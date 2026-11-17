@@ -148,7 +148,7 @@ button.ms-level:active {
   --ms-open-edge: #e3e8f0;
   --ms-ink: #191f28;
   --ms-ink-sub: #4e5968;
-  --ms-coin-ink: #9a6700;
+  --ms-coin-ink: #0b6e50;
 
   position: fixed;
   inset: 0;
@@ -488,7 +488,8 @@ button.ms-level:active {
   transform: translateX(-50%);
   padding: var(--space-2) var(--space-4);
   border-radius: 999px;
-  background: #ffc53d;
+  background: #3ccfa4; /* 지뢰찾기 코인 색(game/currency.ts) */
+  box-shadow: 0 3px 0 #1fa682;
   color: var(--color-text-strong);
   font-size: var(--font-size-body-small);
   font-weight: 600;
@@ -725,7 +726,7 @@ button.ms-level:active {
   }
 }
 
-/* 황금 사원 맵: 동전이 금빛으로 빛난다 */
+/* 황금 사원 맵: 동전이 빛난다 */
 .ms-board.fx-coin-glow .ms-cell-coin {
   animation: ms-coin-glow 1.6s ease-in-out infinite;
 }
@@ -733,10 +734,10 @@ button.ms-level:active {
 @keyframes ms-coin-glow {
   0%,
   100% {
-    filter: drop-shadow(0 0 1px rgba(255, 212, 59, 0.6));
+    filter: drop-shadow(0 0 1px rgba(60, 207, 164, 0.6));
   }
   50% {
-    filter: drop-shadow(0 0 5px rgba(255, 212, 59, 1));
+    filter: drop-shadow(0 0 5px rgba(60, 207, 164, 1));
   }
 }
 

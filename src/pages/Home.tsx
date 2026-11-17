@@ -143,7 +143,7 @@ export default function Home({
           <div key={g.id} className="ab-chip">
             <GameIcon id={g.id} size={20} /> {g.name}
             <strong>
-              <Coin /> {(save.coins[g.id] ?? 0).toLocaleString()}
+              <Coin game={g.id} /> {(save.coins[g.id] ?? 0).toLocaleString()}
             </strong>
           </div>
         ))}

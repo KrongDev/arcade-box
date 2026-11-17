@@ -10,6 +10,7 @@ import { canPurchase, fetchDisplayPrices, purchase, skuOf } from '../game/iap';
 import { playSfx, setSfxSuspended } from '../game/sfx';
 import { AD_REWARD_COINS, GAMES, getGame, type GameId } from '../game/registry';
 import { Coin } from '../components/gameIcons';
+import { currencyVars } from '../game/currency';
 import { useSave } from '../game/save-context';
 import { NAV_BAR_OFFSET, useSafeArea } from '../game/useSafeArea';
 import '../styles/arcade.css';
@@ -157,11 +158,9 @@ export default function Shop({ onExit }: { onExit: () => void }) {
   const inTab = (item: ShopItem) => (tab === 'paid' ? item.price.type === 'paid' : item.price.type !== 'paid');
 
   return (
-    <main className="shop ab-page" style={{ paddingTop: insets.top + NAV_BAR_OFFSET, paddingBottom: insets.bottom + 24 }}>
+    <main className="shop ab-page" style={{ paddingTop: insets.top + NAV_BAR_OFFSET, paddingBottom: insets.bottom + 24, ...currencyVars(game) }}>
       <header className="shop-header">
-        <h1 className="shop-title">
-          상점
-        </h1>
+        <h1 className="shop-title">상점</h1>
         <p className="shop-subtitle">게임에서 모은 코인으로 판과 공을 꾸며요</p>
       </header>
 
@@ -184,7 +183,7 @@ export default function Shop({ onExit }: { onExit: () => void }) {
 
       <section className="shop-balance" aria-label={`${gameName} 코인`}>
         <p className="shop-balance-amount">
-          <Coin /> {balance.toLocaleString()}
+          <Coin game={game} /> {balance.toLocaleString()}
         </p>
         <p className="shop-balance-desc">{gameName} 코인은 {gameName} 아이템에만 쓸 수 있어요</p>
       </section>
@@ -202,7 +201,7 @@ export default function Shop({ onExit }: { onExit: () => void }) {
                 : '오늘 받을 수 있는 광고 보상을 다 받았어요'}
             </p>
           </div>
-          <button type="button" className="ab-btn ab-btn--sm ab-btn--gold shop-ad-button" disabled={adButtonDisabled} onClick={watchAd}>
+          <button type="button" className="ab-btn ab-btn--sm shop-ad-button" disabled={adButtonDisabled} onClick={watchAd}>
             {adButtonLabel}
           </button>
         </section>
@@ -402,7 +401,7 @@ function ItemAction({
     return (
       <>
         <button type="button" className="shop-item-button" disabled={lack > 0} onClick={() => onBuy(item)}>
-          <Coin /> {item.price.amount.toLocaleString()}
+          <Coin game={item.game} /> {item.price.amount.toLocaleString()}
         </button>
         {lack > 0 && <p className="shop-item-lack">{lack.toLocaleString()}코인 더 모아야 해요</p>}
       </>

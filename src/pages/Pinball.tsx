@@ -440,7 +440,7 @@ export default function Pinball({ onExit }: { onExit: () => void }) {
             ))}
           </span>
           <span className="hud-coins">
-            <Coin /> +{hud.coins}
+            <Coin game="pinball" /> +{hud.coins}
           </span>
         </div>
       </header>
@@ -504,7 +504,7 @@ export default function Pinball({ onExit }: { onExit: () => void }) {
               <div className="result-row">
                 <dt>받은 코인</dt>
                 <dd>
-                  <Coin /> {result.coins}
+                  <Coin game="pinball" /> {result.coins}
                 </dd>
               </div>
             </dl>

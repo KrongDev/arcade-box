@@ -36,7 +36,6 @@ export interface TileLook {
   closedEdge: string;
   open: string;
   openEdge: string;
-  coinInk: string;
   pattern: 'none' | 'dots' | 'check' | 'stars' | 'diamond' | 'leaf';
 }
 
@@ -288,7 +287,7 @@ export const CATALOG: ShopItem[] = [
     slot: 'tile',
     name: '기본 발판',
     price: FREE,
-    look: { closed: '#c7d1e2', closedEdge: '#b4bfd3', open: '#ffffff', openEdge: '#e3e8f0', coinInk: '#9a6700', pattern: 'none' },
+    look: { closed: '#c7d1e2', closedEdge: '#b4bfd3', open: '#ffffff', openEdge: '#e3e8f0', pattern: 'none' },
   },
   {
     id: 'minesweeper.tile.mint',
@@ -297,7 +296,7 @@ export const CATALOG: ShopItem[] = [
     name: '민트 발판',
     price: coin(1000),
     ability: { coinValue: 0.1 },
-    look: { closed: '#a8dcc6', closedEdge: '#86c7ab', open: '#ffffff', openEdge: '#d6ece2', coinInk: '#8a5a00', pattern: 'dots' },
+    look: { closed: '#a8dcc6', closedEdge: '#86c7ab', open: '#ffffff', openEdge: '#d6ece2', pattern: 'dots' },
   },
   {
     id: 'minesweeper.tile.peach',
@@ -306,7 +305,7 @@ export const CATALOG: ShopItem[] = [
     name: '복숭아 발판',
     price: coin(1500),
     ability: { coinValue: 0.2 },
-    look: { closed: '#f5c2a8', closedEdge: '#e5a487', open: '#fffaf6', openEdge: '#f3e0d6', coinInk: '#8a5a00', pattern: 'leaf' },
+    look: { closed: '#f5c2a8', closedEdge: '#e5a487', open: '#fffaf6', openEdge: '#f3e0d6', pattern: 'leaf' },
   },
   {
     id: 'minesweeper.tile.check',
@@ -315,7 +314,7 @@ export const CATALOG: ShopItem[] = [
     name: '체크무늬 발판',
     price: coin(3000),
     ability: { shield: 1 },
-    look: { closed: '#b9b4f5', closedEdge: '#9a93e6', open: '#ffffff', openEdge: '#e4e1fb', coinInk: '#8a5a00', pattern: 'check' },
+    look: { closed: '#b9b4f5', closedEdge: '#9a93e6', open: '#ffffff', openEdge: '#e4e1fb', pattern: 'check' },
   },
   {
     id: 'minesweeper.tile.night',
@@ -325,7 +324,7 @@ export const CATALOG: ShopItem[] = [
     price: paid(3000),
     ability: { coinValue: 0.2, shield: 1 },
     effect: { open: 'sparkle' },
-    look: { closed: '#3a4157', closedEdge: '#262c3d', open: '#f6f7fb', openEdge: '#dfe3ec', coinInk: '#8a5a00', pattern: 'stars' },
+    look: { closed: '#3a4157', closedEdge: '#262c3d', open: '#f6f7fb', openEdge: '#dfe3ec', pattern: 'stars' },
   },
   {
     id: 'minesweeper.tile.gold',
@@ -335,7 +334,7 @@ export const CATALOG: ShopItem[] = [
     price: paid(4900),
     ability: { coinValue: 0.4, shield: 1 },
     effect: { open: 'gold' },
-    look: { closed: '#f2c94c', closedEdge: '#d4a017', open: '#fffbea', openEdge: '#f5e6b3', coinInk: '#7a4f00', pattern: 'diamond' },
+    look: { closed: '#f2c94c', closedEdge: '#d4a017', open: '#fffbea', openEdge: '#f5e6b3', pattern: 'diamond' },
   },
 
   // ── 지뢰찾기 — 맵: 숨은 동전 수가 달라요 ──

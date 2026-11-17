@@ -24,14 +24,14 @@
   margin-bottom: var(--space-4);
 }
 
-/* 잔액 — 금색 카드 */
+/* 잔액 — 지금 고른 게임의 코인 색 카드(--cur-*: game/currency.ts) */
 .shop-balance {
   margin-bottom: var(--space-3);
   padding: var(--space-4);
-  border: 2px solid #ffd77a;
+  border: 2px solid var(--cur-edge);
   border-radius: 22px;
-  background: linear-gradient(135deg, #fff6dd 0%, #ffe3a3 100%);
-  box-shadow: 0 5px 0 #f5c96a;
+  background: var(--cur-soft);
+  box-shadow: 0 5px 0 var(--cur-edge);
 }
 
 .shop-balance-amount {
@@ -48,7 +48,7 @@
 .shop-balance-desc {
   margin: var(--space-1) 0 0;
   font-size: var(--font-size-caption);
-  color: #7a5a14;
+  color: var(--cur-ink);
 }
 
 /* 광고 보상 — 보라 카드 */
@@ -96,6 +96,13 @@
 
 .shop-ad-button {
   min-width: 96px;
+  background: var(--cur-face);
+  box-shadow: 0 4px 0 var(--cur-side);
+  color: var(--color-text-strong);
+}
+
+.shop-ad-button:active:not(:disabled) {
+  box-shadow: 0 1px 0 var(--cur-side);
 }
 
 /* 코인·유료 탭 — 둘로 나뉜 스위치 */
@@ -263,8 +270,8 @@
   min-height: 44px;
   border: 0;
   border-radius: 14px;
-  background: var(--brand-gold);
-  box-shadow: 0 4px 0 var(--brand-gold-dark);
+  background: var(--cur-face);
+  box-shadow: 0 4px 0 var(--cur-side);
   color: var(--color-text-strong);
   font: inherit;
   font-size: var(--font-size-body-small);
@@ -290,7 +297,7 @@
 
 .shop-item-button:active:not(:disabled) {
   transform: translateY(3px);
-  box-shadow: 0 1px 0 var(--brand-gold-dark);
+  box-shadow: 0 1px 0 var(--cur-side);
 }
 
 .shop-item.is-paid .shop-item-button:active:not(:disabled) {
@@ -432,13 +439,13 @@
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #ffc53d;
-  box-shadow: inset 0 0 0 2px #e0a000;
+  background: var(--cur-face);
+  box-shadow: inset 0 -2px 0 var(--cur-side);
 }
 
 .item-preview-coin.is-glow {
   box-shadow:
-    inset 0 0 0 2px #e0a000,
-    0 0 6px 2px rgba(255, 212, 59, 0.9);
+    inset 0 -2px 0 var(--cur-side),
+    0 0 6px 2px var(--cur-face);
 }
 

@@ -3,6 +3,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProper
 import { ArcadeIcon } from '../components/ArcadeIcon';
 import { Coin, Lock, Pause } from '../components/gameIcons';
 import { abilityLines } from '../game/catalog';
+import { CURRENCY } from '../game/currency';
 import { mapLook, minesweeperGear, tileLook } from '../game/equipped';
 import { haptic } from '../game/haptic';
 import { playSfx } from '../game/sfx';
@@ -82,7 +83,7 @@ function DifficultySelect({ onExit, onStart }: { onExit: () => void; onStart: (i
         </h1>
         <p className="ms-select-subtitle">숫자를 보고 지뢰를 피해 모든 칸을 열어요</p>
         <p className="ab-chip ms-wallet">
-          <Coin /> 지뢰찾기 코인 <strong>{(save.coins.minesweeper ?? 0).toLocaleString()}</strong>
+          <Coin game="minesweeper" /> 지뢰찾기 코인 <strong>{(save.coins.minesweeper ?? 0).toLocaleString()}</strong>
         </p>
         <ul className="ms-gear" aria-label="장착한 아이템">
           {gearRows.map(({ item, lines }) => (
@@ -511,7 +512,7 @@ function MinesweeperPlay({
           '--ms-open-edge': tiles.openEdge,
           '--ms-ink': map.ink,
           '--ms-ink-sub': map.inkSub,
-          '--ms-coin-ink': tiles.coinInk,
+          '--ms-coin-ink': CURRENCY.minesweeper.ink,
         } as CSSProperties
       }
     >
@@ -539,7 +540,7 @@ function MinesweeperPlay({
             </span>
           )}
           <span className="ms-hud-coins">
-            <Coin /> +{coins}
+            <Coin game="minesweeper" /> +{coins}
           </span>
         </div>
       </header>
@@ -706,7 +707,7 @@ function MinesweeperPlay({
               <div className="result-row">
                 <dt>받은 코인</dt>
                 <dd>
-                  <Coin /> {result.coins + result.bonus}
+                  <Coin game="minesweeper" /> {result.coins + result.bonus}
                 </dd>
               </div>
             </dl>
@@ -809,7 +810,7 @@ const CellView = memo(function CellView({
         style={openDelay !== undefined ? ({ '--open-delay': `${openDelay}ms` } as CSSProperties) : undefined}
       >
         {adj > 0 ? adj : ''}
-        {coin && <span className="ms-cell-coin"><Coin /></span>}
+        {coin && <span className="ms-cell-coin"><Coin game="minesweeper" /></span>}
       </div>
     );
   }

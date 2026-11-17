@@ -116,7 +116,7 @@ function drawInserts(ctx: CanvasRenderingContext2D, engine: PinballEngine, theme
     const y = 400;
     const lit = engine.multiplier >= m;
     if (lit) {
-      solidCircle(ctx, x, y, 13, theme.coin, theme.coinRing, 2.5);
+      solidCircle(ctx, x, y, 13, theme.coin, mix(theme.coin, '#000000', 0.25), 2.5);
       ctx.fillStyle = theme.table;
     } else {
       ctx.beginPath();
@@ -408,8 +408,10 @@ function drawCoins(ctx: CanvasRenderingContext2D, engine: PinballEngine, theme: 
     ctx.save();
     ctx.translate(c.x, c.y + bob);
     ctx.scale(spin, 1);
-    solidCircle(ctx, 0, 0, r, theme.coin, theme.coinRing, 2.5);
-    ctx.strokeStyle = theme.coinRing;
+    // 동전 두께(아래 띠)와 안쪽 테는 같은 진한 금색 — coinRing은 밝은 색이라 띠로 쓰면 뜬다
+    const edge = mix(theme.coin, '#000000', 0.25);
+    solidCircle(ctx, 0, 0, r, theme.coin, edge, 2.5);
+    ctx.strokeStyle = edge;
     ctx.lineWidth = 1.8;
     ctx.beginPath();
     ctx.arc(0, -0.5, r * 0.58, 0, Math.PI * 2);

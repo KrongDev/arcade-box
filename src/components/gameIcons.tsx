@@ -1,6 +1,8 @@
 /**
  * 게임 화면 전용 아이콘 — icons.tsx와 같은 규격(24 뷰박스, currentColor).
  */
+import { CURRENCY } from '../game/currency';
+import type { GameId } from '../game/registry';
 
 type IconProps = {
   size?: string | number;
@@ -15,8 +17,9 @@ export function Pause({ size = '1em' }: IconProps) {
   );
 }
 
-/** 게임 코인 — ArcadeIcon 동전과 같은 두 톤 그림체. 글자와 같은 높이로 나란히 놓인다 */
-export function Coin({ size = '1em' }: IconProps) {
+/** 게임 코인 — ArcadeIcon 동전과 같은 두 톤 그림체. 게임마다 색이 다르다(game/currency.ts) */
+export function Coin({ game, size = '1em' }: IconProps & { game: GameId }) {
+  const c = CURRENCY[game];
   return (
     <svg
       width={size}
@@ -25,9 +28,9 @@ export function Coin({ size = '1em' }: IconProps) {
       aria-hidden="true"
       style={{ display: 'inline-block', verticalAlign: '-0.15em' }}
     >
-      <circle cx="12" cy="13.2" r="10" fill="#eaa012" />
-      <circle cx="12" cy="11" r="10" fill="#ffc53d" />
-      <circle cx="12" cy="11" r="5.8" fill="none" stroke="#eaa012" strokeWidth="2" />
+      <circle cx="12" cy="13.2" r="10" fill={c.side} />
+      <circle cx="12" cy="11" r="10" fill={c.face} />
+      <circle cx="12" cy="11" r="5.8" fill="none" stroke={c.side} strokeWidth="2" />
     </svg>
   );
 }
