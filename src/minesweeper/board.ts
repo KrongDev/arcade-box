@@ -231,3 +231,30 @@ export function scoreRun(d: Difficulty, r: RunStats): ScoreBreakdown {
   return { cells, flags, clear, time, total: Math.max(0, cells + flags + clear + time) };
 }
 
+/**
+ * 이번에 새로 열린 칸마다 시작점에서 몇 걸음 떨어졌는지(8방향) — 번지듯 열리는 연출용.
+ * seeds는 시작점(누른 칸, 코드 열기면 숫자 칸). 시작점 자신은 0걸음이다.
+ */
+export function spreadSteps(b: Board, seeds: number[], opened: Set<number>): Map<number, number> {
+  const steps = new Map<number, number>();
+  const queue: number[] = [];
+  for (const s of seeds) {
+    steps.set(s, 0);
+    queue.push(s);
+  }
+  for (let head = 0; head < queue.length; head++) {
+    const cur = queue[head];
+    const d = steps.get(cur) as number;
+    for (const n of neighbors(b, cur)) {
+      if (!opened.has(n) || steps.has(n)) continue;
+      steps.set(n, d + 1);
+      queue.push(n);
+    }
+  }
+  // 시작점과 이어지지 않은 칸(드묾)은 맨 끝에 연다
+  let max = 0;
+  for (const v of steps.values()) max = Math.max(max, v);
+  for (const i of opened) if (!steps.has(i)) steps.set(i, max + 1);
+  return steps;
+}
+

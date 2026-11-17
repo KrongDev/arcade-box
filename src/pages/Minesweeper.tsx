@@ -17,6 +17,7 @@ import {
   getDifficulty,
   isWon,
   openCell,
+  spreadSteps,
   runStats,
   scoreRun,
   stageKey,
@@ -193,6 +194,9 @@ function MinesweeperPlay({
   };
 
   const rerender = () => setVersion((v) => v + 1);
+  /** 마지막으로 열린 칸들의 등장 지연(ms) — 누른 곳에서 번지듯 열린다 */
+  const [openDelays, setOpenDelays] = useState<Map<number, number>>(() => new Map());
+  const rippleMs = useRef(0);
   const setPhase = useCallback((p: Phase) => {
     phaseRef.current = p;
     setPhaseState(p);
@@ -258,7 +262,8 @@ function MinesweeperPlay({
         unlockedName: r.firstClear && next ? next.name : null,
       });
       setPhase('won');
-      later(() => setShowResult(true), 600);
+      // 마지막 칸들이 번지며 열리는 걸 다 본 뒤 결과를 띄운다
+      later(() => setShowResult(true), Math.max(600, rippleMs.current + 350));
     } else {
       const { score, best } = settle(0, stats);
       haptic('error', 0);
@@ -295,8 +300,23 @@ function MinesweeperPlay({
       return;
     }
 
+    const wasOpen = b.cells.map((c) => c.open);
     const res = cell.open ? chord(b, index) : openCell(b, index);
     if (res.opened === 0 && !res.boom) return;
+
+    // 누른 칸부터 번지듯 열리도록 칸마다 지연을 준다 (넓게 열릴수록 한 걸음 간격을 줄여 0.75초 안에 끝낸다)
+    const fresh = new Set<number>();
+    b.cells.forEach((c, i) => {
+      if (c.open && !c.mine && !wasOpen[i]) fresh.add(i);
+    });
+    const steps = spreadSteps(b, [index], fresh);
+    let maxStep = 0;
+    for (const [i, d] of steps) if (fresh.has(i)) maxStep = Math.max(maxStep, d);
+    const stepMs = maxStep > 0 ? Math.min(42, 750 / maxStep) : 0;
+    const delays = new Map<number, number>();
+    for (const [i, d] of steps) if (fresh.has(i)) delays.set(i, Math.round(d * stepMs));
+    setOpenDelays(delays);
+    rippleMs.current = maxStep * stepMs;
 
     if (p === 'ready') {
       clock.current.since = performance.now();
@@ -312,6 +332,11 @@ function MinesweeperPlay({
     } else if (!res.boom) {
       haptic('tickWeak');
       playSfx('open');
+    }
+    // 번지는 동안 '톡톡' 소리를 몇 번 이어 준다
+    if (!res.boom && maxStep >= 3) {
+      const ticks = Math.min(6, Math.floor(maxStep / 2));
+      for (let k = 1; k <= ticks; k++) later(() => playSfx('open'), Math.round((rippleMs.current * k) / ticks));
     }
 
     if (res.boom) finish(false);
@@ -465,6 +490,7 @@ function MinesweeperPlay({
               exploded={board.exploded === i}
               phase={phase}
               revealDelay={revealDelays[i]}
+              openDelay={openDelays.get(i)}
             />
           ))}
           {phase === 'lost' && board.exploded !== null && (
@@ -667,6 +693,7 @@ const CellView = memo(function CellView({
   exploded,
   phase,
   revealDelay,
+  openDelay,
 }: {
   open: boolean;
   flag: boolean;
@@ -676,13 +703,19 @@ const CellView = memo(function CellView({
   exploded: boolean;
   phase: Phase;
   revealDelay?: number;
+  /** 이번에 열린 칸이면 등장 지연(ms) */
+  openDelay?: number;
 }) {
   const lost = phase === 'lost';
   const won = phase === 'won';
 
   if (open && !mine) {
     return (
-      <div role="gridcell" className={`ms-cell is-open ${NUMBER_CLASS[adj]}`}>
+      <div
+        role="gridcell"
+        className={`ms-cell is-open ${NUMBER_CLASS[adj]}${openDelay !== undefined ? ' is-opening' : ''}`}
+        style={openDelay !== undefined ? ({ '--open-delay': `${openDelay}ms` } as CSSProperties) : undefined}
+      >
         {adj > 0 ? adj : ''}
         {coin && <span className="ms-cell-coin"><Coin /></span>}
       </div>

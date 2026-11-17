@@ -270,6 +270,36 @@ button.ms-level:active {
   box-shadow: inset 0 0 0 1px var(--ms-open-edge);
 }
 
+/* 누른 칸부터 번지듯 열린다: 차례가 오기 전까지는 닫힌 칸으로 보이다가 살짝 눌리며 열린다 */
+.ms-cell.is-opening {
+  animation: ms-open 0.26s ease-out var(--open-delay, 0ms) backwards;
+}
+
+.ms-cell.is-opening > * {
+  animation: ms-open-content 0.26s ease-out var(--open-delay, 0ms) backwards;
+}
+
+@keyframes ms-open {
+  0% {
+    background: var(--ms-closed);
+    box-shadow: inset 0 -3px 0 var(--ms-closed-edge);
+    color: transparent;
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(0.84);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes ms-open-content {
+  0% {
+    opacity: 0;
+  }
+}
+
 .ms-cell.is-mine,
 .ms-cell.is-flag {
   font-size: 20px;
@@ -409,7 +439,9 @@ button.ms-level:active {
 @media (prefers-reduced-motion: reduce) {
   .ms-viewport.is-shaking,
   .ms-cell.is-exploded,
-  .ms-cell.is-revealing {
+  .ms-cell.is-revealing,
+  .ms-cell.is-opening,
+  .ms-cell.is-opening > * {
     animation: none;
   }
   .ms-blast,
