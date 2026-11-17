@@ -33,6 +33,7 @@ npm run dev                                                             # http:/
 | `DEPLOY_SSH_KEY` | 배포용 SSH 개인 키 (이 용도로만 새로 만든 키를 권해요) |
 | `DEPLOY_KNOWN_HOSTS` | `ssh-keyscan -H <서버 주소>` 결과 — 접속한 서버가 진짜인지 확인하는 데 써요 |
 | `DEPLOY_PORT` | (선택) SSH 포트, 기본 22 |
+| `GCP_PROJECT_ID`, `GCP_ZONE`, `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_SERVICE_ACCOUNT` | (GCP VM일 때) `setup-gcp.sh`가 출력하는 값. 있으면 공개 SSH 대신 IAP 터널로 접속해요 |
 | `SERVER_DOMAIN` | 서버 도메인 이름만 (예: `arcade-box.duckdns.org`). Caddy가 이 이름으로 HTTPS 인증서를 자동 발급해요 |
 | `POSTGRES_PASSWORD` | DB 비밀번호 — 영문·숫자·`-`·`_`만 (예: `openssl rand -hex 32`) |
 | `TOSS_MTLS_CERT` | 앱인토스 콘솔 mTLS 인증서 zip 안의 인증서(`*_public.crt`) 내용 전체 |
@@ -61,57 +62,49 @@ openssl rand -hex 32 | gh secret set POSTGRES_PASSWORD
 
 ## GCP 무료 VM에 띄우기
 
-Compute Engine 무료 등급(e2-micro 1대)에 서버·DB·Caddy를 함께 올려요. 아래 조건을 벗어나면 요금이 나와요.
+Compute Engine 무료 등급(e2-micro 1대)에 서버·DB·Caddy를 함께 올려요. `server/deploy/setup-gcp.sh` 하나로 잠근 VM을 만들고 배포 준비까지 해요.
 
-- 리전은 `us-west1`·`us-central1`·`us-east1` 중 하나 (한국에서 가장 가까운 곳은 `us-west1`)
-- 디스크는 표준 영구 디스크(`pd-standard`) 30GB 이하 — 기본값인 균형 디스크는 과금돼요
-- 나가는 트래픽은 한 달 1GB까지 무료
-- 스냅샷 백업은 유료, 결제 계정의 예산 알림을 꼭 걸어 두세요
+무료 조건: 리전 `us-west1`·`us-central1`·`us-east1`, 표준 영구 디스크 30GB 이하, 나가는 트래픽 월 1GB. 스냅샷 백업은 유료예요. 결제 계정에 예산 알림을 꼭 걸어 두세요.
 
-### 1. VM 만들기 (GCP 콘솔 오른쪽 위 Cloud Shell에서)
+### 보안 구성
 
-```bash
-gcloud compute instances create arcade-box \
-  --zone=us-west1-b --machine-type=e2-micro \
-  --image-family=ubuntu-2404-lts-amd64 --image-project=ubuntu-os-cloud \
-  --boot-disk-size=30GB --boot-disk-type=pd-standard --tags=web
-gcloud compute firewall-rules create allow-web --allow=tcp:80,tcp:443 --target-tags=web
-gcloud compute instances describe arcade-box --zone=us-west1-b \
-  --format='get(networkInterfaces[0].accessConfigs[0].natIP)'     # 외부 IP
-```
+| 구분 | 허용 | 막는 것 |
+|---|---|---|
+| 들어오기 | 80·443 (전체) — 앱 사용자 접속, HTTPS 인증서 발급 | SSH 공개 접속, RDP, ICMP (GCP 기본 규칙 삭제) |
+| 들어오기 | 22 (구글 IAP 대역 `35.235.240.0/20`만) — 구글 계정 인증을 거친 접속 | |
+| 나가기 | 80·443 — 토스 API, 인증서 발급, 이미지 받기, 보안 업데이트 | 그 밖의 모든 포트 |
 
-외부 IP는 VM을 '중지 → 시작'하면 바뀔 수 있어요(재부팅은 그대로). 바뀌면 도메인과 `DEPLOY_HOST`, `DEPLOY_KNOWN_HOSTS`를 새 IP로 바꿔 주세요.
+- 배포는 GitHub Actions가 GCP 키 파일 없이 Workload Identity로 인증하고 IAP 터널로 접속해요. 이 저장소의 `main` 브랜치에서 실행될 때만 인증돼요.
+- VM에는 GCP 서비스 계정을 붙이지 않아요. VM이 뚫려도 GCP 프로젝트로 넘어갈 수 없어요. Shielded VM(보안 부팅·무결성 검사)을 켜요.
+- SSH는 키 로그인만 받고 비밀번호·root 로그인은 꺼요. 보안 업데이트는 자동으로 설치돼요.
+- 컨테이너는 Caddy만 바깥(80·443)에 열려요. 서버 8080은 VM 안(127.0.0.1)에서만, DB는 컨테이너 네트워크 안에서만 닿아요.
 
-### 2. 도메인 연결
-
-[DuckDNS](https://www.duckdns.org)에 로그인해 서브도메인(예: `arcade-box`)을 만들고 VM 외부 IP를 넣어요. 그러면 `arcade-box.duckdns.org`가 `SERVER_DOMAIN`이 돼요. 가진 도메인이 있으면 A 레코드를 VM IP로 지정해도 돼요.
-
-### 3. 배포 키 만들고 VM 준비하기
-
-내 컴퓨터에서 배포 전용 키를 만들어요.
+### 1. 배포 키 만들기 (내 컴퓨터)
 
 ```bash
 ssh-keygen -t ed25519 -f ~/.ssh/arcade-box-deploy -N "" -C arcade-box-deploy
-cat ~/.ssh/arcade-box-deploy.pub        # 공개 키 — 아래 명령에 붙여 넣어요
+gh secret set DEPLOY_SSH_KEY < ~/.ssh/arcade-box-deploy
+cat ~/.ssh/arcade-box-deploy.pub        # 공개 키 — 아래 명령에 넣어요
 ```
 
-Cloud Shell에서 VM 준비 스크립트를 실행해요. Docker 설치, 스왑 2GB, 배포 전용 사용자 `deploy` 생성까지 해요.
+### 2. VM 만들기 (GCP 콘솔 오른쪽 위 Cloud Shell)
 
 ```bash
-gcloud compute ssh arcade-box --zone=us-west1-b --command \
-  'curl -fsSL https://raw.githubusercontent.com/KrongDev/arcade-box/main/server/deploy/setup-vm.sh | sudo bash -s -- "<공개 키 한 줄>"'
+curl -fsSL https://raw.githubusercontent.com/KrongDev/arcade-box/main/server/deploy/setup-gcp.sh -o setup-gcp.sh
+bash setup-gcp.sh "<공개 키 한 줄>"
 ```
 
-내 컴퓨터에서 서버 지문을 받아요. 이 값이 `DEPLOY_KNOWN_HOSTS`예요.
+마지막에 `VM_IP`, `DEPLOY_HOST`, `GCP_*`, `DEPLOY_KNOWN_HOSTS` 값이 출력돼요. 비밀값이 아니니 그대로 secret으로 등록하면 돼요.
 
-```bash
-ssh-keyscan -H <VM 외부 IP>
-```
+외부 IP는 VM을 '중지 → 시작'하면 바뀔 수 있어요(재부팅은 그대로). 바뀌면 도메인의 IP만 새로 바꿔 주세요.
+
+### 3. 도메인 연결
+
+[DuckDNS](https://www.duckdns.org)에 로그인해 서브도메인(예: `arcade-box`)을 만들고 `VM_IP`를 넣어요. 그러면 `arcade-box.duckdns.org`가 `SERVER_DOMAIN`이 돼요. 가진 도메인이 있으면 A 레코드를 VM IP로 지정해도 돼요.
 
 ### 4. secret 등록하고 배포
 
-위 표의 secret을 등록해요. `DEPLOY_HOST`는 VM 외부 IP, `DEPLOY_USER`는 `deploy`, `DEPLOY_SSH_KEY`는 `~/.ssh/arcade-box-deploy` 파일 내용이에요.
+위 표의 secret을 등록해요. `DEPLOY_USER`는 `deploy`예요.
 
 1. Actions → `서버 배포` → Run workflow. 마지막 단계가 `https://<도메인>/healthz` 응답까지 확인해요.
 2. `VITE_API_BASE`를 `https://<도메인>`으로 등록하고 Actions → `미니앱 배포`를 실행해요.
-
