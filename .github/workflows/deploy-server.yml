@@ -1,7 +1,8 @@
 # 게임 서버를 배포한다. Actions 탭에서 직접 실행한다.
 #   1) server/ 이미지를 GHCR에 올린다 (비밀값은 이미지에 넣지 않는다)
 #   2) SSH로 서버에 접속해 .env·mTLS 인증서를 secret에서 바로 쓰고 docker compose로 다시 띄운다
-# 서버에는 Docker와 Docker Compose v2가 있어야 하고, DEPLOY_USER가 docker를 실행할 수 있어야 한다.
+#   3) https://SERVER_DOMAIN/healthz 로 바깥에서 응답을 확인한다 (Caddy가 HTTPS 인증서를 자동 발급)
+# 서버 준비는 server/deploy/setup-vm.sh 한 번으로 끝난다 (Docker·스왑·배포 사용자).
 # 필요한 secret: README '비밀값 관리'
 name: 서버 배포
 
@@ -56,6 +57,7 @@ jobs:
       DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
       DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
       DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+      SERVER_DOMAIN: ${{ secrets.SERVER_DOMAIN }}
     steps:
       - uses: actions/checkout@v5
 
@@ -68,13 +70,17 @@ jobs:
           TOSS_MTLS_KEY: ${{ secrets.TOSS_MTLS_KEY }}
         run: |
           missing=""
-          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS POSTGRES_PASSWORD TOSS_MTLS_CERT TOSS_MTLS_KEY; do
+          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS SERVER_DOMAIN POSTGRES_PASSWORD TOSS_MTLS_CERT TOSS_MTLS_KEY; do
             if [ -z "${!name}" ]; then missing="$missing $name"; fi
           done
           if [ -n "$missing" ]; then echo "::error::다음 secret이 없어요:$missing"; exit 1; fi
           # DB 주소(postgres://user:비밀번호@...)에 그대로 들어가므로 특수문자를 받지 않는다
           case "$POSTGRES_PASSWORD" in
             *[!A-Za-z0-9_-]*) echo "::error::POSTGRES_PASSWORD는 영문·숫자·-·_만 써 주세요 (예: openssl rand -hex 32)"; exit 1 ;;
+          esac
+          # 도메인 이름만 받는다 (https:// 나 경로 없이, 예: arcade-box.duckdns.org)
+          case "$SERVER_DOMAIN" in
+            *[!A-Za-z0-9.-]*|"") echo "::error::SERVER_DOMAIN에는 도메인 이름만 넣어 주세요 (예: arcade-box.duckdns.org)"; exit 1 ;;
           esac
 
       - name: SSH 준비
@@ -107,9 +113,11 @@ jobs:
           # 비밀값은 표준 입력으로만 넘긴다 — 명령줄·로그에 남기지 않는다
           remote 'umask 077 && mkdir -p ~/arcade-box/mtls'
           remote 'cat > ~/arcade-box/docker-compose.yml' < server/docker-compose.yml
+          remote 'cat > ~/arcade-box/Caddyfile' < server/Caddyfile
           printf '%s\n' "$TOSS_MTLS_CERT" | remote 'umask 077 && cat > ~/arcade-box/mtls/client.crt'
           printf '%s\n' "$TOSS_MTLS_KEY" | remote 'umask 077 && cat > ~/arcade-box/mtls/client.key'
           {
+            echo "DOMAIN=$SERVER_DOMAIN"
             echo "POSTGRES_PASSWORD=$POSTGRES_PASSWORD"
             echo "MTLS_DIR=./mtls"
             echo "MTLS_CERT_FILE=client.crt"
@@ -132,12 +140,25 @@ jobs:
           for i in $(seq 1 20); do
             if remote 'cd ~/arcade-box && docker compose exec -T server wget -qO- http://127.0.0.1:8080/healthz' >/dev/null 2>&1; then
               echo "서버가 응답해요"
-              exit 0
+              break
+            fi
+            if [ "$i" = 20 ]; then
+              echo "::error::서버가 60초 안에 응답하지 않았어요"
+              remote 'cd ~/arcade-box && docker compose ps && docker compose logs --tail 50 server'
+              exit 1
             fi
             sleep 3
           done
-          echo "::error::서버가 60초 안에 응답하지 않았어요"
-          remote 'cd ~/arcade-box && docker compose ps && docker compose logs --tail 50 server'
+          # 바깥에서 HTTPS로 — 첫 배포 때는 인증서 발급에 시간이 걸릴 수 있다
+          for i in $(seq 1 24); do
+            if curl -sf --max-time 10 "https://$SERVER_DOMAIN/healthz" >/dev/null; then
+              echo "https://$SERVER_DOMAIN 에서 응답해요"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::https://$SERVER_DOMAIN/healthz 가 2분 안에 응답하지 않았어요. 도메인이 서버 IP를 가리키는지, 방화벽에서 80·443이 열려 있는지 확인해 주세요"
+          remote 'cd ~/arcade-box && docker compose logs --tail 50 caddy'
           exit 1
 
       - name: SSH 키 지우기

@@ -1,0 +1,6 @@
+# 서버 앞단 HTTPS. DOMAIN(.env)으로 Let's Encrypt 인증서를 자동으로 받고 갱신한다.
+# DOMAIN=localhost로 띄우면 Caddy 내부 인증서를 쓴다(로컬 확인용).
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy server:8080
+}

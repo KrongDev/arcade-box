@@ -1,7 +1,7 @@
 # 운영과 같은 구성: 서버 + PostgreSQL.
 # 실제 파트너 API(mTLS)를 쓰므로 인증서가 든 디렉터리를 MTLS_DIR로 마운트한다.
-#   직접 띄우기: MTLS_DIR=/안전한/경로 POSTGRES_PASSWORD=... docker compose up -d --build
-#   GitHub Actions '서버 배포' 워크플로는 이 파일을 서버로 복사하고, .env와 인증서를 secret으로 채워 SERVER_IMAGE를 받아 띄운다.
+#   직접 띄우기: DOMAIN=도메인 MTLS_DIR=/안전한/경로 POSTGRES_PASSWORD=... docker compose up -d --build
+#   GitHub Actions '서버 배포' 워크플로는 이 파일과 Caddyfile을 서버로 복사하고, .env와 인증서를 secret으로 채워 SERVER_IMAGE를 받아 띄운다.
 services:
   db:
     image: postgres:17-alpine
@@ -37,9 +37,28 @@ services:
     volumes:
       # 인증서·키는 저장소 밖 디렉터리에서 읽기 전용으로 마운트한다
       - ${MTLS_DIR:?인증서 디렉터리(MTLS_DIR)를 지정하세요}:/run/secrets/mtls:ro
+    # 바깥에서는 Caddy(443)로만 들어온다. 8080은 이 서버 안에서만 연다
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
+    restart: unless-stopped
+
+  # HTTPS — DOMAIN으로 인증서를 자동 발급·갱신하고 server로 넘긴다
+  caddy:
+    image: caddy:2-alpine
+    depends_on:
+      - server
+    environment:
+      DOMAIN: ${DOMAIN:?서버 도메인(DOMAIN)을 지정하세요}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
     restart: unless-stopped
 
 volumes:
   pgdata:
+  caddy-data:
+  caddy-config:

@@ -107,7 +107,7 @@ flowchart LR
 |---|---|
 | 클라이언트 | React 19, TypeScript, Vite, Canvas 2D, Web Audio, `@apps-in-toss/web-framework` 3.10 |
 | 서버 | Node.js 24 (TypeScript 직접 실행), PostgreSQL 17, `pg` |
-| 인프라 | Docker Compose, GitHub Container Registry, GitHub Actions |
+| 인프라 | Docker Compose, Caddy(HTTPS), GCP Compute Engine, GitHub Container Registry, GitHub Actions |
 | 품질 | Node 내장 테스트 러너(서버 28개 테스트), oxlint, CI |
 
 ## 프로젝트 구조
