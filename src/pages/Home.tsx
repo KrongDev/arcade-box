@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import logoMark from '../assets/logo-mark.png';
 import { GameArt } from '../components/GameArt';
 import { Coin, Gear, Lock, Play } from '../components/gameIcons';
-import { Close } from '../components/icons';
+import { ChevronLeft, ChevronRight, Close } from '../components/icons';
 import { API_BASE } from '../game/api';
 import { haptic } from '../game/haptic';
 import { ATTENDANCE_COINS, GAMES, getGame, type GameDef, type GameId } from '../game/registry';
@@ -30,6 +30,30 @@ export default function Home({
   const [claimedMessage, setClaimedMessage] = useState<string | null>(null);
 
   const unlockedGames = GAMES.filter((g) => save.unlocked.includes(g.id));
+
+  // 게임 카드는 옆으로 넘긴다 — 게임이 늘어나도 화면이 길어지지 않게
+  const trackRef = useRef<HTMLUListElement>(null);
+  const [active, setActive] = useState(0);
+  useEffect(() => {
+    const el = trackRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const first = el.children[0] as HTMLElement | undefined;
+      const second = el.children[1] as HTMLElement | undefined;
+      const step = first && second ? second.offsetLeft - first.offsetLeft : el.clientWidth;
+      setActive(Math.max(0, Math.min(GAMES.length - 1, Math.round(el.scrollLeft / Math.max(1, step)))));
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
+  const goTo = useCallback((index: number) => {
+    const el = trackRef.current;
+    const target = el?.children[index] as HTMLElement | undefined;
+    const first = el?.children[0] as HTMLElement | undefined;
+    if (!el || !target || !first) return;
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    el.scrollTo({ left: target.offsetLeft - first.offsetLeft, behavior: reduce ? 'auto' : 'smooth' });
+  }, []);
   const claimTargets = unlockedGames.filter((g) => g.playable);
 
   const claim = (id: GameId) => {
@@ -94,14 +118,46 @@ export default function Home({
         </button>
       </section>
 
-      <h2 className="ab-section-title">게임</h2>
-      <ul className="game-list">
-        {GAMES.map((g) => (
-          <li key={g.id}>
+      <div className="game-section-head">
+        <h2 className="ab-section-title game-section-title">
+          게임 <span className="game-count">{GAMES.length}</span>
+        </h2>
+        {GAMES.length > 1 && (
+          <div className="game-nav">
+            <button type="button" className="ab-icon-btn" aria-label="이전 게임" disabled={active <= 0} onClick={() => goTo(active - 1)}>
+              <ChevronLeft size={22} />
+            </button>
+            <button
+              type="button"
+              className="ab-icon-btn"
+              aria-label="다음 게임"
+              disabled={active >= GAMES.length - 1}
+              onClick={() => goTo(active + 1)}
+            >
+              <ChevronRight size={22} />
+            </button>
+          </div>
+        )}
+      </div>
+      <ul className="game-carousel" ref={trackRef} aria-label="게임 목록, 옆으로 넘겨요">
+        {GAMES.map((g, i) => (
+          <li key={g.id} aria-label={`${GAMES.length}개 중 ${i + 1}번째`}>
             <GameCard game={g} save={save} onPlay={onPlay} />
           </li>
         ))}
       </ul>
+      {GAMES.length > 1 &&
+        (GAMES.length <= 8 ? (
+          <div className="game-dots" aria-hidden="true">
+            {GAMES.map((g, i) => (
+              <span key={g.id} className={i === active ? 'game-dot is-active' : 'game-dot'} />
+            ))}
+          </div>
+        ) : (
+          <p className="game-counter" aria-hidden="true">
+            {active + 1} / {GAMES.length}
+          </p>
+        ))}
 
       <div className="home-tiles">
         <button type="button" className="home-tile" onClick={onOpenShop}>
