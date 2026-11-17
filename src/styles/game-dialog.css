@@ -14,10 +14,24 @@
   width: 100%;
   max-width: 360px;
   padding: var(--space-5);
-  border-radius: 20px;
+  border: 2px solid var(--line);
+  border-radius: 28px;
   background: var(--color-bg);
+  box-shadow: 0 8px 0 var(--line-strong);
   color: var(--color-text-default);
   text-align: center;
+  animation: dialog-pop 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.25);
+}
+
+@keyframes dialog-pop {
+  0% {
+    transform: scale(0.86);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 .dialog-title {
@@ -41,20 +55,30 @@
   margin-top: var(--space-5);
 }
 
+/* 입체 버튼 — 아래 그림자가 눌리면 줄어든다 (arcade.css의 .ab-btn과 같은 모양) */
 .btn {
   min-height: 52px;
   padding: 0 var(--space-4);
   border: 0;
-  border-radius: 14px;
+  border-radius: 16px;
   font: inherit;
   font-size: var(--font-size-body);
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
+  transition:
+    transform 0.08s ease,
+    box-shadow 0.08s ease;
 }
 
 .btn-primary {
   background: var(--brand-primary);
+  box-shadow: 0 4px 0 var(--brand-primary-dark);
   color: var(--color-text-inverse);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--brand-primary-dark);
 }
 
 .btn:disabled {
@@ -69,8 +93,18 @@
 }
 
 .btn-secondary {
-  background: var(--color-bg-canvas);
+  background: var(--color-bg);
+  box-shadow:
+    0 0 0 2px var(--line) inset,
+    0 4px 0 var(--line-strong);
   color: var(--color-text-strong);
+}
+
+.btn-secondary:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow:
+    0 0 0 2px var(--line) inset,
+    0 1px 0 var(--line-strong);
 }
 
 .result-badge {
@@ -78,24 +112,29 @@
   margin: 0 0 var(--space-3);
   padding: var(--space-1) var(--space-3);
   border-radius: 999px;
-  background: #fff4d6;
-  color: #8a5a00;
+  background: linear-gradient(90deg, #ffe08a, #ffc94d);
+  box-shadow: 0 3px 0 #e8a92a;
+  color: #6b4500;
   font-size: var(--font-size-body-small);
-  font-weight: 600;
+  font-weight: 700;
 }
 
+/* 점수 — 보라·분홍 그라데이션 글자 */
 .result-score {
   margin: var(--space-2) 0 0;
-  font-size: var(--font-size-display);
-  font-weight: var(--font-weight-display);
-  color: var(--color-text-strong);
+  background: linear-gradient(90deg, var(--brand-pink), var(--brand-primary));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-size: 36px;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
 .result-rows {
   margin: var(--space-4) 0 0;
   padding: var(--space-3) var(--space-4);
-  border-radius: 14px;
+  border-radius: 16px;
   background: var(--color-bg-canvas);
 }
 
@@ -120,9 +159,18 @@
 .result-unlock {
   margin: var(--space-3) 0 0;
   padding: var(--space-3);
-  border-radius: 14px;
-  background: #e8f8f0;
-  color: #04693f;
+  border-radius: 16px;
+  background: var(--brand-mint-soft);
+  color: #0b6e63;
   font-size: var(--font-size-body-small);
   font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-dialog {
+    animation: none;
+  }
+  .btn {
+    transition: none;
+  }
 }

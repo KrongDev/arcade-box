@@ -36,8 +36,9 @@
   height: 44px;
   padding: 0;
   border: 0;
-  border-radius: 12px;
+  border-radius: 14px;
   background: var(--pb-surface);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.35), 0 0 0 2px rgba(165, 148, 255, 0.35) inset;
   color: var(--pb-text);
   cursor: pointer;
 }
@@ -158,4 +159,9 @@
 .hud-tag-multi {
   background: #ff5c86;
   color: #ffffff;
+}
+
+.hud-pause:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35), 0 0 0 2px rgba(165, 148, 255, 0.35) inset;
 }

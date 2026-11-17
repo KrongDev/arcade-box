@@ -1,0 +1,196 @@
+/**
+ * 아케이드박스 공통 그림체 — 화면들이 함께 쓰는 버튼·카드·칩.
+ * 밝은 바탕(라이트 모드)에 보라·분홍·금색 포인트, 꾹 눌리는 입체 버튼.
+ * 값은 tokens.css의 토큰만 쓴다.
+ */
+
+/* 화면 바탕은 index.css의 body·#root가 깐다. 화면은 높이만 채운다 */
+.ab-page {
+  min-height: 100vh;
+  /* biome-ignore lint/suspicious/noDuplicateProperties: dvh 미지원 브라우저용 vh 폴백 */
+  min-height: 100dvh;
+}
+
+/* 입체 버튼 — 아래 그림자가 눌리면 줄어든다 */
+.ab-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 52px;
+  padding: 0 var(--space-5);
+  border: 0;
+  border-radius: 16px;
+  background: var(--brand-primary);
+  box-shadow: 0 4px 0 var(--brand-primary-dark);
+  color: var(--color-text-inverse);
+  font: inherit;
+  font-size: var(--font-size-body);
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+  transition:
+    transform 0.08s ease,
+    box-shadow 0.08s ease;
+}
+
+.ab-btn:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--brand-primary-dark);
+}
+
+.ab-btn:disabled {
+  background: var(--color-bg-canvas);
+  box-shadow: 0 4px 0 var(--line-strong);
+  color: var(--color-text-hint);
+  cursor: default;
+}
+
+.ab-btn--sm {
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border-radius: 14px;
+  font-size: var(--font-size-body-small);
+}
+
+.ab-btn--block {
+  display: flex;
+  width: 100%;
+}
+
+.ab-btn--pink {
+  background: var(--brand-pink);
+  box-shadow: 0 4px 0 var(--brand-pink-dark);
+}
+
+.ab-btn--pink:active:not(:disabled) {
+  box-shadow: 0 1px 0 var(--brand-pink-dark);
+}
+
+.ab-btn--gold {
+  background: var(--brand-gold);
+  box-shadow: 0 4px 0 var(--brand-gold-dark);
+  color: var(--color-text-strong);
+}
+
+.ab-btn--gold:active:not(:disabled) {
+  box-shadow: 0 1px 0 var(--brand-gold-dark);
+}
+
+.ab-btn--ghost {
+  background: var(--color-bg);
+  box-shadow:
+    0 0 0 2px var(--line) inset,
+    0 4px 0 var(--line-strong);
+  color: var(--color-text-strong);
+}
+
+.ab-btn--ghost:active:not(:disabled) {
+  box-shadow:
+    0 0 0 2px var(--line) inset,
+    0 1px 0 var(--line-strong);
+}
+
+/* 카드 — 흰 면, 연보라 테두리, 아래로 살짝 두께 */
+.ab-card {
+  border: 2px solid var(--line);
+  border-radius: 22px;
+  background: var(--color-bg);
+  box-shadow: 0 5px 0 var(--line);
+}
+
+/* 동그란 아이콘 버튼 (설정 등) */
+.ab-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 2px solid var(--line);
+  border-radius: 14px;
+  background: var(--color-bg);
+  box-shadow: 0 3px 0 var(--line);
+  color: var(--color-text-subtle);
+  cursor: pointer;
+}
+
+.ab-icon-btn:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--line);
+}
+
+/* 코인 칩 */
+.ab-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 40px;
+  padding: 0 var(--space-3);
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  background: var(--color-bg);
+  font-size: var(--font-size-body-small);
+  color: var(--color-text-subtle);
+}
+
+.ab-chip strong {
+  color: var(--color-text-strong);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 섹션 제목 — 왼쪽에 색 막대 */
+.ab-section-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-5) 0 var(--space-3);
+  font-size: var(--font-size-title);
+  font-weight: 700;
+  color: var(--color-text-strong);
+}
+
+.ab-section-title::before {
+  content: '';
+  width: 6px;
+  height: 20px;
+  border-radius: 3px;
+  background: linear-gradient(var(--brand-pink), var(--brand-primary));
+}
+
+/* 알약 탭 */
+.ab-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.ab-tab {
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  background: var(--color-bg);
+  color: var(--color-text-subtle);
+  font: inherit;
+  font-size: var(--font-size-body-small);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ab-tab.is-active,
+.ab-tab[aria-selected='true'] {
+  border-color: var(--brand-primary);
+  background: var(--brand-primary);
+  box-shadow: 0 3px 0 var(--brand-primary-dark);
+  color: var(--color-text-inverse);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ab-btn,
+  .ab-icon-btn {
+    transition: none;
+  }
+}

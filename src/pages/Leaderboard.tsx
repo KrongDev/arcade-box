@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { API_BASE, api, type LeaderboardData } from '../game/api';
 import { useSave } from '../game/save-context';
 import { NAV_BAR_OFFSET, useSafeArea } from '../game/useSafeArea';
+import '../styles/arcade.css';
 import './Leaderboard.css';
 
 const BOARDS = [
@@ -61,7 +62,7 @@ export default function Leaderboard({ onExit }: { onExit: () => void }) {
   };
 
   return (
-    <main className="board" style={{ paddingTop: insets.top + NAV_BAR_OFFSET, paddingBottom: insets.bottom + 24 }}>
+    <main className="board ab-page" style={{ paddingTop: insets.top + NAV_BAR_OFFSET, paddingBottom: insets.bottom + 24 }}>
       <header className="board-header">
         <h1 className="board-title">
           <span className="tf">🏆</span> 순위표
@@ -73,14 +74,14 @@ export default function Leaderboard({ onExit }: { onExit: () => void }) {
         </p>
       </header>
 
-      <div className="board-tabs" role="tablist" aria-label="순위표 종류">
+      <div className="ab-tabs board-tabs" role="tablist" aria-label="순위표 종류">
         {boards.map((b) => (
           <button
             key={b.id}
             type="button"
             role="tab"
             aria-selected={b.id === board}
-            className={b.id === board ? 'board-tab is-active' : 'board-tab'}
+            className={b.id === board ? 'ab-tab is-active' : 'ab-tab'}
             onClick={() => choose(b.id)}
           >
             {b.label}
@@ -94,8 +95,11 @@ export default function Leaderboard({ onExit }: { onExit: () => void }) {
 
       {API_BASE && state.kind === 'error' && (
         <div className="board-empty-box">
+          <span className="board-empty-emoji tf" aria-hidden="true">
+            📡
+          </span>
           <p className="board-empty">순위표를 불러오지 못했어요. 네트워크를 확인하고 다시 시도해 주세요.</p>
-          <button type="button" className="board-secondary-button" onClick={retry}>
+          <button type="button" className="ab-btn ab-btn--sm ab-btn--ghost board-secondary-button" onClick={retry}>
             다시 불러오기
           </button>
         </div>
@@ -115,10 +119,32 @@ export default function Leaderboard({ onExit }: { onExit: () => void }) {
           </section>
 
           {state.data.entries.length === 0 ? (
-            <p className="board-empty">아직 아무도 기록을 남기지 않았어요</p>
+            <div className="board-empty-box">
+              <span className="board-empty-emoji tf" aria-hidden="true">
+                🏆
+              </span>
+              <p className="board-empty">아직 아무도 기록을 남기지 않았어요</p>
+            </div>
           ) : (
-            <ol className="board-list">
-              {state.data.entries.map((e) => (
+            <>
+            {/* 1~3위 시상대: 2위 · 1위 · 3위 순서로 놓는다 */}
+            <ol className="board-podium" aria-label="1위부터 3위">
+              {[1, 0, 2]
+                .map((k) => state.data.entries[k])
+                .filter((e): e is LeaderboardData['entries'][number] => e !== undefined)
+                .map((e) => (
+                  <li key={`p-${e.rank}-${e.player}`} className={`podium-step is-rank-${e.rank}${e.me ? ' is-me' : ''}`}>
+                    <span className="podium-medal tf">{MEDALS[e.rank - 1]}</span>
+                    <span className="podium-player">{e.me ? `${e.player} (나)` : e.player}</span>
+                    <span className="podium-value">{formatValue(e.value)}</span>
+                    <span className="podium-base" aria-hidden="true">
+                      {e.rank}
+                    </span>
+                  </li>
+                ))}
+            </ol>
+            <ol className="board-list" start={4}>
+              {state.data.entries.slice(3).map((e) => (
                 <li key={`${e.rank}-${e.player}`} className={e.me ? 'board-row is-me' : 'board-row'}>
                   <span className="board-rank">
                     {e.rank <= 3 ? <span className="tf">{MEDALS[e.rank - 1]}</span> : e.rank}
@@ -128,11 +154,12 @@ export default function Leaderboard({ onExit }: { onExit: () => void }) {
                 </li>
               ))}
             </ol>
+            </>
           )}
         </>
       )}
 
-      <button type="button" className="board-home-button" onClick={onExit}>
+      <button type="button" className="ab-btn ab-btn--ghost ab-btn--block board-home-button" onClick={onExit}>
         홈으로
       </button>
     </main>

@@ -8,24 +8,40 @@
 
 :root {
   /* 텍스트 — 중립 그레이스케일. #000은 쓰지 않는다(예외는 아래 --dim). */
-  --color-text-strong: #191f28; /* 제목·금액·핵심 숫자 */
-  --color-text-default: #333d4b; /* 본문·리스트 타이틀 */
-  --color-text-subtle: #4e5968; /* 설명·부제·메타데이터 */
-  --color-text-hint: #8b95a1; /* placeholder·타임스탬프·약한 힌트 */
-  --color-text-disabled: #b0b8c1; /* 비활성·장식 라벨 */
+  /* 아케이드박스: 보라빛이 살짝 도는 회색 */
+  --color-text-strong: #1f1a3d; /* 제목·금액·핵심 숫자 */
+  --color-text-default: #3a3557; /* 본문·리스트 타이틀 */
+  --color-text-subtle: #5d5878; /* 설명·부제·메타데이터 */
+  --color-text-hint: #8a85a6; /* placeholder·타임스탬프·약한 힌트 */
+  --color-text-disabled: #b6b1cc; /* 비활성·장식 라벨 */
   --color-text-inverse: #ffffff; /* 브랜드·강조로 채운 표면 위 텍스트 */
 
   /* 배경 */
-  --color-bg: #ffffff; /* 기본 배경 */
-  --color-bg-canvas: #f2f4f6; /* 회색 캔버스 배경 */
+  --color-bg: #ffffff; /* 기본 배경(카드 표면) */
+  --color-bg-canvas: #f1edff; /* 칩·잠긴 면처럼 한 단계 들어간 면 */
 
   /* 상태색 — harness 기준(H), 공식 규격 단정 아님 */
   --color-danger: #f04452; /* 위험·에러 상태 */
   --color-success: #03b26c; /* 성공·완료 상태 */
   --color-warning: #fe9800; /* 경고·주의 상태 */
 
-  /* 브랜드 강조색 — 중립 기본값이다. 브랜드 색으로 바꾸세요. */
-  --brand-primary: #191f28;
+  /* 브랜드 — 아케이드박스: 보라(주), 분홍·금색(보조). 진한 값은 입체 버튼의 아래 그림자 */
+  --brand-primary: #6c4cf1;
+  --brand-primary-dark: #4f32c9;
+  --brand-primary-soft: #ece6ff;
+  --brand-pink: #d6266a; /* 흰 글자 대비 4.8:1 */
+  --brand-pink-dark: #a3164c;
+  --brand-pink-soft: #ffe5ef;
+  --brand-gold: #ffb627;
+  --brand-gold-dark: #d98a00;
+  --brand-gold-soft: #fff3d6;
+  --brand-mint: #14b8a6;
+  --brand-mint-soft: #dcf7f3;
+
+  /* 화면 바탕과 카드 테두리 */
+  --page-bg: #f5f2ff;
+  --line: #e6e0fb;
+  --line-strong: #d6cdf7;
 
   /* 타이포 스케일 — 크기는 이 6단계 안에서만 고른다. weight는 400~700만 쓴다. */
   --font-size-display: 28px; /* Display·히어로 (26~32px 범위 안에서 조정 가능) */

@@ -1,14 +1,10 @@
 .board {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
-  /* biome-ignore lint/suspicious/noDuplicateProperties: dvh 미지원 브라우저용 vh 폴백 */
-  min-height: 100dvh;
-  background: var(--color-bg);
 }
 
 .board-header {
-  margin-bottom: var(--space-5);
+  margin-bottom: var(--space-4);
 }
 
 .board-title {
@@ -22,56 +18,122 @@
   margin: var(--space-2) 0 0;
   font-size: var(--font-size-body-small);
   color: var(--color-text-subtle);
+  line-height: 1.45;
 }
 
 .board-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
   margin-bottom: var(--space-4);
 }
 
-.board-tab {
-  min-height: 44px;
-  padding: 0 var(--space-4);
-  border: 1px solid #e5e8eb;
-  border-radius: 999px;
-  background: var(--color-bg);
-  color: var(--color-text-subtle);
-  font: inherit;
-  font-size: var(--font-size-body-small);
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.board-tab.is-active {
-  border-color: var(--brand-primary);
-  background: var(--brand-primary);
-  color: var(--color-text-inverse);
-}
-
+/* 내 순위 — 보라 카드 */
 .board-me {
-  margin-bottom: var(--space-4);
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-5);
   padding: var(--space-4);
-  border-radius: 16px;
-  background: var(--color-bg-canvas);
+  border-radius: 22px;
+  background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-primary-dark) 100%);
+  box-shadow: 0 5px 0 var(--brand-primary-dark);
+  color: var(--color-text-inverse);
 }
 
 .board-me-rank {
   margin: 0;
   font-size: var(--font-size-display);
-  font-weight: var(--font-weight-display);
-  color: var(--color-text-strong);
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
 .board-me-value {
-  margin: var(--space-1) 0 0;
+  margin: 0;
   font-size: var(--font-size-body-small);
-  color: var(--color-text-subtle);
+  color: rgba(255, 255, 255, 0.9);
 }
 
+/* 시상대 — 가운데가 1위, 높이가 다르다 */
+.board-podium {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  list-style: none;
+}
+
+.podium-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  text-align: center;
+}
+
+.podium-medal {
+  font-size: 32px;
+  line-height: 1.2;
+}
+
+.podium-player {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: var(--font-size-caption);
+  font-weight: 600;
+  color: var(--color-text-default);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.podium-value {
+  font-size: var(--font-size-body-small);
+  font-weight: 700;
+  color: var(--color-text-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.podium-base {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  width: 100%;
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-radius: 16px 16px 6px 6px;
+  font-size: var(--font-size-title);
+  font-weight: 700;
+  color: var(--color-text-inverse);
+}
+
+.podium-step.is-rank-1 .podium-base {
+  height: 96px;
+  background: linear-gradient(180deg, #ffc94d, #f5a300);
+  box-shadow: 0 5px 0 #d98a00;
+}
+
+.podium-step.is-rank-2 .podium-base {
+  height: 72px;
+  background: linear-gradient(180deg, #c8cee0, #9aa3b8);
+  box-shadow: 0 5px 0 #7d869c;
+}
+
+.podium-step.is-rank-3 .podium-base {
+  height: 56px;
+  background: linear-gradient(180deg, #f3b98a, #d98a52);
+  box-shadow: 0 5px 0 #b56a36;
+}
+
+.podium-step.is-me .podium-player {
+  color: var(--brand-primary);
+}
+
+/* 4위부터 목록 */
 .board-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -82,20 +144,21 @@
   align-items: center;
   gap: var(--space-3);
   min-height: 56px;
-  padding: var(--space-2) var(--space-3);
-  border-bottom: 1px solid #f2f4f6;
+  padding: 0 var(--space-4);
+  border: 2px solid var(--line);
+  border-radius: 16px;
+  background: var(--color-bg);
+  font-size: var(--font-size-body-small);
 }
 
 .board-row.is-me {
-  border-radius: 12px;
-  border-bottom-color: transparent;
-  background: #fff4d6;
+  border-color: var(--brand-primary);
+  background: var(--brand-primary-soft);
 }
 
 .board-rank {
+  width: 32px;
   flex-shrink: 0;
-  width: 36px;
-  font-size: var(--font-size-body);
   font-weight: 700;
   color: var(--color-text-subtle);
   text-align: center;
@@ -105,56 +168,46 @@
 .board-player {
   flex: 1;
   min-width: 0;
-  font-size: var(--font-size-body);
-  color: var(--color-text-strong);
+  overflow: hidden;
+  color: var(--color-text-default);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .board-value {
   flex-shrink: 0;
-  font-size: var(--font-size-body);
-  font-weight: 600;
+  font-weight: 700;
   color: var(--color-text-strong);
   font-variant-numeric: tabular-nums;
 }
 
+/* 비었을 때·실패했을 때 */
 .board-empty-box {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-5) 0;
+  padding: var(--space-6) var(--space-4);
+  border: 2px dashed var(--line-strong);
+  border-radius: 22px;
   text-align: center;
+}
+
+.board-empty-emoji {
+  font-size: 44px;
 }
 
 .board-empty {
-  margin: var(--space-4) 0;
+  margin: 0;
   font-size: var(--font-size-body-small);
   color: var(--color-text-subtle);
-  text-align: center;
+  line-height: 1.5;
 }
 
 .board-secondary-button {
-  min-height: 44px;
-  padding: 0 var(--space-5);
-  border: 0;
-  border-radius: 12px;
-  background: var(--color-bg-canvas);
-  color: var(--color-text-strong);
-  font: inherit;
-  font-size: var(--font-size-body-small);
-  font-weight: 600;
-  cursor: pointer;
+  min-width: 140px;
 }
 
 .board-home-button {
-  min-height: 52px;
   margin-top: var(--space-5);
-  border: 0;
-  border-radius: 14px;
-  background: var(--color-bg-canvas);
-  color: var(--color-text-strong);
-  font: inherit;
-  font-size: var(--font-size-body);
-  font-weight: 600;
-  cursor: pointer;
 }

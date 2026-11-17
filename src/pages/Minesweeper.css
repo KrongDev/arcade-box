@@ -2,10 +2,6 @@
 .ms-select {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
-  /* biome-ignore lint/suspicious/noDuplicateProperties: dvh 미지원 브라우저용 vh 폴백 */
-  min-height: 100dvh;
-  background: var(--color-bg);
 }
 
 .ms-select-header {
@@ -26,37 +22,32 @@
 }
 
 .ms-wallet {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
   margin: var(--space-4) 0 0;
-  padding: var(--space-2) var(--space-3);
-  border-radius: 999px;
-  background: var(--color-bg-canvas);
-  font-size: var(--font-size-body-small);
-  font-weight: 600;
-  color: var(--color-text-strong);
 }
 
 .ms-levels {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-4);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .ms-level {
+  --level: var(--brand-primary);
+  --level-dark: var(--brand-primary-dark);
+  --level-soft: var(--brand-primary-soft);
   display: flex;
   align-items: center;
   gap: var(--space-3);
   width: 100%;
-  min-height: 88px;
+  min-height: 96px;
   padding: var(--space-4);
-  border: 0;
-  border-radius: 16px;
-  background: var(--color-bg-canvas);
+  border: 2px solid var(--level-soft);
+  border-radius: 22px;
+  background: var(--color-bg);
+  box-shadow: 0 5px 0 var(--level-soft);
   color: inherit;
   font: inherit;
   text-align: left;
@@ -80,7 +71,7 @@ button.ms-level:active {
 }
 
 .ms-level-name {
-  font-size: var(--font-size-body);
+  font-size: var(--font-size-title);
   font-weight: 700;
   color: var(--color-text-strong);
 }
@@ -91,9 +82,14 @@ button.ms-level:active {
 }
 
 .ms-level-meta {
-  margin-top: 2px;
+  align-self: flex-start;
+  margin-top: var(--space-1);
+  padding: 2px var(--space-2);
+  border-radius: 8px;
+  background: var(--level-soft);
   font-size: var(--font-size-caption);
-  color: var(--color-text-subtle);
+  font-weight: 600;
+  color: var(--color-text-default);
 }
 
 .ms-level.is-locked .ms-level-name,
@@ -107,24 +103,27 @@ button.ms-level:active {
   align-items: center;
   min-height: 44px;
   padding: 0 var(--space-4);
-  border-radius: 12px;
-  background: var(--brand-primary);
+  border-radius: 14px;
+  background: var(--level);
+  box-shadow: 0 4px 0 var(--level-dark);
   color: var(--color-text-inverse);
   font-size: var(--font-size-body-small);
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .ms-howto {
   margin-top: var(--space-6);
   padding: var(--space-4);
-  border: 1px solid #e5e8eb;
-  border-radius: 16px;
+  border: 2px solid var(--line);
+  border-radius: 22px;
+  background: var(--color-bg);
+  box-shadow: 0 5px 0 var(--line);
 }
 
 .ms-howto-title {
   margin: 0 0 var(--space-2);
   font-size: var(--font-size-body);
-  font-weight: 600;
+  font-weight: 700;
   color: var(--color-text-strong);
 }
 
@@ -137,16 +136,7 @@ button.ms-level:active {
 }
 
 .ms-home-button {
-  min-height: 52px;
   margin-top: var(--space-5);
-  border: 0;
-  border-radius: 14px;
-  background: var(--color-bg-canvas);
-  color: var(--color-text-strong);
-  font: inherit;
-  font-size: var(--font-size-body);
-  font-weight: 600;
-  cursor: pointer;
 }
 
 /* ───── 플레이 ───── */
@@ -188,9 +178,10 @@ button.ms-level:active {
   width: 44px;
   height: 44px;
   padding: 0;
-  border: 0;
-  border-radius: 12px;
+  border: 2px solid var(--line);
+  border-radius: 14px;
   background: var(--color-bg);
+  box-shadow: 0 3px 0 var(--line);
   color: var(--color-text-strong);
   cursor: pointer;
 }
@@ -518,26 +509,27 @@ button.ms-level:active {
   grid-template-columns: 1fr 1fr;
   gap: var(--space-1);
   padding: var(--space-1);
-  border-radius: 14px;
-  background: var(--color-bg-canvas);
+  border: 2px solid var(--line);
+  border-radius: 18px;
+  background: var(--color-bg);
 }
 
 .ms-mode-button {
   min-height: 48px;
   border: 0;
-  border-radius: 10px;
+  border-radius: 14px;
   background: transparent;
   color: var(--color-text-subtle);
   font: inherit;
   font-size: var(--font-size-body);
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
 }
 
 .ms-mode-button.is-active {
-  background: var(--color-bg);
-  color: var(--color-text-strong);
-  box-shadow: 0 1px 3px rgba(25, 31, 40, 0.12);
+  background: var(--brand-primary);
+  box-shadow: 0 3px 0 var(--brand-primary-dark);
+  color: var(--color-text-inverse);
 }
 
 /* 결과 창이 판을 너무 가리지 않게 — 끝난 판을 살짝 비쳐 보이게 */
@@ -552,3 +544,54 @@ button.ms-level:active {
   gap: var(--space-2);
 }
 
+/* 난이도 색: 초급 초록 · 중급 주황 · 고급 분홍빨강 (흰 글자 대비 5:1 이상) */
+.ms-level.is-easy {
+  --level: #0b7d5a;
+  --level-dark: #075c42;
+  --level-soft: #d3f5ea;
+}
+
+.ms-level.is-normal {
+  --level: #b35400;
+  --level-dark: #8a3f00;
+  --level-soft: #ffe8cc;
+}
+
+.ms-level.is-hard {
+  --level: #d02a55;
+  --level-dark: #a01a3e;
+  --level-soft: #ffdce5;
+}
+
+button.ms-level {
+  cursor: pointer;
+}
+
+button.ms-level:active {
+  transform: translateY(3px);
+  box-shadow: 0 2px 0 var(--level-soft);
+}
+
+.ms-level-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: var(--level);
+  box-shadow: 0 3px 0 var(--level-dark);
+  color: var(--color-text-strong);
+}
+
+.ms-level.is-locked {
+  border-color: var(--line);
+  background: var(--color-bg-canvas);
+  box-shadow: 0 5px 0 var(--line);
+}
+
+.ms-level.is-locked .ms-level-icon {
+  background: var(--line-strong);
+  box-shadow: 0 3px 0 var(--line-strong);
+}

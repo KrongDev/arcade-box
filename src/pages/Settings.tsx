@@ -6,6 +6,7 @@ import { haptic } from '../game/haptic';
 import { itemForSku } from '../game/iap';
 import { useSave } from '../game/save-context';
 import { NAV_BAR_OFFSET, useSafeArea } from '../game/useSafeArea';
+import '../styles/arcade.css';
 import './Settings.css';
 
 function useBackEvent(handler: () => void) {
@@ -39,12 +40,12 @@ function SettingsMain({ onExit, onOpenPurchases }: { onExit: () => void; onOpenP
   useBackEvent(onExit);
 
   return (
-    <main className="settings" style={{ paddingTop: insets.top + NAV_BAR_OFFSET, paddingBottom: insets.bottom + 24 }}>
+    <main className="settings ab-page" style={{ paddingTop: insets.top + NAV_BAR_OFFSET, paddingBottom: insets.bottom + 24 }}>
       <h1 className="settings-title">설정</h1>
 
       <section className="settings-group" aria-labelledby="settings-sound">
         <h2 id="settings-sound" className="settings-group-title">
-          소리와 진동
+          <span className="tf">🔊</span> 소리와 진동
         </h2>
         <ToggleRow
           label="효과음"
@@ -65,7 +66,7 @@ function SettingsMain({ onExit, onOpenPurchases }: { onExit: () => void; onOpenP
 
       <section className="settings-group" aria-labelledby="settings-purchase">
         <h2 id="settings-purchase" className="settings-group-title">
-          구매
+          <span className="tf">🧾</span> 구매
         </h2>
         <button type="button" className="settings-row is-link" onClick={onOpenPurchases}>
           <span className="settings-row-text">
@@ -80,7 +81,7 @@ function SettingsMain({ onExit, onOpenPurchases }: { onExit: () => void; onOpenP
 
       <section className="settings-group" aria-labelledby="settings-help">
         <h2 id="settings-help" className="settings-group-title">
-          도움말
+          <span className="tf">💬</span> 도움말
         </h2>
         {SUPPORT_EMAIL && (
           <div className="settings-row">
@@ -116,7 +117,7 @@ function SettingsMain({ onExit, onOpenPurchases }: { onExit: () => void; onOpenP
         </div>
       </section>
 
-      <button type="button" className="settings-home-button" onClick={onExit}>
+      <button type="button" className="ab-btn ab-btn--ghost ab-btn--block settings-home-button" onClick={onExit}>
         홈으로
       </button>
     </main>
@@ -213,7 +214,7 @@ function PurchaseHistory({ onBack }: { onBack: () => void }) {
   };
 
   return (
-    <main className="settings" style={{ paddingTop: insets.top + NAV_BAR_OFFSET, paddingBottom: insets.bottom + 24 }}>
+    <main className="settings ab-page" style={{ paddingTop: insets.top + NAV_BAR_OFFSET, paddingBottom: insets.bottom + 24 }}>
       <h1 className="settings-title">구매 내역</h1>
 
       {state.kind === 'loading' && <p className="settings-empty">불러오는 중이에요</p>}
@@ -222,7 +223,7 @@ function PurchaseHistory({ onBack }: { onBack: () => void }) {
         <div className="settings-empty-box">
           <p className="settings-empty">{state.message}</p>
           {supported && (
-            <button type="button" className="settings-secondary-button" onClick={retry}>
+            <button type="button" className="ab-btn ab-btn--sm ab-btn--ghost settings-secondary-button" onClick={retry}>
               다시 불러오기
             </button>
           )}
@@ -254,14 +255,14 @@ function PurchaseHistory({ onBack }: { onBack: () => void }) {
             ))}
           </ul>
           {state.nextKey && (
-            <button type="button" className="settings-secondary-button" onClick={loadMore} disabled={loadingMore}>
+            <button type="button" className="ab-btn ab-btn--sm ab-btn--ghost settings-secondary-button" onClick={loadMore} disabled={loadingMore}>
               {loadingMore ? '불러오는 중이에요' : '더 보기'}
             </button>
           )}
         </>
       )}
 
-      <button type="button" className="settings-home-button" onClick={onBack}>
+      <button type="button" className="ab-btn ab-btn--ghost ab-btn--block settings-home-button" onClick={onBack}>
         설정으로
       </button>
     </main>

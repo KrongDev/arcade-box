@@ -28,6 +28,7 @@ import {
   type ScoreBreakdown,
 } from '../minesweeper/board';
 import { useBoardGestures } from '../minesweeper/useBoardGestures';
+import '../styles/arcade.css';
 import '../styles/game-dialog.css';
 import './Minesweeper.css';
 
@@ -69,14 +70,14 @@ function DifficultySelect({ onExit, onStart }: { onExit: () => void; onStart: (i
   useBackEvent(onExit);
 
   return (
-    <main className="ms-select" style={{ paddingTop: insets.top + NAV_BAR_OFFSET, paddingBottom: insets.bottom + 24 }}>
+    <main className="ms-select ab-page" style={{ paddingTop: insets.top + NAV_BAR_OFFSET, paddingBottom: insets.bottom + 24 }}>
       <header className="ms-select-header">
         <h1 className="ms-select-title">
           <span className="tf">💣</span> 지뢰찾기
         </h1>
         <p className="ms-select-subtitle">숫자를 보고 지뢰를 피해 모든 칸을 열어요</p>
-        <p className="ms-wallet">
-          <Coin /> 지뢰찾기 코인 {(save.coins.minesweeper ?? 0).toLocaleString()}
+        <p className="ab-chip ms-wallet">
+          <Coin /> 지뢰찾기 코인 <strong>{(save.coins.minesweeper ?? 0).toLocaleString()}</strong>
         </p>
       </header>
 
@@ -89,7 +90,8 @@ function DifficultySelect({ onExit, onStart }: { onExit: () => void; onStart: (i
           if (!unlocked) {
             return (
               <li key={d.id}>
-                <div className="ms-level is-locked" aria-disabled="true">
+                <div className={`ms-level is-${d.id} is-locked`} aria-disabled="true">
+                  <LevelIcon level={d.id} />
                   <span className="ms-level-body">
                     <span className="ms-level-name">
                       {d.name} <span className="tf">🔒</span>
@@ -103,7 +105,8 @@ function DifficultySelect({ onExit, onStart }: { onExit: () => void; onStart: (i
           }
           return (
             <li key={d.id}>
-              <button type="button" className="ms-level" onClick={() => onStart(d.id)}>
+              <button type="button" className={`ms-level is-${d.id}`} onClick={() => onStart(d.id)}>
+                <LevelIcon level={d.id} />
                 <span className="ms-level-body">
                   <span className="ms-level-name">{d.name}</span>
                   <span className="ms-level-spec">{spec}</span>
@@ -121,7 +124,9 @@ function DifficultySelect({ onExit, onStart }: { onExit: () => void; onStart: (i
       </ul>
 
       <section className="ms-howto" aria-label="하는 방법">
-        <h2 className="ms-howto-title">하는 방법</h2>
+        <h2 className="ms-howto-title">
+          <span className="tf">💡</span> 하는 방법
+        </h2>
         <ul className="ms-howto-list">
           <li>칸을 누르면 열리고, 길게 누르면 깃발을 꽂아요.</li>
           <li>숫자는 주변 8칸에 있는 지뢰 수예요. 첫 칸은 항상 안전해요.</li>
@@ -131,10 +136,35 @@ function DifficultySelect({ onExit, onStart }: { onExit: () => void; onStart: (i
         </ul>
       </section>
 
-      <button type="button" className="ms-home-button" onClick={onExit}>
+      <button type="button" className="ab-btn ab-btn--ghost ab-btn--block ms-home-button" onClick={onExit}>
         홈으로
       </button>
     </main>
+  );
+}
+
+/** 난이도 아이콘 — 판 크기만큼 칸이 늘어나는 작은 격자 */
+function LevelIcon({ level }: { level: DifficultyId }) {
+  const n = level === 'easy' ? 3 : level === 'normal' ? 4 : 5;
+  const gap = 2;
+  const size = (40 - gap * (n - 1)) / n;
+  const mine = n * n - 2;
+  return (
+    <span className="ms-level-icon" aria-hidden="true">
+      <svg viewBox="0 0 40 40" width="40" height="40">
+        {Array.from({ length: n * n }, (_, i) => (
+          <rect
+            key={i}
+            x={(i % n) * (size + gap)}
+            y={Math.floor(i / n) * (size + gap)}
+            width={size}
+            height={size}
+            rx={Math.min(3, size / 3)}
+            fill={i === mine ? 'currentColor' : i % 3 === 0 ? '#ffffff' : 'rgba(255,255,255,0.55)'}
+          />
+        ))}
+      </svg>
+    </span>
   );
 }
 

@@ -99,7 +99,7 @@ function drawInserts(ctx: CanvasRenderingContext2D, engine: PinballEngine, theme
   // 구멍 아래 화살표: 잠금 불이 켜지면 깜박인다
   arrow(ctx, SAUCER.x, SAUCER.y + 40, -Math.PI / 2, 11, engine.lockLit && blink ? theme.bumper : null, theme);
   if (engine.lockLit) {
-    ctx.font = `800 13px ${FONT}`;
+    ctx.font = `700 13px ${FONT}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = blink ? theme.bumperFlash : theme.bumper;
@@ -109,7 +109,7 @@ function drawInserts(ctx: CanvasRenderingContext2D, engine: PinballEngine, theme
   // 보너스 배율 ×2 ~ ×5
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = `800 12px ${FONT}`;
+  ctx.font = `700 12px ${FONT}`;
   for (let m = 2; m <= MAX_MULTIPLIER; m++) {
     const x = 128 + (m - 2) * 33;
     const y = 400;

@@ -1,28 +1,29 @@
 .settings {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
-  /* biome-ignore lint/suspicious/noDuplicateProperties: dvh 미지원 브라우저용 vh 폴백 */
-  min-height: 100dvh;
-  background: var(--color-bg);
 }
 
 .settings-title {
-  margin: 0 0 var(--space-5);
+  margin: 0 0 var(--space-4);
   font-size: var(--font-size-display);
   font-weight: var(--font-weight-display);
   color: var(--color-text-strong);
 }
 
 .settings-group {
-  margin-bottom: var(--space-5);
+  margin-bottom: var(--space-4);
+  padding: var(--space-2) var(--space-4);
+  border: 2px solid var(--line);
+  border-radius: 22px;
+  background: var(--color-bg);
+  box-shadow: 0 5px 0 var(--line);
 }
 
 .settings-group-title {
-  margin: 0 0 var(--space-2);
+  margin: var(--space-3) 0 var(--space-1);
   font-size: var(--font-size-body-small);
-  font-weight: 600;
-  color: var(--color-text-subtle);
+  font-weight: 700;
+  color: var(--brand-primary);
 }
 
 /* 행 */
@@ -34,7 +35,7 @@
   min-height: 64px;
   padding: var(--space-3) 0;
   border: 0;
-  border-bottom: 1px solid #f2f4f6;
+  border-bottom: 2px solid var(--color-bg-canvas);
   background: transparent;
   color: inherit;
   font: inherit;
@@ -81,12 +82,12 @@
   width: 52px;
   height: 32px;
   border-radius: 16px;
-  background: #d1d6db;
+  background: var(--line-strong);
   transition: background 0.15s ease;
 }
 
 .settings-switch.is-on {
-  background: var(--color-success);
+  background: var(--brand-primary);
 }
 
 .settings-switch-knob {
@@ -97,7 +98,7 @@
   height: 26px;
   border-radius: 50%;
   background: var(--color-bg);
-  box-shadow: 0 1px 3px rgba(25, 31, 40, 0.2);
+  box-shadow: 0 2px 0 rgba(31, 26, 61, 0.18);
   transition: transform 0.15s ease;
 }
 
@@ -107,10 +108,10 @@
 
 /* 안내 */
 .settings-info {
-  margin-top: var(--space-3);
-  padding: var(--space-4);
+  margin: var(--space-2) 0 var(--space-3);
+  padding: var(--space-3) var(--space-4);
   border-radius: 16px;
-  background: var(--color-bg-canvas);
+  background: var(--brand-primary-soft);
 }
 
 .settings-info-title {
@@ -141,7 +142,7 @@
   gap: var(--space-3);
   min-height: 64px;
   padding: var(--space-3) 0;
-  border-bottom: 1px solid #f2f4f6;
+  border-bottom: 2px solid var(--color-bg-canvas);
 }
 
 .purchase-status {
@@ -176,27 +177,13 @@
 }
 
 .settings-secondary-button {
-  min-height: 44px;
-  padding: 0 var(--space-5);
-  border: 0;
-  border-radius: 12px;
-  background: var(--color-bg-canvas);
-  color: var(--color-text-strong);
-  font: inherit;
-  font-size: var(--font-size-body-small);
-  font-weight: 600;
-  cursor: pointer;
+  min-width: 140px;
 }
 
 .settings-home-button {
-  min-height: 52px;
   margin-top: var(--space-5);
-  border: 0;
-  border-radius: 14px;
-  background: var(--color-bg-canvas);
-  color: var(--color-text-strong);
-  font: inherit;
-  font-size: var(--font-size-body);
-  font-weight: 600;
-  cursor: pointer;
+}
+
+.settings-group .settings-row:last-child {
+  border-bottom: 0;
 }

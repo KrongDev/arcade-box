@@ -11,6 +11,7 @@ import { AD_REWARD_COINS, GAMES, getGame, type GameId } from '../game/registry';
 import { Coin } from '../components/gameIcons';
 import { useSave } from '../game/save-context';
 import { NAV_BAR_OFFSET, useSafeArea } from '../game/useSafeArea';
+import '../styles/arcade.css';
 import '../styles/game-dialog.css';
 import './Shop.css';
 
@@ -155,7 +156,7 @@ export default function Shop({ onExit }: { onExit: () => void }) {
   const inTab = (item: ShopItem) => (tab === 'paid' ? item.price.type === 'paid' : item.price.type !== 'paid');
 
   return (
-    <main className="shop" style={{ paddingTop: insets.top + NAV_BAR_OFFSET, paddingBottom: insets.bottom + 24 }}>
+    <main className="shop ab-page" style={{ paddingTop: insets.top + NAV_BAR_OFFSET, paddingBottom: insets.bottom + 24 }}>
       <header className="shop-header">
         <h1 className="shop-title">
           <span className="tf">🛍️</span> 상점
@@ -164,14 +165,14 @@ export default function Shop({ onExit }: { onExit: () => void }) {
       </header>
 
       {games.length > 1 && (
-        <div className="shop-segment" role="tablist" aria-label="게임 선택">
+        <div className="ab-tabs shop-games" role="tablist" aria-label="게임 선택">
           {games.map((g) => (
             <button
               key={g.id}
               type="button"
               role="tab"
               aria-selected={g.id === game}
-              className={g.id === game ? 'shop-segment-button is-active' : 'shop-segment-button'}
+              className={g.id === game ? 'ab-tab is-active' : 'ab-tab'}
               onClick={() => setGame(g.id)}
             >
               <span className="tf">{g.emoji}</span> {g.name}
@@ -199,7 +200,7 @@ export default function Shop({ onExit }: { onExit: () => void }) {
                 : '오늘 받을 수 있는 광고 보상을 다 받았어요'}
             </p>
           </div>
-          <button type="button" className="shop-ad-button" disabled={adButtonDisabled} onClick={watchAd}>
+          <button type="button" className="ab-btn ab-btn--sm ab-btn--gold shop-ad-button" disabled={adButtonDisabled} onClick={watchAd}>
             {adButtonLabel}
           </button>
         </section>
@@ -240,8 +241,11 @@ export default function Shop({ onExit }: { onExit: () => void }) {
             <h2 className="shop-section-title">{SLOT_NAMES[slot]}</h2>
             <ul className="shop-grid">
               {items.map((item) => (
-                <li key={item.id} className="shop-item">
-                  <ItemPreview item={item} />
+                <li key={item.id} className={`shop-item is-${item.price.type}`}>
+                  {item.price.type === 'paid' && <span className="shop-item-ribbon">유료</span>}
+                  <span className="shop-item-frame">
+                    <ItemPreview item={item} />
+                  </span>
                   <p className="shop-item-name">{item.name}</p>
                   <ItemAction
                     item={item}
@@ -266,7 +270,7 @@ export default function Shop({ onExit }: { onExit: () => void }) {
           : '코인과 코인 아이템은 서버에 저장돼서 기기를 바꿔도 이어져요.'}
       </p>
 
-      <button type="button" className="shop-home-button" onClick={onExit}>
+      <button type="button" className="ab-btn ab-btn--ghost ab-btn--block shop-home-button" onClick={onExit}>
         홈으로
       </button>
 

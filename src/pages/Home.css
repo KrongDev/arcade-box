@@ -1,14 +1,39 @@
 .home {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
-  /* biome-ignore lint/suspicious/noDuplicateProperties: dvh 미지원 브라우저용 vh 폴백 */
-  min-height: 100dvh;
-  background: var(--color-bg);
 }
 
-.home-header {
-  margin-bottom: var(--space-5);
+/* 머리: 로고 + 이름, 오른쪽 설정 */
+.home-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.home-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.home-logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  box-shadow: 0 3px 0 var(--line-strong);
+}
+
+.home-brand-name {
+  font-size: var(--font-size-body);
+  font-weight: 700;
+  color: var(--color-text-strong);
+}
+
+.home-hero {
+  margin-bottom: var(--space-4);
 }
 
 .home-title {
@@ -33,36 +58,35 @@
   margin-bottom: var(--space-4);
 }
 
-.wallet-chip {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 40px;
-  padding: var(--space-2) var(--space-3);
-  border-radius: 999px;
-  background: var(--color-bg-canvas);
-  font-size: var(--font-size-body-small);
-}
-
-.wallet-name {
-  color: var(--color-text-subtle);
-}
-
-.wallet-amount {
-  font-weight: 600;
-  color: var(--color-text-strong);
-  font-variant-numeric: tabular-nums;
-}
-
-/* 출석 보상 */
+/* 출석 보상 — 금색 카드 */
 .attendance {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  margin-bottom: var(--space-3);
   padding: var(--space-4);
-  border: 1px solid #e5e8eb;
+  border: 2px solid #ffd77a;
+  border-radius: 22px;
+  background: linear-gradient(135deg, #fff6dd 0%, #ffe3a3 100%);
+  box-shadow: 0 5px 0 #f5c96a;
+}
+
+.attendance.is-done {
+  border-color: var(--line);
+  background: var(--color-bg);
+  box-shadow: 0 5px 0 var(--line);
+}
+
+.attendance-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 52px;
+  height: 52px;
   border-radius: 16px;
+  background: var(--color-bg);
+  box-shadow: 0 3px 0 rgba(217, 138, 0, 0.35);
+  font-size: 30px;
 }
 
 .attendance-text {
@@ -73,7 +97,7 @@
 .attendance-title {
   margin: 0;
   font-size: var(--font-size-body);
-  font-weight: 600;
+  font-weight: 700;
   color: var(--color-text-strong);
 }
 
@@ -81,90 +105,18 @@
   margin: var(--space-1) 0 0;
   font-size: var(--font-size-body-small);
   color: var(--color-text-subtle);
+  line-height: 1.4;
 }
 
 .attendance-button {
-  flex-shrink: 0;
   min-width: 72px;
-  min-height: 44px;
-  padding: 0 var(--space-4);
-  border: 0;
-  border-radius: 12px;
-  background: var(--brand-primary);
-  color: var(--color-text-inverse);
-  font: inherit;
-  font-size: var(--font-size-body-small);
-  font-weight: 600;
-  cursor: pointer;
 }
 
-.attendance-button:disabled {
-  background: var(--color-bg-canvas);
-  color: var(--color-text-disabled);
-  cursor: default;
-}
-
-/* 상점 입구 */
-.shop-entry {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  width: 100%;
-  min-height: 72px;
-  margin: 0 0 var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid #e5e8eb;
-  border-radius: 16px;
-  background: var(--color-bg);
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.shop-entry-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  background: var(--color-bg-canvas);
-  font-size: 24px;
-}
-
-.shop-entry-body {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1;
-  min-width: 0;
-}
-
-.shop-entry-title {
-  font-size: var(--font-size-body);
-  font-weight: 600;
-  color: var(--color-text-strong);
-}
-
-.shop-entry-desc {
-  font-size: var(--font-size-body-small);
-  color: var(--color-text-subtle);
-}
-
-/* 게임 목록 */
-.section-title {
-  margin: var(--space-5) 0 var(--space-3);
-  font-size: var(--font-size-body);
-  font-weight: 700;
-  color: var(--color-text-strong);
-}
-
+/* 게임 카드 — 위 그림, 아래 이름·기록·플레이 */
 .game-list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-4);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -172,14 +124,14 @@
 
 .game-card {
   display: flex;
-  align-items: center;
-  gap: var(--space-4);
+  flex-direction: column;
   width: 100%;
-  min-height: 88px;
-  padding: var(--space-4);
-  border: 0;
-  border-radius: 16px;
-  background: var(--color-bg-canvas);
+  padding: 0;
+  overflow: hidden;
+  border: 2px solid var(--line);
+  border-radius: 24px;
+  background: var(--color-bg);
+  box-shadow: 0 6px 0 var(--line);
   color: inherit;
   font: inherit;
   text-align: left;
@@ -187,27 +139,31 @@
 
 button.game-card {
   cursor: pointer;
+  transition:
+    transform 0.08s ease,
+    box-shadow 0.08s ease;
 }
 
 button.game-card:active {
-  transform: scale(0.98);
-  transition: transform 0.1s ease;
+  transform: translateY(4px);
+  box-shadow: 0 2px 0 var(--line);
 }
 
-.game-tile {
+.game-art {
   position: relative;
+  display: block;
+  height: 132px;
+  line-height: 0;
+}
+
+.game-info {
   display: flex;
   align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 56px;
-  height: 56px;
-  border-radius: 14px;
-  background: var(--color-bg);
-  font-size: 30px;
+  gap: var(--space-3);
+  padding: var(--space-4);
 }
 
-.game-body {
+.game-text {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -216,94 +172,151 @@ button.game-card:active {
 }
 
 .game-name {
-  font-size: var(--font-size-body);
-  font-weight: 600;
+  font-size: var(--font-size-title);
+  font-weight: 700;
   color: var(--color-text-strong);
 }
 
 .game-desc {
   font-size: var(--font-size-body-small);
   color: var(--color-text-subtle);
+  line-height: 1.4;
 }
 
 .game-meta {
-  margin-top: 2px;
+  align-self: flex-start;
+  margin-top: var(--space-1);
+  padding: 2px var(--space-2);
+  border-radius: 8px;
+  background: var(--brand-gold-soft);
   font-size: var(--font-size-caption);
-  color: var(--color-text-subtle);
+  font-weight: 600;
+  color: #8a5a00;
   font-variant-numeric: tabular-nums;
 }
 
-.game-chevron {
-  display: flex;
+/* 카드 전체가 버튼이라, 이 '플레이'는 눌러야 할 곳을 보여 주는 표시다 */
+.game-play {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
   flex-shrink: 0;
-  color: var(--color-text-hint);
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border-radius: 14px;
+  background: var(--brand-primary);
+  box-shadow: 0 4px 0 var(--brand-primary-dark);
+  color: var(--color-text-inverse);
+  font-size: var(--font-size-body-small);
+  font-weight: 700;
 }
 
 .game-badge {
   flex-shrink: 0;
-  padding: var(--space-1) var(--space-2);
-  border-radius: 8px;
-  background: var(--color-bg);
+  padding: var(--space-1) var(--space-3);
+  border-radius: 999px;
+  background: var(--color-bg-canvas);
   font-size: var(--font-size-caption);
   color: var(--color-text-subtle);
 }
 
-.game-card.is-locked .game-tile-emoji {
-  opacity: 0.35;
+/* 잠긴 게임 — 그림을 흐리게, 자물쇠 */
+.game-card.is-locked .game-art svg {
+  filter: grayscale(1);
+  opacity: 0.45;
 }
 
-.game-lock {
+.game-lock-badge {
   position: absolute;
-  right: -4px;
-  bottom: -4px;
-  font-size: 20px;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  margin: -26px 0 0 -26px;
+  border-radius: 50%;
+  background: var(--color-text-strong);
+  box-shadow: 0 4px 0 rgba(31, 26, 61, 0.35);
+  color: var(--color-text-inverse);
 }
 
 .game-progress {
   display: block;
-  height: 6px;
+  height: 10px;
   margin-top: var(--space-2);
-  border-radius: 3px;
-  background: #e5e8eb;
+  border-radius: 5px;
+  background: var(--color-bg-canvas);
   overflow: hidden;
 }
 
 .game-progress-bar {
   display: block;
   height: 100%;
-  border-radius: 3px;
-  background: var(--brand-primary);
+  border-radius: 5px;
+  background: linear-gradient(90deg, var(--brand-pink), var(--brand-primary));
 }
 
-.settings-entry {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  width: 100%;
-  min-height: 56px;
+/* 상점·순위표 타일 */
+.home-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-3);
   margin-top: var(--space-5);
-  padding: 0 var(--space-4);
-  border: 1px solid #e5e8eb;
-  border-radius: 14px;
+}
+
+.home-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  min-height: 132px;
+  padding: var(--space-4);
+  border: 2px solid var(--line);
+  border-radius: 22px;
   background: var(--color-bg);
+  box-shadow: 0 5px 0 var(--line);
   color: inherit;
   font: inherit;
-  font-size: var(--font-size-body);
   text-align: left;
   cursor: pointer;
 }
 
-.settings-entry-label {
-  font-weight: 600;
+.home-tile:active {
+  transform: translateY(3px);
+  box-shadow: 0 2px 0 var(--line);
+}
+
+.home-tile-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: var(--space-2);
+  border-radius: 14px;
+  font-size: 26px;
+}
+
+.home-tile-icon.is-pink {
+  background: var(--brand-pink-soft);
+}
+
+.home-tile-icon.is-gold {
+  background: var(--brand-gold-soft);
+}
+
+.home-tile-title {
+  font-size: var(--font-size-body);
+  font-weight: 700;
   color: var(--color-text-strong);
 }
 
-.settings-entry-desc {
-  flex: 1;
-  min-width: 0;
-  font-size: var(--font-size-body-small);
+.home-tile-desc {
+  font-size: var(--font-size-caption);
   color: var(--color-text-subtle);
-  text-align: right;
+  line-height: 1.4;
 }
 
 .home-note {
@@ -328,7 +341,7 @@ button.game-card:active {
   width: 100%;
   max-width: 480px;
   padding: var(--space-5) var(--space-5) 34px;
-  border-radius: 20px 20px 0 0;
+  border-radius: 28px 28px 0 0;
   background: var(--color-bg);
 }
 
@@ -347,41 +360,21 @@ button.game-card:active {
   color: var(--color-text-strong);
 }
 
-.sheet-close {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border: 0;
-  border-radius: 12px;
-  background: var(--color-bg-canvas);
-  color: var(--color-text-subtle);
-  cursor: pointer;
-}
-
 .sheet-list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-3);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .sheet-option {
-  width: 100%;
-  min-height: 56px;
-  padding: 0 var(--space-4);
-  border: 0;
-  border-radius: 14px;
-  background: var(--color-bg-canvas);
-  color: var(--color-text-strong);
-  font: inherit;
-  font-size: var(--font-size-body);
-  font-weight: 600;
-  text-align: left;
-  cursor: pointer;
+  justify-content: flex-start;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button.game-card {
+    transition: none;
+  }
 }

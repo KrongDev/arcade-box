@@ -212,7 +212,7 @@ export class PinballFx {
     ctx.textBaseline = 'middle';
     for (const p of this.popups) {
       const a = Math.min(1, p.life / p.max / 0.5);
-      ctx.font = `800 ${p.size}px -apple-system, system-ui, sans-serif`;
+      ctx.font = `700 ${p.size}px -apple-system, system-ui, sans-serif`;
       ctx.lineWidth = 4;
       ctx.strokeStyle = `rgba(0, 0, 0, ${0.55 * a})`;
       ctx.strokeText(p.text, p.x, p.y);
@@ -239,7 +239,7 @@ export class PinballFx {
       ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
       roundRect(ctx, -150, -40, 300, b.sub ? 86 : 64, 20);
       ctx.fill();
-      ctx.font = '900 34px -apple-system, system-ui, sans-serif';
+      ctx.font = '700 34px -apple-system, system-ui, sans-serif';
       ctx.lineWidth = 6;
       ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
       ctx.strokeText(b.text, 0, -10);
