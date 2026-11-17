@@ -29,7 +29,8 @@ export const BALLS_PER_GAME = 3;
 /** 판 위 동전 1개를 주웠을 때 받는 코인 */
 export const COIN_PICKUP_VALUE = 5;
 /** 한 판에 받을 수 있는 코인 상한 — 서버(server/src/domain.ts BOARDS의 pinball.maxCoinsPerRun)와 같다 */
-export const MAX_COINS_PER_RUN = 300;
+export const MAX_COINS_PER_RUN = 400;
+const COIN_SPAWN_INTERVAL = 3.5;
 export const MAX_MULTIPLIER = 5;
 /** 한 판 점수 상한 — 서버(server/src/domain.ts MAX_PINBALL_SCORE)와 같다. 넘으면 서버가 기록을 받지 않는다 */
 export const MAX_SCORE = 5_000_000;
@@ -402,10 +403,17 @@ export class PinballEngine {
   private saucerCooldown = 0;
   private wasMultiball = false;
   private milestoneIndex = 0;
+  /** 공 능력으로 생긴 코인 소수점 — 1이 쌓이면 코인 하나를 더 준다 */
+  private coinCarry = 0;
   private random: () => number;
+  /** 장착 능력: 판 위 동전 빈도 +비율, 동전 하나의 코인 +비율 */
+  readonly coinSpawn: number;
+  readonly coinValue: number;
 
-  constructor(random: () => number = Math.random) {
+  constructor(random: () => number = Math.random, gear: { coinSpawn?: number; coinValue?: number } = {}) {
     this.random = random;
+    this.coinSpawn = Math.max(0, gear.coinSpawn ?? 0);
+    this.coinValue = Math.max(0, gear.coinValue ?? 0);
   }
 
   /** 발사대에 공이 있으면 'ready' */
@@ -612,7 +620,10 @@ export class PinballEngine {
       const c = this.coins[i];
       if (Math.hypot(ball.x - c.x, ball.y - c.y) < BALL_R + c.r + 2) {
         this.coins.splice(i, 1);
-        const coins = Math.min(COIN_PICKUP_VALUE, MAX_COINS_PER_RUN - this.coinsEarned);
+        this.coinCarry += COIN_PICKUP_VALUE * this.coinValue;
+        const bonus = Math.floor(this.coinCarry);
+        this.coinCarry -= bonus;
+        const coins = Math.min(COIN_PICKUP_VALUE + bonus, MAX_COINS_PER_RUN - this.coinsEarned);
         this.coinsEarned += coins;
         const points = this.award(POINTS.coin);
         this.events.push({ type: 'coin', x: c.x, y: c.y, coins, points });
@@ -785,7 +796,7 @@ export class PinballEngine {
   private updateCoinSpawns(frame: number): void {
     this.coinTimer -= frame;
     if (this.coinTimer > 0 || this.coins.length >= 3) return;
-    this.coinTimer = 3.5;
+    this.coinTimer = COIN_SPAWN_INTERVAL / (1 + this.coinSpawn);
     for (let tries = 0; tries < 30; tries++) {
       const x = 60 + this.random() * 250;
       const y = 110 + this.random() * 300;

@@ -29,3 +29,14 @@ describe('지뢰찾기 점수 식', () => {
     }
   });
 });
+
+describe('지뢰 보호 감점', () => {
+  it('보호를 쓰면 합계의 70% (내림)', () => {
+    const sp = spec('minesweeper.easy');
+    const raw = minesweeperScore(sp, { opened: 33, correctFlags: 1, wrongFlags: 0, won: false, seconds: 5 });
+    const shielded = minesweeperScore(sp, { opened: 33, correctFlags: 1, wrongFlags: 0, won: false, seconds: 5, shields: 1 });
+    assert.equal(raw, 350);
+    assert.equal(shielded, 245);
+  });
+});
+

@@ -1,7 +1,7 @@
 import { graniteEvent } from '@apps-in-toss/web-framework';
 import { useEffect, useRef, useState } from 'react';
 import { ItemPreview } from '../components/ItemPreview';
-import { CATALOG, SLOT_NAMES, slotsOf, type ShopItem } from '../game/catalog';
+import { CATALOG, SLOT_NAMES, TIER_NAMES, abilityLines, effectLine, slotsOf, tierOf, type ShopItem } from '../game/catalog';
 import { isEquipped, isOwned } from '../game/equipped';
 import { haptic } from '../game/haptic';
 import { useRewardedAd } from '../game/ads';
@@ -242,11 +242,12 @@ export default function Shop({ onExit }: { onExit: () => void }) {
             <ul className="shop-grid">
               {items.map((item) => (
                 <li key={item.id} className={`shop-item is-${item.price.type}`}>
-                  {item.price.type === 'paid' && <span className="shop-item-ribbon">유료</span>}
+                  <span className={`shop-item-tier tier-${tierOf(item)}`}>{TIER_NAMES[tierOf(item)]}</span>
                   <span className="shop-item-frame">
                     <ItemPreview item={item} />
                   </span>
                   <p className="shop-item-name">{item.name}</p>
+                  <ItemPerks item={item} />
                   <ItemAction
                     item={item}
                     balance={balance}
@@ -298,6 +299,7 @@ export default function Shop({ onExit }: { onExit: () => void }) {
             <p className="dialog-body">
               {gameName} 코인 {confirming.price.amount.toLocaleString()}개를 써요. 사면 바로 장착돼요.
             </p>
+            {abilityLines(confirming).length > 0 && <p className="shop-confirm-perks">{abilityLines(confirming).join(' · ')}</p>}
             <div className="dialog-actions">
               <button type="button" className="btn btn-primary" onClick={confirmBuy}>
                 사기
@@ -310,6 +312,27 @@ export default function Shop({ onExit }: { onExit: () => void }) {
         </div>
       )}
     </main>
+  );
+}
+
+/** 아이템 능력·이펙트 한 줄씩 */
+function ItemPerks({ item }: { item: ShopItem }) {
+  const lines = abilityLines(item);
+  const effect = effectLine(item);
+  if (lines.length === 0 && !effect) return <p className="shop-item-perk is-none">꾸미기만 해요</p>;
+  return (
+    <>
+      {lines.map((line) => (
+        <p key={line} className="shop-item-perk">
+          {line}
+        </p>
+      ))}
+      {effect && (
+        <p className="shop-item-perk is-effect">
+          <span className="tf">✨</span> {effect}
+        </p>
+      )}
+    </>
   );
 }
 

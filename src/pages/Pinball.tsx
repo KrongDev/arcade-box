@@ -1,7 +1,8 @@
 import { graniteEvent } from '@apps-in-toss/web-framework';
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { Coin, Pause } from '../components/gameIcons';
-import { pinballLooks } from '../game/equipped';
+import { abilityLines } from '../game/catalog';
+import { equippedItem, pinballGear, pinballLooks } from '../game/equipped';
 import { haptic } from '../game/haptic';
 import { playSfx } from '../game/sfx';
 import { shareWithLink } from '../game/share';
@@ -57,12 +58,21 @@ export default function Pinball({ onExit }: { onExit: () => void }) {
   const { addCoins, recordScore, submitRun, save } = useSave();
   const looks = pinballLooks(save);
   const themeRef = useRef<TableTheme>({ ...looks.table, ...looks.ball });
+  // 장착한 판·공의 능력과 이펙트는 판을 시작할 때 정한다
+  const [initial] = useState(() => {
+    const gear = pinballGear(save);
+    const fx = new PinballFx(prefersReducedMotion());
+    fx.setSkin(gear.effect);
+    return { gear, engine: new PinballEngine(Math.random, gear), fx };
+  });
+  const gearRef = useRef(initial.gear);
+  const gearLines = [...abilityLines(equippedItem(save, 'pinball', 'table')), ...abilityLines(equippedItem(save, 'pinball', 'ball'))];
   const insets = useSafeArea();
 
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const engineRef = useRef(new PinballEngine());
-  const fxRef = useRef(new PinballFx(prefersReducedMotion()));
+  const engineRef = useRef(initial.engine);
+  const fxRef = useRef(initial.fx);
   const phaseRef = useRef<Phase>('playing');
   const pointers = useRef(new Map<number, Side>());
   const keys = useRef(new Set<Side>());
@@ -133,8 +143,9 @@ export default function Pinball({ onExit }: { onExit: () => void }) {
   }, [onExit, settle]);
 
   const restart = useCallback(() => {
-    engineRef.current = new PinballEngine();
+    engineRef.current = new PinballEngine(Math.random, gearRef.current);
     fxRef.current = new PinballFx(prefersReducedMotion());
+    fxRef.current.setSkin(gearRef.current.effect);
     settledRef.current = false;
     releaseAll();
     setResult(null);
@@ -283,6 +294,10 @@ export default function Pinball({ onExit }: { onExit: () => void }) {
         e.step(dt);
         for (const ev of e.drainEvents()) {
           fx.handle(ev, themeRef.current);
+          if (fx.handleSkin(ev)) {
+            playSfx('blast');
+            haptic('basicMedium');
+          }
           onEngineEvent.current(ev);
         }
         fx.trackBalls(e.balls);
@@ -442,6 +457,7 @@ export default function Pinball({ onExit }: { onExit: () => void }) {
           <div className="pinball-hint" aria-live="polite">
             <p className="pinball-hint-title">화면을 누르고 있다가 떼면 공이 발사돼요</p>
             <p className="pinball-hint-desc">오래 누를수록 세게 나가요. 공이 들어가면 왼쪽·오른쪽을 눌러 플리퍼를 움직여요</p>
+            {gearLines.length > 0 && <p className="pinball-hint-gear">장착 능력 · {gearLines.join(' · ')}</p>}
           </div>
         )}
       </div>

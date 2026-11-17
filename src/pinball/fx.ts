@@ -1,3 +1,4 @@
+import type { Effect } from '../game/catalog';
 import type { Ball, PinballEvent } from './engine';
 import type { TableTheme } from './render';
 
@@ -15,7 +16,7 @@ interface Particle {
   max: number;
   size: number;
   color: string;
-  kind: 'spark' | 'ring' | 'star';
+  kind: 'spark' | 'ring' | 'star' | 'flame';
 }
 
 interface Popup {
@@ -48,9 +49,32 @@ export class PinballFx {
   private flashColor = '#ffffff';
   private trails = new Map<number, { x: number; y: number }[]>();
   private readonly reduced: boolean;
+  /** 장착 아이템 이펙트 (공 꼬리·부딪힘·판 배경) */
+  private skin: Effect = {};
+  private stars: { x: number; y: number; r: number; ph: number }[] = [];
+  private shooting: { x: number; y: number; life: number } | null = null;
+  private shootingTimer = 3;
+  private neon = 0;
+  private clock = 0;
 
   constructor(reducedMotion = false) {
     this.reduced = reducedMotion;
+  }
+
+  setSkin(effect: Effect): void {
+    this.skin = effect;
+    this.stars = [];
+    if (effect.table === 'stars') {
+      for (let i = 0; i < 46; i++) {
+        this.stars.push({ x: 14 + Math.random() * 330, y: 14 + Math.random() * 640, r: 0.6 + Math.random() * 1.3, ph: Math.random() * Math.PI * 2 });
+      }
+    }
+  }
+
+  /** 네온 판: 벽 빛 세기 (평소엔 숨 쉬듯, 맞으면 번쩍) */
+  wallGlow(): number {
+    if (this.skin.table !== 'neon') return 1;
+    return 1.2 + 0.5 * Math.sin(this.clock * 2.4) + this.neon * 1.6;
   }
 
   handle(ev: PinballEvent, theme: TableTheme): void {
@@ -130,6 +154,25 @@ export class PinballFx {
     }
   }
 
+  /** 장착한 공·판 이펙트 — 부딪힐 때 */
+  handleSkin(ev: PinballEvent): boolean {
+    if (ev.type !== 'bumper' && ev.type !== 'sling' && ev.type !== 'target' && ev.type !== 'saucer') return false;
+    const { x, y } = ev;
+    if (this.skin.table === 'neon') this.neon = 1;
+    if (this.skin.hit === 'fire') {
+      this.flames(x, y, 14, 140);
+    }
+    if (this.skin.hit === 'boom') {
+      this.burst(x, y, 20, ['#ffffff', '#a5d8ff', '#4dabf7'], 420);
+      this.ring(x, y, '#74c0fc', 64);
+      this.ring(x, y, '#ffffff', 36);
+      this.kick(6);
+      if (!this.reduced) this.screenFlash('#74c0fc');
+      return true;
+    }
+    return false;
+  }
+
   /** 공 위치를 기록해 꼬리를 만든다 */
   trackBalls(balls: Ball[]): void {
     const alive = new Set<number>();
@@ -139,12 +182,36 @@ export class PinballFx {
       trail.push({ x: b.x, y: b.y });
       if (trail.length > TRAIL_LENGTH) trail.shift();
       this.trails.set(b.id, trail);
+      if (b.held > 0) continue;
+      const moving = Math.hypot(b.vx, b.vy) > 60;
+      if (this.skin.trail === 'fire' && moving) this.flames(b.x, b.y, this.reduced ? 1 : 2, 30);
+      if (this.skin.trail === 'sparkle' && moving && Math.random() < (this.reduced ? 0.2 : 0.6)) {
+        this.push({ x: b.x + (Math.random() - 0.5) * 8, y: b.y + (Math.random() - 0.5) * 8, vx: (Math.random() - 0.5) * 30, vy: (Math.random() - 0.5) * 30, life: 0.55, max: 0.55, size: 1.5 + Math.random() * 2, color: Math.random() < 0.5 ? '#ffffff' : '#ffe066', kind: 'star' });
+      }
+      if (this.skin.trail === 'lightning' && moving && Math.random() < (this.reduced ? 0.1 : 0.35)) {
+        this.push({ x: b.x, y: b.y, vx: (Math.random() - 0.5) * 220, vy: (Math.random() - 0.5) * 220, life: 0.2, max: 0.2, size: 1.5, color: '#a5d8ff', kind: 'spark' });
+      }
     }
     for (const id of [...this.trails.keys()]) if (!alive.has(id)) this.trails.delete(id);
   }
 
   update(dt: number): void {
     const t = Math.min(dt, 1 / 20);
+    this.clock += t;
+    this.neon = Math.max(0, this.neon - t * 3);
+    if (this.skin.table === 'stars' && !this.reduced) {
+      this.shootingTimer -= t;
+      if (this.shootingTimer <= 0) {
+        this.shootingTimer = 3 + Math.random() * 4;
+        this.shooting = { x: 20 + Math.random() * 200, y: 20 + Math.random() * 120, life: 0.9 };
+      }
+      if (this.shooting) {
+        this.shooting.x += 260 * t;
+        this.shooting.y += 150 * t;
+        this.shooting.life -= t;
+        if (this.shooting.life <= 0) this.shooting = null;
+      }
+    }
     for (const p of this.particles) {
       p.life -= t;
       p.x += p.vx * t;
@@ -152,6 +219,9 @@ export class PinballFx {
       if (p.kind === 'spark' || p.kind === 'star') {
         p.vx *= 1 - 3 * t;
         p.vy = p.vy * (1 - 3 * t) + 260 * t;
+      } else if (p.kind === 'flame') {
+        p.vx *= 1 - 2 * t;
+        p.vy -= 90 * t;
       }
     }
     this.particles = this.particles.filter((p) => p.life > 0);
@@ -173,8 +243,52 @@ export class PinballFx {
     return { x: (Math.random() - 0.5) * this.shake, y: (Math.random() - 0.5) * this.shake };
   }
 
+  /** 판 바탕 위, 장치 아래에 그리는 것: 은하수 판의 별과 별똥별 */
+  drawBackground(ctx: CanvasRenderingContext2D): void {
+    if (this.skin.table !== 'stars') return;
+    for (const st of this.stars) {
+      const a = this.reduced ? 0.6 : 0.35 + 0.45 * (0.5 + 0.5 * Math.sin(this.clock * 2 + st.ph));
+      ctx.fillStyle = `rgba(255, 255, 255, ${a})`;
+      ctx.beginPath();
+      ctx.arc(st.x, st.y, st.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (this.shooting) {
+      const s = this.shooting;
+      const g = ctx.createLinearGradient(s.x - 60, s.y - 35, s.x, s.y);
+      g.addColorStop(0, 'rgba(255, 255, 255, 0)');
+      g.addColorStop(1, `rgba(255, 255, 255, ${Math.min(1, s.life * 1.5)})`);
+      ctx.strokeStyle = g;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(s.x - 60, s.y - 35);
+      ctx.lineTo(s.x, s.y);
+      ctx.stroke();
+    }
+  }
+
   /** 공 아래에 그리는 것: 꼬리 */
   drawUnder(ctx: CanvasRenderingContext2D, theme: TableTheme, radius: number): void {
+    if (this.skin.trail === 'lightning') {
+      for (const trail of this.trails.values()) {
+        if (trail.length < 3) continue;
+        ctx.save();
+        ctx.strokeStyle = '#a5d8ff';
+        ctx.shadowColor = '#4dabf7';
+        ctx.shadowBlur = 12;
+        ctx.lineWidth = 2.5;
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        trail.forEach((p, i) => {
+          const j = i === trail.length - 1 ? 0 : (Math.random() - 0.5) * 9;
+          if (i === 0) ctx.moveTo(p.x + j, p.y - j);
+          else ctx.lineTo(p.x + j, p.y - j);
+        });
+        ctx.stroke();
+        ctx.restore();
+      }
+      return;
+    }
     for (const trail of this.trails.values()) {
       for (let i = 0; i < trail.length - 1; i++) {
         const a = (i + 1) / trail.length;
@@ -192,6 +306,14 @@ export class PinballFx {
     ctx.globalCompositeOperation = 'lighter';
     for (const p of this.particles) {
       const a = Math.max(0, p.life / p.max);
+      if (p.kind === 'flame') {
+        const color = a > 0.66 ? '#ffe066' : a > 0.33 ? '#ff922b' : '#f03e3e';
+        ctx.fillStyle = withAlpha(color, Math.min(1, a * 1.4));
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * (0.4 + a * 0.6), 0, Math.PI * 2);
+        ctx.fill();
+        continue;
+      }
       if (p.kind === 'ring') {
         const r = p.size * (1 - a) + 4;
         ctx.strokeStyle = withAlpha(p.color, a * 0.9);
@@ -274,6 +396,28 @@ export class PinballFx {
         size: 1.5 + Math.random() * 2.5,
         color: colors[i % colors.length],
         kind: i % 4 === 0 ? 'star' : 'spark',
+      });
+    }
+  }
+
+  private push(p: Particle): void {
+    if (this.particles.length < MAX_PARTICLES) this.particles.push(p);
+  }
+
+  /** 불꽃 알갱이: 위로 피어오르며 노랑 → 주황 → 빨강으로 꺼진다 */
+  private flames(x: number, y: number, count: number, spread: number): void {
+    for (let i = 0; i < count; i++) {
+      const life = 0.3 + Math.random() * 0.3;
+      this.push({
+        x: x + (Math.random() - 0.5) * 6,
+        y: y + (Math.random() - 0.5) * 6,
+        vx: (Math.random() - 0.5) * spread,
+        vy: -20 - Math.random() * spread * 0.6,
+        life,
+        max: life,
+        size: 3 + Math.random() * 4,
+        color: '#ff922b',
+        kind: 'flame',
       });
     }
   }

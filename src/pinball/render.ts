@@ -36,8 +36,9 @@ export function drawTable(ctx: CanvasRenderingContext2D, engine: PinballEngine, 
   ctx.translate(shake.x, shake.y);
 
   drawFloor(ctx, theme);
+  fx.drawBackground(ctx);
   drawInserts(ctx, engine, theme, t);
-  drawWalls(ctx, engine, theme);
+  drawWalls(ctx, engine, theme, fx.wallGlow());
   drawLanes(ctx, engine, theme);
   drawTargets(ctx, engine, theme);
   drawSaucer(ctx, engine, theme, t);
@@ -188,12 +189,12 @@ function shield(ctx: CanvasRenderingContext2D, x: number, y: number, litColor: s
   ctx.restore();
 }
 
-function drawWalls(ctx: CanvasRenderingContext2D, engine: PinballEngine, theme: TableTheme): void {
+function drawWalls(ctx: CanvasRenderingContext2D, engine: PinballEngine, theme: TableTheme, glow: number): void {
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   ctx.strokeStyle = theme.wall;
   ctx.shadowColor = theme.wall;
-  ctx.shadowBlur = 10;
+  ctx.shadowBlur = 10 * glow;
   ctx.lineWidth = 4;
   ctx.beginPath();
   for (const w of WALLS) {

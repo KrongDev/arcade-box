@@ -148,6 +148,8 @@ export type RunReport =
       opened: number;
       correctFlags: number;
       wrongFlags: number;
+      /** 지뢰 보호를 쓴 횟수 — 쓰면 서버가 점수를 깎는다 */
+      shields?: number;
       coins: number;
     };
 

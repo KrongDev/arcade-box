@@ -29,16 +29,35 @@ export interface MinesweeperSpec {
  * 지뢰찾기 점수 — 클라이언트(src/minesweeper/board.ts scoreRun)와 같은 식이다. 서버 값이 정본.
  * 연 칸 ×10, 맞은 깃발 ×20, 틀린 깃발 ×(−10), 깼으면 안전한 칸 수 ×10 + 기준 시간보다 빠른 0.1초당 1점.
  */
-export const MS_SCORE = { perCell: 10, perCorrectFlag: 20, perWrongFlag: -10, clearPerSafeCell: 10, perTenthUnderPar: 1 };
+export const MS_SCORE = { perCell: 10, perCorrectFlag: 20, perWrongFlag: -10, clearPerSafeCell: 10, perTenthUnderPar: 1, shieldPercent: 70 };
 
-export function minesweeperScore(spec: MinesweeperSpec, r: { opened: number; correctFlags: number; wrongFlags: number; won: boolean; seconds: number }): number {
+/** 한 판에 쓸 수 있는 지뢰 보호 횟수 상한 (발판 아이템 능력 중 가장 큰 값) */
+export const MAX_SHIELDS = 1;
+
+/**
+ * 지뢰 보호를 쓴 판은 합계의 70%만 받는다(내림) — 보호를 거짓으로 보내도 손해라 소유 확인 없이 받는다.
+ */
+export function minesweeperScore(
+  spec: MinesweeperSpec,
+  r: { opened: number; correctFlags: number; wrongFlags: number; won: boolean; seconds: number; shields?: number },
+): number {
   let score = r.opened * MS_SCORE.perCell + r.correctFlags * MS_SCORE.perCorrectFlag + r.wrongFlags * MS_SCORE.perWrongFlag;
   if (r.won) {
     score += spec.safe * MS_SCORE.clearPerSafeCell;
     score += Math.max(0, Math.round((spec.par - r.seconds) * 10)) * MS_SCORE.perTenthUnderPar;
   }
-  return Math.max(0, score);
+  score = Math.max(0, score);
+  // 정수로 계산한다 (350 × 0.7 같은 소수 오차로 1점 덜 나오지 않게)
+  return (r.shields ?? 0) > 0 ? Math.floor((score * MS_SCORE.shieldPercent) / 100) : score;
 }
+
+/**
+ * 아이템 능력을 반영한 코인 상한 — 클라이언트 카탈로그(src/game/catalog.ts)의 가장 큰 능력과 맞춘다.
+ * 코인은 현금이 아니라 꾸미기에만 쓰여서, 장착 여부까지 확인하지 않고 '최대 능력'을 상한으로 둔다.
+ */
+export const MAX_COIN_BONUS = 0.4; // 지뢰찾기 발판: 동전 코인 +40%
+export const MAP_EXTRA_COINS_MAX = { easy: 4, normal: 7, hard: 10 }; // 지뢰찾기 맵: 숨은 동전 +개
+const msCoinCap = (coins: number, extra: number, clearBonus: number) => Math.ceil((coins + extra) * 5 * (1 + MAX_COIN_BONUS)) + clearBonus;
 
 export interface BoardDef {
   id: string;
@@ -52,12 +71,13 @@ export interface BoardDef {
 }
 
 export const BOARDS: BoardDef[] = [
-  { id: 'pinball', gameId: 'pinball', order: 'higher', maxCoinsPerRun: 300, requires: null },
-  // 동전 수 × 5 + 클리어 보너스 (클라이언트 DIFFICULTIES와 같음)
+  // 핀볼: 클라이언트 MAX_COINS_PER_RUN과 같다 (판·공 능력 포함)
+  { id: 'pinball', gameId: 'pinball', order: 'higher', maxCoinsPerRun: 400, requires: null },
+  // 지뢰찾기: (동전 수 + 맵 최대 보너스) × 5 × (1 + 발판 최대 보너스) + 클리어 보너스 (클라이언트 DIFFICULTIES와 같음)
   // 지뢰찾기도 점수(높을수록 1등)로 순위를 매긴다. 판 크기: 초급 8×10·10, 중급 12×18·36, 고급 16×26·80
-  { id: 'minesweeper.easy', gameId: 'minesweeper', order: 'higher', maxCoinsPerRun: 3 * 5 + 20, requires: null, minesweeper: { safe: 70, mines: 10, par: 180 } },
-  { id: 'minesweeper.normal', gameId: 'minesweeper', order: 'higher', maxCoinsPerRun: 6 * 5 + 40, requires: 'minesweeper.easy', minesweeper: { safe: 180, mines: 36, par: 480 } },
-  { id: 'minesweeper.hard', gameId: 'minesweeper', order: 'higher', maxCoinsPerRun: 10 * 5 + 80, requires: 'minesweeper.normal', minesweeper: { safe: 336, mines: 80, par: 900 } },
+  { id: 'minesweeper.easy', gameId: 'minesweeper', order: 'higher', maxCoinsPerRun: msCoinCap(3, MAP_EXTRA_COINS_MAX.easy, 20), requires: null, minesweeper: { safe: 70, mines: 10, par: 180 } },
+  { id: 'minesweeper.normal', gameId: 'minesweeper', order: 'higher', maxCoinsPerRun: msCoinCap(6, MAP_EXTRA_COINS_MAX.normal, 40), requires: 'minesweeper.easy', minesweeper: { safe: 180, mines: 36, par: 480 } },
+  { id: 'minesweeper.hard', gameId: 'minesweeper', order: 'higher', maxCoinsPerRun: msCoinCap(10, MAP_EXTRA_COINS_MAX.hard, 80), requires: 'minesweeper.normal', minesweeper: { safe: 336, mines: 80, par: 900 } },
 ];
 
 /** 비정상 기록을 거르는 느슨한 상한 */
@@ -83,15 +103,25 @@ export const ITEMS: ServerItem[] = [
   { id: 'pinball.table.classic', gameId: 'pinball', slot: 'table', price: { type: 'free' } },
   { id: 'pinball.table.sunset', gameId: 'pinball', slot: 'table', price: { type: 'coin', amount: 1000 } },
   { id: 'pinball.table.forest', gameId: 'pinball', slot: 'table', price: { type: 'coin', amount: 1500 } },
+  { id: 'pinball.table.candy', gameId: 'pinball', slot: 'table', price: { type: 'coin', amount: 3000 } },
   { id: 'pinball.table.neon', gameId: 'pinball', slot: 'table', price: { type: 'paid' } },
   { id: 'pinball.table.galaxy', gameId: 'pinball', slot: 'table', price: { type: 'paid' } },
   { id: 'pinball.ball.silver', gameId: 'pinball', slot: 'ball', price: { type: 'free' } },
   { id: 'pinball.ball.gold', gameId: 'pinball', slot: 'ball', price: { type: 'coin', amount: 1000 } },
+  { id: 'pinball.ball.emerald', gameId: 'pinball', slot: 'ball', price: { type: 'coin', amount: 2500 } },
   { id: 'pinball.ball.ruby', gameId: 'pinball', slot: 'ball', price: { type: 'paid' } },
+  { id: 'pinball.ball.fire', gameId: 'pinball', slot: 'ball', price: { type: 'paid' } },
+  { id: 'pinball.ball.thunder', gameId: 'pinball', slot: 'ball', price: { type: 'paid' } },
   { id: 'minesweeper.tile.basic', gameId: 'minesweeper', slot: 'tile', price: { type: 'free' } },
   { id: 'minesweeper.tile.mint', gameId: 'minesweeper', slot: 'tile', price: { type: 'coin', amount: 1000 } },
   { id: 'minesweeper.tile.peach', gameId: 'minesweeper', slot: 'tile', price: { type: 'coin', amount: 1500 } },
+  { id: 'minesweeper.tile.check', gameId: 'minesweeper', slot: 'tile', price: { type: 'coin', amount: 3000 } },
   { id: 'minesweeper.tile.night', gameId: 'minesweeper', slot: 'tile', price: { type: 'paid' } },
+  { id: 'minesweeper.tile.gold', gameId: 'minesweeper', slot: 'tile', price: { type: 'paid' } },
+  { id: 'minesweeper.map.basic', gameId: 'minesweeper', slot: 'map', price: { type: 'free' } },
+  { id: 'minesweeper.map.forest', gameId: 'minesweeper', slot: 'map', price: { type: 'coin', amount: 2000 } },
+  { id: 'minesweeper.map.island', gameId: 'minesweeper', slot: 'map', price: { type: 'coin', amount: 4000 } },
+  { id: 'minesweeper.map.temple', gameId: 'minesweeper', slot: 'map', price: { type: 'paid' } },
 ];
 
 export function getItem(id: string): ServerItem | undefined {
@@ -216,10 +246,11 @@ export interface RunInput {
   score?: unknown;
   seconds?: unknown;
   won?: unknown;
-  /** 지뢰찾기: 연 칸 수, 맞은 깃발 수, 틀린 깃발 수 */
+  /** 지뢰찾기: 연 칸 수, 맞은 깃발 수, 틀린 깃발 수, 지뢰 보호를 쓴 횟수 */
   opened?: unknown;
   correctFlags?: unknown;
   wrongFlags?: unknown;
+  shields?: unknown;
   coins: unknown;
 }
 
@@ -267,12 +298,15 @@ export function applyRun(state: UserState, input: RunInput, nowMs: number): RunO
     const opened = int(input.opened);
     const correctFlags = int(input.correctFlags);
     const wrongFlags = int(input.wrongFlags);
+    const shields = input.shields === undefined ? 0 : int(input.shields);
     const won = input.won === true;
     // 가능한 범위인지 본다: 연 칸 ≤ 안전한 칸, 맞은 깃발 ≤ 지뢰 수, 틀린 깃발은 아직 닫힌 안전한 칸에만
     if (
       opened === null ||
       correctFlags === null ||
       wrongFlags === null ||
+      shields === null ||
+      shields > MAX_SHIELDS ||
       opened > spec.safe ||
       correctFlags > spec.mines ||
       wrongFlags > spec.safe - opened ||
@@ -295,7 +329,7 @@ export function applyRun(state: UserState, input: RunInput, nowMs: number): RunO
         firstClear = true;
       }
     }
-    const score = minesweeperScore(spec, { opened, correctFlags, wrongFlags, won, seconds });
+    const score = minesweeperScore(spec, { opened, correctFlags, wrongFlags, won, seconds, shields });
     const prev = state.bestScore[board.id] ?? 0;
     if (score > prev) {
       state.bestScore[board.id] = score;

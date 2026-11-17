@@ -47,6 +47,8 @@ export interface Cell {
   open: boolean;
   flag: boolean;
   coin: boolean;
+  /** 지뢰 보호로 막아 낸 지뢰 (열린 채로 남는다) */
+  shielded: boolean;
 }
 
 export interface Board {
@@ -70,13 +72,14 @@ export interface OpenResult {
 
 const NOTHING: OpenResult = { boom: false, coins: 0, opened: 0 };
 
-export function createBoard(d: Difficulty): Board {
+/** extraCoins: 맵 아이템이 더해 주는 숨은 동전 수 */
+export function createBoard(d: Difficulty, extraCoins = 0): Board {
   return {
     cols: d.cols,
     rows: d.rows,
     mines: d.mines,
-    coins: d.coins,
-    cells: Array.from({ length: d.cols * d.rows }, () => ({ mine: false, adj: 0, open: false, flag: false, coin: false })),
+    coins: d.coins + Math.max(0, extraCoins),
+    cells: Array.from({ length: d.cols * d.rows }, () => ({ mine: false, adj: 0, open: false, flag: false, coin: false, shielded: false })),
     placed: false,
     openCount: 0,
     exploded: null,
@@ -150,6 +153,15 @@ export function openCell(b: Board, i: number, random: () => number = Math.random
   return { boom: false, coins, opened };
 }
 
+/** 방금 밟은 지뢰를 지뢰 보호로 막는다 — 지뢰는 열린 채 남고 판은 계속된다 */
+export function shieldExplosion(b: Board): number | null {
+  const i = b.exploded;
+  if (i === null) return null;
+  b.cells[i].shielded = true;
+  b.exploded = null;
+  return i;
+}
+
 /** 열린 숫자 칸 주변의 깃발 수가 숫자와 같으면 나머지 주변 칸을 한 번에 연다 */
 export function chord(b: Board, i: number, random: () => number = Math.random): OpenResult {
   const cell = b.cells[i];
@@ -197,9 +209,11 @@ export interface RunStats {
   wrongFlags: number;
   won: boolean;
   seconds: number;
+  /** 지뢰 보호를 쓴 횟수 */
+  shields: number;
 }
 
-export function runStats(b: Board, won: boolean, seconds: number): RunStats {
+export function runStats(b: Board, won: boolean, seconds: number, shields = 0): RunStats {
   let correctFlags = 0;
   let wrongFlags = 0;
   for (const c of b.cells) {
@@ -207,7 +221,7 @@ export function runStats(b: Board, won: boolean, seconds: number): RunStats {
     if (c.mine) correctFlags++;
     else wrongFlags++;
   }
-  return { opened: b.openCount, correctFlags, wrongFlags, won, seconds: Math.round(seconds * 10) / 10 };
+  return { opened: b.openCount, correctFlags, wrongFlags, won, seconds: Math.round(seconds * 10) / 10, shields };
 }
 
 export interface ScoreBreakdown {
@@ -215,12 +229,18 @@ export interface ScoreBreakdown {
   flags: number;
   clear: number;
   time: number;
+  /** 지뢰 보호를 썼으면 깎인 점수 (0 또는 음수) */
+  shield: number;
   total: number;
 }
+
+/** 지뢰 보호를 쓴 판은 점수의 이 퍼센트만 받는다 — 서버 MS_SCORE.shieldPercent와 같다 */
+export const SHIELD_SCORE_PERCENT = 70;
 
 /**
  * 점수 — 서버(server/src/domain.ts minesweeperScore)와 같은 식이다. 순위표 값은 서버가 정한다.
  * 연 칸 ×10, 맞은 깃발 ×20, 틀린 깃발 ×(−10), 깼으면 안전한 칸 수 ×10 + 기준 시간보다 빠른 0.1초당 1점.
+ * 지뢰 보호를 썼으면 합계의 70%만 받는다(내림).
  */
 export function scoreRun(d: Difficulty, r: RunStats): ScoreBreakdown {
   const safe = d.cols * d.rows - d.mines;
@@ -228,7 +248,10 @@ export function scoreRun(d: Difficulty, r: RunStats): ScoreBreakdown {
   const flags = r.correctFlags * 20 - r.wrongFlags * 10;
   const clear = r.won ? safe * 10 : 0;
   const time = r.won ? Math.max(0, Math.round((d.par - r.seconds) * 10)) : 0;
-  return { cells, flags, clear, time, total: Math.max(0, cells + flags + clear + time) };
+  const raw = Math.max(0, cells + flags + clear + time);
+  // 정수로 계산한다 — 서버와 소수 오차 없이 같은 값
+  const total = r.shields > 0 ? Math.floor((raw * SHIELD_SCORE_PERCENT) / 100) : raw;
+  return { cells, flags, clear, time, shield: total - raw, total };
 }
 
 /**

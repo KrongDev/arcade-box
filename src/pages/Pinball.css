@@ -165,3 +165,10 @@
   transform: translateY(2px);
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35), 0 0 0 2px rgba(165, 148, 255, 0.35) inset;
 }
+
+.pinball-hint-gear {
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-caption);
+  font-weight: 600;
+  color: var(--pb-coin);
+}

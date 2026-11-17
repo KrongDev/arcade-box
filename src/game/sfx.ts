@@ -17,6 +17,7 @@ export type Sfx =
   | 'multiball'
   | 'ballSave'
   | 'combo'
+  | 'blast'
   | 'coin'
   | 'milestone'
   | 'drain'
@@ -93,7 +94,7 @@ function noise(ac: AudioContext, at: number, dur: number, gain: number) {
   src.start(at);
 }
 
-const MIN_GAP: Partial<Record<Sfx, number>> = { bumper: 45, open: 40, flip: 30, sling: 40, target: 30, rollover: 40 };
+const MIN_GAP: Partial<Record<Sfx, number>> = { blast: 90, bumper: 45, open: 40, flip: 30, sling: 40, target: 30, rollover: 40 };
 
 export function playSfx(name: Sfx): void {
   if (!enabled || suspended || (typeof document !== 'undefined' && document.hidden)) return;
@@ -154,6 +155,10 @@ export function playSfx(name: Sfx): void {
     case 'ballSave':
       tone(ac, t, 988, 0.14, 'triangle', 0.08);
       tone(ac, t + 0.12, 1319, 0.24, 'triangle', 0.08);
+      break;
+    case 'blast':
+      noise(ac, t, 0.18, 0.3);
+      tone(ac, t, 90, 0.22, 'sine', 0.22, 40);
       break;
     case 'combo':
       tone(ac, t, 1047, 0.07, 'square', 0.04, 1568);

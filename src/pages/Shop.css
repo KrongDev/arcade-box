@@ -199,17 +199,33 @@
   aspect-ratio: 4 / 5;
 }
 
-.shop-item-ribbon {
+/* 등급 배지 — 기본·고급·희귀·전설 */
+.shop-item-tier {
   position: absolute;
   top: var(--space-2);
-  right: var(--space-2);
+  left: var(--space-2);
   z-index: 1;
   padding: 2px var(--space-2);
   border-radius: 999px;
-  background: linear-gradient(90deg, var(--brand-pink), var(--brand-primary));
   font-size: var(--font-size-caption);
   font-weight: 700;
   color: var(--color-text-inverse);
+}
+
+.shop-item-tier.tier-basic {
+  background: #6b7280;
+}
+
+.shop-item-tier.tier-rare {
+  background: #0b7d5a;
+}
+
+.shop-item-tier.tier-epic {
+  background: #b35400;
+}
+
+.shop-item-tier.tier-legend {
+  background: linear-gradient(90deg, var(--brand-pink), var(--brand-primary));
 }
 
 .shop-item-name {
@@ -337,3 +353,82 @@
   border-radius: 16px;
   box-shadow: 0 4px 0 var(--line);
 }
+
+/* 능력·이펙트 */
+.shop-item-perk {
+  margin: 0;
+  font-size: var(--font-size-caption);
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--brand-primary-dark);
+}
+
+.shop-item-perk.is-effect {
+  color: var(--brand-pink-dark);
+}
+
+.shop-item-perk.is-none {
+  font-weight: 400;
+  color: var(--color-text-hint);
+}
+
+.shop-confirm-perks {
+  margin: var(--space-2) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: 12px;
+  background: var(--brand-primary-soft);
+  font-size: var(--font-size-body-small);
+  font-weight: 600;
+  color: var(--brand-primary-dark);
+}
+
+/* 맵 미리보기 — 바탕·장식·동전 */
+.item-preview-map {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.item-preview-motif {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  font-size: 48px;
+  line-height: 1;
+  opacity: 0.35;
+}
+
+.item-preview-grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, 22px);
+  gap: 3px;
+}
+
+.item-preview-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.08);
+}
+
+.item-preview-coin {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ffc53d;
+  box-shadow: inset 0 0 0 2px #e0a000;
+}
+
+.item-preview-coin.is-glow {
+  box-shadow:
+    inset 0 0 0 2px #e0a000,
+    0 0 6px 2px rgba(255, 212, 59, 0.9);
+}
+

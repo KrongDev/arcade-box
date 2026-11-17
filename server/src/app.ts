@@ -187,6 +187,7 @@ export function createApp(deps: AppDeps) {
             opened: body.opened,
             correctFlags: body.correctFlags,
             wrongFlags: body.wrongFlags,
+            shields: body.shields,
             coins: body.coins,
           },
           nowMs,

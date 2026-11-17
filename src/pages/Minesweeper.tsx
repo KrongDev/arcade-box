@@ -1,7 +1,8 @@
 import { graniteEvent } from '@apps-in-toss/web-framework';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Coin, Pause } from '../components/gameIcons';
-import { tileLook } from '../game/equipped';
+import { abilityLines } from '../game/catalog';
+import { mapLook, minesweeperGear, tileLook } from '../game/equipped';
 import { haptic } from '../game/haptic';
 import { playSfx } from '../game/sfx';
 import { shareWithLink } from '../game/share';
@@ -17,6 +18,7 @@ import {
   getDifficulty,
   isWon,
   openCell,
+  shieldExplosion,
   spreadSteps,
   runStats,
   scoreRun,
@@ -68,6 +70,8 @@ function DifficultySelect({ onExit, onStart }: { onExit: () => void; onStart: (i
   const { save } = useSave();
   const insets = useSafeArea();
   useBackEvent(onExit);
+  const gear = minesweeperGear(save);
+  const gearRows = [gear.tile, gear.map].map((item) => ({ item, lines: abilityLines(item) }));
 
   return (
     <main className="ms-select ab-page" style={{ paddingTop: insets.top + NAV_BAR_OFFSET, paddingBottom: insets.bottom + 24 }}>
@@ -79,6 +83,14 @@ function DifficultySelect({ onExit, onStart }: { onExit: () => void; onStart: (i
         <p className="ab-chip ms-wallet">
           <Coin /> 지뢰찾기 코인 <strong>{(save.coins.minesweeper ?? 0).toLocaleString()}</strong>
         </p>
+        <ul className="ms-gear" aria-label="장착한 아이템">
+          {gearRows.map(({ item, lines }) => (
+            <li key={item.id} className="ms-gear-row">
+              <span className="ms-gear-name">{item.name}</span>
+              <span className="ms-gear-ability">{lines.length > 0 ? lines.join(' · ') : '능력 없음'}</span>
+            </li>
+          ))}
+        </ul>
       </header>
 
       <ul className="ms-levels">
@@ -86,7 +98,8 @@ function DifficultySelect({ onExit, onStart }: { onExit: () => void; onStart: (i
           const unlocked = d.requires === null || save.cleared.includes(stageKey(d.requires));
           const bestScore = save.bestScore[stageKey(d.id)];
           const bestTime = save.bestTime[stageKey(d.id)];
-          const spec = `${d.cols}×${d.rows} · 지뢰 ${d.mines}개 · 동전 ${d.coins}개`;
+          const extra = gear.extraCoins[DIFFICULTIES.indexOf(d)] ?? 0;
+          const spec = `${d.cols}×${d.rows} · 지뢰 ${d.mines}개 · 동전 ${d.coins + extra}개`;
           if (!unlocked) {
             return (
               <li key={d.id}>
@@ -195,10 +208,18 @@ function MinesweeperPlay({
   const diff = getDifficulty(difficultyId);
   const { addCoins, recordClear, recordStageScore, submitRun, save } = useSave();
   const tiles = tileLook(save);
+  const map = mapLook(save);
+  // 장착 능력·이펙트는 판을 시작할 때 정한다
+  const [gear] = useState(() => minesweeperGear(save));
   const insets = useSafeArea();
 
   // 판은 한 판 동안 같은 객체를 고쳐 쓰고, setVersion으로 다시 그린다
-  const [board] = useState<Board>(() => createBoard(diff));
+  const [board] = useState<Board>(() => createBoard(diff, gear.extraCoins[DIFFICULTIES.indexOf(diff)] ?? 0));
+  /** 남은 지뢰 보호, 쓴 횟수 */
+  const [shieldsLeft, setShieldsLeft] = useState(gear.shield);
+  const shieldsUsed = useRef(0);
+  /** 발판 능력으로 생긴 코인 소수점 */
+  const coinCarry = useRef(0);
   const viewportRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const phaseRef = useRef<Phase>('ready');
@@ -274,7 +295,7 @@ function MinesweeperPlay({
     stopClock();
     const secs = elapsed();
     setSeconds(secs);
-    const stats = runStats(board, won, secs);
+    const stats = runStats(board, won, secs, shieldsUsed.current);
     if (won) {
       const r = recordClear(stageKey(diff.id), stats.seconds);
       const next = DIFFICULTIES.find((d) => d.requires === diff.id);
@@ -352,8 +373,24 @@ function MinesweeperPlay({
       clock.current.since = performance.now();
       setPhase('playing');
     }
+    // 지뢰를 밟았는데 보호가 남아 있으면 막고 계속한다 (그 판 점수는 깎인다)
+    let shielded = false;
+    if (res.boom && shieldsLeft > 0) {
+      shieldExplosion(b);
+      shieldsUsed.current += 1;
+      setShieldsLeft((n) => n - 1);
+      shielded = true;
+      haptic('error', 0);
+      playSfx('blast');
+      setShaking(true);
+      later(() => setShaking(false), 450);
+      showToast('지뢰 보호가 막았어요 · 이번 판 점수는 30% 깎여요');
+    }
+
     if (res.coins > 0) {
-      const gained = res.coins * COIN_VALUE;
+      coinCarry.current += res.coins * COIN_VALUE * (1 + gear.coinValue);
+      const gained = Math.floor(coinCarry.current);
+      coinCarry.current -= gained;
       coinsRef.current += gained;
       setCoins(coinsRef.current);
       haptic('success', 0);
@@ -369,7 +406,7 @@ function MinesweeperPlay({
       for (let k = 1; k <= ticks; k++) later(() => playSfx('open'), Math.round((rippleMs.current * k) / ticks));
     }
 
-    if (res.boom) finish(false);
+    if (res.boom && !shielded) finish(false);
     else if (isWon(b)) finish(true);
     rerender();
   };
@@ -432,7 +469,7 @@ function MinesweeperPlay({
   }, [setPhase]);
 
   const quit = useCallback(() => {
-    settle(0, runStats(board, false, elapsed()));
+    settle(0, runStats(board, false, elapsed(), shieldsUsed.current));
     onSelect();
   }, [onSelect, settle, board]);
 
@@ -466,13 +503,13 @@ function MinesweeperPlay({
       style={
         {
           paddingTop: insets.top + NAV_BAR_OFFSET,
-          '--ms-bg': tiles.bg,
+          '--ms-bg': map.bg,
           '--ms-closed': tiles.closed,
           '--ms-closed-edge': tiles.closedEdge,
           '--ms-open': tiles.open,
           '--ms-open-edge': tiles.openEdge,
-          '--ms-ink': tiles.ink,
-          '--ms-ink-sub': tiles.inkSub,
+          '--ms-ink': map.ink,
+          '--ms-ink-sub': map.inkSub,
           '--ms-coin-ink': tiles.coinInk,
         } as CSSProperties
       }
@@ -495,15 +532,32 @@ function MinesweeperPlay({
           <span aria-label={`남은 지뢰 ${minesLeft}개`}>
             <span className="tf">🚩</span> {minesLeft}
           </span>
+          {gear.shield > 0 && (
+            <span className={shieldsLeft > 0 ? 'ms-hud-shield' : 'ms-hud-shield is-used'} aria-label={`남은 지뢰 보호 ${shieldsLeft}번`}>
+              <span className="tf">🛡️</span> {shieldsLeft}
+            </span>
+          )}
           <span className="ms-hud-coins">
             <Coin /> +{coins}
           </span>
         </div>
       </header>
 
+      {map.motif && (
+        <span className="ms-motif tf" aria-hidden="true">
+          {map.motif}
+        </span>
+      )}
       <div className={shaking ? 'ms-viewport is-shaking' : 'ms-viewport'} ref={viewportRef}>
         <div
-          className="ms-board"
+          className={[
+            'ms-board',
+            `pat-${tiles.pattern}`,
+            gear.effect.open ? `fx-open-${gear.effect.open}` : '',
+            gear.effect.coinGlow ? 'fx-coin-glow' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
           ref={contentRef}
           role="grid"
           aria-label={`${diff.name} 판 ${diff.cols}×${diff.rows}`}
@@ -518,6 +572,7 @@ function MinesweeperPlay({
               adj={cell.adj}
               coin={cell.coin}
               exploded={board.exploded === i}
+              shielded={cell.shielded}
               phase={phase}
               revealDelay={revealDelays[i]}
               openDelay={openDelays.get(i)}
@@ -639,6 +694,12 @@ function MinesweeperPlay({
                   </div>
                 </>
               )}
+              {result.score.shield < 0 && (
+                <div className="result-row">
+                  <dt>지뢰 보호 (30% 감점)</dt>
+                  <dd>−{Math.abs(result.score.shield).toLocaleString()}</dd>
+                </div>
+              )}
               <div className="result-row">
                 <dt>최고 점수</dt>
                 <dd>{result.bestScore.toLocaleString()}점</dd>
@@ -721,6 +782,7 @@ const CellView = memo(function CellView({
   adj,
   coin,
   exploded,
+  shielded,
   phase,
   revealDelay,
   openDelay,
@@ -731,6 +793,7 @@ const CellView = memo(function CellView({
   adj: number;
   coin: boolean;
   exploded: boolean;
+  shielded: boolean;
   phase: Phase;
   revealDelay?: number;
   /** 이번에 열린 칸이면 등장 지연(ms) */
@@ -748,6 +811,13 @@ const CellView = memo(function CellView({
       >
         {adj > 0 ? adj : ''}
         {coin && <span className="ms-cell-coin"><Coin /></span>}
+      </div>
+    );
+  }
+  if (shielded) {
+    return (
+      <div role="gridcell" aria-label="보호로 막은 지뢰" className="ms-cell is-shielded">
+        <span className="tf">🛡️</span>
       </div>
     );
   }

@@ -266,11 +266,60 @@ describe('판 기록·잠금 해제·리더보드', () => {
       { won: true, seconds: 30, opened: 69, correctFlags: 0, wrongFlags: 0 }, // 다 안 열었는데 깼다고 함
       { won: false, opened: 70, correctFlags: 0, wrongFlags: 0 }, // 다 열었는데 못 깼다고 함
       { won: false, opened: 1.5, correctFlags: 0, wrongFlags: 0 },
+      { won: false, opened: 10, correctFlags: 0, wrongFlags: 0, shields: 2 }, // 지뢰 보호 상한(1번) 초과
+      { won: false, opened: 10, correctFlags: 0, wrongFlags: 0, shields: -1 },
     ];
     for (const b of bad) {
       advance(5000);
       const r = await call('POST', '/v1/me/runs', { token: fay, body: { board: 'minesweeper.easy', coins: 0, ...b } });
       assert.equal(r.status, 400, JSON.stringify(b));
+    }
+  });
+});
+
+describe('아이템 능력', () => {
+  it('지뢰 보호를 쓴 판은 점수의 70%만 받는다', async () => {
+    const gil = await login('code-gil-00001', 'anon-gil');
+    await call('POST', '/v1/me/runs', { token: gil, body: { board: 'pinball', score: 30000, coins: 0 } });
+    advance(5000);
+    const r = await call('POST', '/v1/me/runs', {
+      token: gil,
+      body: { board: 'minesweeper.easy', won: true, seconds: 40, opened: 70, correctFlags: 10, wrongFlags: 0, shields: 1, coins: 0 },
+    });
+    assert.equal(r.status, 200);
+    assert.equal(r.body.bestScore['minesweeper.easy'], 2100); // 3000 × 0.7
+  });
+  it('코인 상한은 가장 좋은 아이템 능력까지 받는다', async () => {
+    const hal = await login('code-hal-00001', 'anon-hal');
+    const ok = await call('POST', '/v1/me/runs', { token: hal, body: { board: 'pinball', score: 30000, coins: 400 } });
+    assert.equal(ok.status, 200);
+    advance(5000);
+    const over = await call('POST', '/v1/me/runs', { token: hal, body: { board: 'pinball', score: 1000, coins: 401 } });
+    assert.equal(over.status, 400);
+    advance(5000);
+    // 초급: (동전 3 + 맵 4) × 5 × 1.4 + 클리어 20 = 69
+    const ms = await call('POST', '/v1/me/runs', {
+      token: hal,
+      body: { board: 'minesweeper.easy', won: true, seconds: 40, opened: 70, correctFlags: 0, wrongFlags: 0, coins: 69 },
+    });
+    assert.equal(ms.status, 200);
+    advance(5000);
+    const msOver = await call('POST', '/v1/me/runs', {
+      token: hal,
+      body: { board: 'minesweeper.easy', won: false, seconds: 40, opened: 10, correctFlags: 0, wrongFlags: 0, coins: 70 },
+    });
+    assert.equal(msOver.status, 400);
+  });
+  it('새 아이템(맵·발판)을 코인으로 사서 장착한다', async () => {
+    const ivy = await login('code-ivy-00001', 'anon-ivy');
+    await call('POST', '/v1/me/runs', { token: ivy, body: { board: 'pinball', score: 30000, coins: 0 } });
+    const imported = await call('POST', '/v1/me/import', { token: ivy, body: { save: { coins: { minesweeper: 5000 } } } });
+    assert.ok(imported.status === 200 || imported.status === 409);
+    const me = await call('GET', '/v1/me', { token: ivy });
+    if ((me.body.coins.minesweeper ?? 0) >= 2000) {
+      const buy = await call('POST', '/v1/me/items/minesweeper.map.forest/buy', { token: ivy });
+      assert.equal(buy.status, 200);
+      assert.equal(buy.body.equipped['minesweeper.map'], 'minesweeper.map.forest');
     }
   });
 });
