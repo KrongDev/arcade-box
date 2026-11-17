@@ -8,40 +8,49 @@
 
 :root {
   /* 텍스트 — 중립 그레이스케일. #000은 쓰지 않는다(예외는 아래 --dim). */
-  /* 아케이드박스: 보라빛이 살짝 도는 회색 */
-  --color-text-strong: #1f1a3d; /* 제목·금액·핵심 숫자 */
-  --color-text-default: #3a3557; /* 본문·리스트 타이틀 */
-  --color-text-subtle: #5d5878; /* 설명·부제·메타데이터 */
-  --color-text-hint: #8a85a6; /* placeholder·타임스탬프·약한 힌트 */
-  --color-text-disabled: #b6b1cc; /* 비활성·장식 라벨 */
+  /* 아케이드박스: 오락기 몸체와 어울리는 차가운 회색 */
+  --color-text-strong: #1c1d22; /* 제목·금액·핵심 숫자 */
+  --color-text-default: #33353d; /* 본문·리스트 타이틀 */
+  --color-text-subtle: #555865; /* 설명·부제·메타데이터 */
+  --color-text-hint: #80838f; /* placeholder·타임스탬프·약한 힌트 */
+  --color-text-disabled: #b2b5bf; /* 비활성·장식 라벨 */
   --color-text-inverse: #ffffff; /* 브랜드·강조로 채운 표면 위 텍스트 */
 
   /* 배경 */
-  --color-bg: #ffffff; /* 기본 배경(카드 표면) */
-  --color-bg-canvas: #f1edff; /* 칩·잠긴 면처럼 한 단계 들어간 면 */
+  --color-bg: #f7f8fa; /* 기본 배경(플라스틱 판 면) */
+  --color-bg-canvas: #e3e5ea; /* 칩·잠긴 면처럼 한 단계 들어간 면 */
 
   /* 상태색 — harness 기준(H), 공식 규격 단정 아님 */
-  --color-danger: #f04452; /* 위험·에러 상태 */
+  --color-danger: #e5262e; /* 위험·에러 상태 */
   --color-success: #03b26c; /* 성공·완료 상태 */
   --color-warning: #fe9800; /* 경고·주의 상태 */
 
-  /* 브랜드 — 아케이드박스: 보라(주), 분홍·금색(보조). 진한 값은 입체 버튼의 아래 그림자 */
-  --brand-primary: #6c4cf1;
-  --brand-primary-dark: #4f32c9;
-  --brand-primary-soft: #ece6ff;
-  --brand-pink: #d6266a; /* 흰 글자 대비 4.8:1 */
-  --brand-pink-dark: #a3164c;
-  --brand-pink-soft: #ffe5ef;
+  /* 브랜드 — 아케이드박스 "화이트 오락기": 회색 몸체, 검은 화면, 파란 불빛, 빨간 버튼.
+     진한 값은 입체 버튼의 아래 두께다. */
+  --brand-primary: #3a56ff; /* 파란 불빛(켜짐·선택). 흰 글자 대비 5.5:1 */
+  --brand-primary-dark: #2338c4;
+  --brand-primary-soft: #e3e8ff;
+  --brand-pink: #e5262e; /* 빨간 오락기 버튼(가장 중요한 동작). 흰 글자 대비 4.6:1 */
+  --brand-pink-dark: #a8141b;
+  --brand-pink-soft: #ffe3e4;
   --brand-gold: #ffb627;
   --brand-gold-dark: #d98a00;
   --brand-gold-soft: #fff3d6;
   --brand-mint: #14b8a6;
   --brand-mint-soft: #dcf7f3;
 
-  /* 화면 바탕과 카드 테두리 */
-  --page-bg: #f5f2ff;
-  --line: #e6e0fb;
-  --line-strong: #d6cdf7;
+  /* 오락기 몸체 */
+  --page-bg: #e8e9ed; /* 몸체 면 */
+  --cab-side: #d5d7dd; /* 몸체 양옆 모서리 */
+  --line: #dcdee4; /* 판 사이 이음매 */
+  --line-strong: #c6c9d1; /* 플라스틱 판 아래 두께 */
+  --bezel: #15161b; /* 화면 테두리·액정 */
+  --crt: #101433; /* 화면 속 바탕 */
+  --led-glow: rgba(58, 86, 255, 0.45); /* 버튼·스위치 파란 불빛 */
+  --red-glow: rgba(229, 38, 46, 0.4);
+
+  /* 픽셀 글꼴 — 제목·숫자·버튼에만. 본문은 시스템 글꼴 */
+  --font-pixel: 'Galmuri11', -apple-system, system-ui, sans-serif;
 
   /* 타이포 스케일 — 크기는 이 6단계 안에서만 고른다. weight는 400~700만 쓴다. */
   --font-size-display: 28px; /* Display·히어로 (26~32px 범위 안에서 조정 가능) */

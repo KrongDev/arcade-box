@@ -42,7 +42,9 @@ function SettingsMain({ onExit, onOpenPurchases }: { onExit: () => void; onOpenP
 
   return (
     <main className="settings ab-page" style={{ paddingTop: insets.top + NAV_BAR_OFFSET, paddingBottom: insets.bottom + 24 }}>
-      <h1 className="settings-title">설정</h1>
+      <h1 className="ab-plate">
+        <span className="ab-stripe ab-stripe--pink">설정</span>
+      </h1>
 
       <section className="settings-group" aria-labelledby="settings-sound">
         <h2 id="settings-sound" className="settings-group-title">
@@ -234,7 +236,7 @@ function PurchaseHistory({ onBack }: { onBack: () => void }) {
       {state.kind === 'ready' && state.orders.length === 0 && (
         <div className="settings-empty-box">
           <p className="settings-empty-emoji">
-            <ArcadeIcon name="receipt" size={56} />
+            <ArcadeIcon name="receipt" size={48} />
           </p>
           <p className="settings-empty">아직 구매한 유료 아이템이 없어요</p>
         </div>

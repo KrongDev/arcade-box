@@ -1,0 +1,12 @@
+/*
+ * 픽셀 글꼴 Galmuri11 Bold (SIL Open Font License 1.1 — 같은 폴더의 Galmuri-OFL.md).
+ * 제목·숫자·버튼에만 쓰고 본문은 시스템 글꼴로 둔다(굵은 꼴만 166KB).
+ * 글리프가 없는 글자는 시스템 글꼴로 대신 그려진다.
+ */
+@font-face {
+  font-family: 'Galmuri11';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('../assets/fonts/Galmuri11-Bold.woff2') format('woff2');
+}

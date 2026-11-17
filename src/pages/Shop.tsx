@@ -19,13 +19,24 @@ import './Shop.css';
 
 type Tab = 'coin' | 'paid';
 
-export default function Shop({ onExit }: { onExit: () => void }) {
+export default function Shop({
+  game: selectedGame,
+  onGameChange,
+  onExit,
+}: {
+  /** 홈에서 고른 게임 — 상점은 이 게임 아이템으로 열리고, 안에서 바꾸면 앱 전체의 지금 게임도 바뀐다 */
+  game: GameId;
+  onGameChange: (id: GameId) => void;
+  onExit: () => void;
+}) {
   const { save, buyItem, equipItem, grantPaidOrder, adRewardsLeft, claimAdReward, serverStatus } = useSave();
   const ad = useRewardedAd();
   const insets = useSafeArea();
 
   const games = GAMES.filter((g) => save.unlocked.includes(g.id) && g.playable);
-  const [game, setGame] = useState<GameId>(games[0]?.id ?? 'pinball');
+  // 고른 게임이 아직 잠겼거나 준비 중이면 열린 첫 게임 상점을 보여 준다
+  const game: GameId = games.some((g) => g.id === selectedGame) ? selectedGame : (games[0]?.id ?? 'pinball');
+  const setGame = onGameChange;
   const [tab, setTab] = useState<Tab>('coin');
   const [confirming, setConfirming] = useState<ShopItem | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -160,8 +171,10 @@ export default function Shop({ onExit }: { onExit: () => void }) {
   return (
     <main className="shop ab-page" style={{ paddingTop: insets.top + NAV_BAR_OFFSET, paddingBottom: insets.bottom + 24, ...currencyVars(game) }}>
       <header className="shop-header">
-        <h1 className="shop-title">상점</h1>
-        <p className="shop-subtitle">게임에서 모은 코인으로 판과 공을 꾸며요</p>
+        <h1 className="ab-plate">
+          <span className="ab-stripe">상점</span>
+        </h1>
+        <p className="shop-subtitle">게임을 고르면 그 게임 코인과 아이템이 보여요</p>
       </header>
 
       {games.length > 1 && (
@@ -175,15 +188,18 @@ export default function Shop({ onExit }: { onExit: () => void }) {
               className={g.id === game ? 'ab-tab is-active' : 'ab-tab'}
               onClick={() => setGame(g.id)}
             >
-              <GameIcon id={g.id} size={20} /> {g.name}
+              <GameIcon id={g.id} size={16} /> {g.name}
             </button>
           ))}
         </div>
       )}
 
-      <section className="shop-balance" aria-label={`${gameName} 코인`}>
-        <p className="shop-balance-amount">
-          <Coin game={game} /> {balance.toLocaleString()}
+      <section className="shop-balance ab-card" aria-label={`${gameName} 코인`}>
+        <p className="shop-balance-label">
+          <GameIcon id={game} size={16} /> {gameName} 코인
+        </p>
+        <p className="shop-balance-amount ab-lcd">
+          <Coin game={game} size={32} /> {balance.toLocaleString()}
         </p>
         <p className="shop-balance-desc">{gameName} 코인은 {gameName} 아이템에만 쓸 수 있어요</p>
       </section>
@@ -191,7 +207,7 @@ export default function Shop({ onExit }: { onExit: () => void }) {
       {ad.status !== 'unsupported' && (
         <section className="shop-ad" aria-label="광고 보고 코인 받기">
           <span className="shop-ad-icon">
-            <ArcadeIcon name="tv" size={34} />
+            <ArcadeIcon name="tv" size={32} />
           </span>
           <div className="shop-ad-text">
             <p className="shop-ad-title">광고 보고 코인 {AD_REWARD_COINS}개 받기</p>

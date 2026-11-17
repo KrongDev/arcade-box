@@ -3,27 +3,38 @@
   flex-direction: column;
 }
 
-.settings-title {
-  margin: 0 0 var(--space-4);
-  font-size: var(--font-size-display);
-  font-weight: var(--font-weight-display);
-  color: var(--color-text-strong);
+.settings > .ab-plate {
+  align-self: flex-start;
+  margin-bottom: var(--space-5);
 }
 
+/* 묶음 — 플라스틱 판 */
 .settings-group {
   margin-bottom: var(--space-4);
   padding: var(--space-2) var(--space-4);
-  border: 2px solid var(--line);
-  border-radius: 22px;
+  border-radius: 16px;
   background: var(--color-bg);
-  box-shadow: 0 5px 0 var(--line);
+  box-shadow: 0 4px 0 var(--line-strong);
 }
 
+/* 묶음 이름 앞 파란 불 하나 */
 .settings-group-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   margin: var(--space-3) 0 var(--space-1);
+  font-family: var(--font-pixel);
   font-size: var(--font-size-body-small);
   font-weight: 700;
-  color: var(--brand-primary);
+  color: var(--color-text-subtle);
+}
+
+.settings-group-title::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  background: var(--brand-primary);
+  box-shadow: 0 0 6px 2px var(--led-glow);
 }
 
 /* 행 */
@@ -56,6 +67,7 @@
 
 .settings-row-label {
   font-size: var(--font-size-body);
+  font-weight: 700;
   color: var(--color-text-strong);
 }
 
@@ -75,57 +87,65 @@
   color: var(--color-text-hint);
 }
 
-/* 스위치 */
+/* 스위치 — 꺼지면 검은 홈, 켜지면 파란 불이 들어온다 */
 .settings-switch {
   position: relative;
   flex-shrink: 0;
-  width: 52px;
+  width: 56px;
   height: 32px;
   border-radius: 16px;
-  background: var(--line-strong);
-  transition: background 0.15s ease;
+  background: #2a2b31;
+  box-shadow: inset 0 2px 0 #000000;
+  transition:
+    background 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .settings-switch.is-on {
   background: var(--brand-primary);
+  box-shadow:
+    inset 0 2px 0 var(--brand-primary-dark),
+    0 0 14px 3px var(--led-glow);
 }
 
 .settings-switch-knob {
   position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 26px;
-  height: 26px;
+  top: 4px;
+  left: 4px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  background: var(--color-bg);
-  box-shadow: 0 2px 0 rgba(31, 26, 61, 0.18);
+  background: #ffffff;
+  box-shadow: 0 2px 0 #9ea3af;
   transition: transform 0.15s ease;
 }
 
 .settings-switch.is-on .settings-switch-knob {
-  transform: translateX(20px);
+  transform: translateX(24px);
 }
 
-/* 안내 */
+/* 안내 — 작은 액정 화면 */
 .settings-info {
-  margin: var(--space-2) 0 var(--space-3);
+  margin: var(--space-3) 0 var(--space-3);
   padding: var(--space-3) var(--space-4);
-  border-radius: 16px;
-  background: var(--brand-primary-soft);
+  border-radius: 12px;
+  background: var(--bezel);
+  box-shadow: inset 0 2px 0 #000000;
 }
 
 .settings-info-title {
   margin: 0 0 var(--space-2);
+  font-family: var(--font-pixel);
   font-size: var(--font-size-body-small);
-  font-weight: 600;
-  color: var(--color-text-strong);
+  font-weight: 700;
+  color: #5fe0bc;
 }
 
 .settings-info-list {
   margin: 0;
   padding-left: 20px;
   font-size: var(--font-size-body-small);
-  color: var(--color-text-subtle);
+  color: #d7dbf5;
   line-height: 1.6;
 }
 

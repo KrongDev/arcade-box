@@ -489,7 +489,7 @@ export default function Pinball({ onExit }: { onExit: () => void }) {
           <section className="game-dialog" role="dialog" aria-modal="true" aria-labelledby="result-title">
             {result.isBest && (
               <p className="result-badge">
-                <ArcadeIcon name="party" size={20} /> 새 최고 기록
+                <ArcadeIcon name="party" size={16} /> 새 최고 기록
               </p>
             )}
             <h2 id="result-title" className="dialog-title">
@@ -510,7 +510,7 @@ export default function Pinball({ onExit }: { onExit: () => void }) {
             </dl>
             {result.unlockedNames.map((name) => (
               <p key={name} className="result-unlock">
-                <ArcadeIcon name="unlock" size={20} /> 새 게임 {name}
+                <ArcadeIcon name="unlock" size={16} /> 새 게임 {name}
                 {subjectParticle(name)} 열렸어요
               </p>
             ))}

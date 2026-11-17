@@ -1,17 +1,52 @@
 /**
- * 아케이드박스 공통 그림체 — 화면들이 함께 쓰는 버튼·카드·칩.
- * 밝은 바탕(라이트 모드)에 보라·분홍·금색 포인트, 꾹 눌리는 입체 버튼.
+ * 아케이드박스 공통 그림체 "화이트 오락기" — 화면들이 함께 쓰는 버튼·판·화면·액정.
+ * 회색 플라스틱 몸체 위에 검은 화면(베젤), 하얗게 빛나는 동그란 버튼, 빨간 시작 버튼.
+ * 제목·숫자·버튼 글자는 픽셀 글꼴(--font-pixel), 본문은 시스템 글꼴.
  * 값은 tokens.css의 토큰만 쓴다.
  */
 
-/* 화면 바탕은 index.css의 body·#root가 깐다. 화면은 높이만 채운다 */
+/* 화면 바탕은 index.css(:root)가 깐다. 화면은 높이만 채운다 */
 .ab-page {
   min-height: 100vh;
   /* biome-ignore lint/suspicious/noDuplicateProperties: dvh 미지원 브라우저용 vh 폴백 */
   min-height: 100dvh;
 }
 
-/* 입체 버튼 — 아래 그림자가 눌리면 줄어든다 */
+.ab-pixel {
+  font-family: var(--font-pixel);
+  font-weight: 700;
+}
+
+/* 줄무늬 픽셀 글자 — 위는 노랑, 아래는 하늘색, 진한 빨강 그림자(오락실 타이틀) */
+.ab-stripe {
+  display: inline-block;
+  font-family: var(--font-pixel);
+  font-weight: 700;
+  color: transparent;
+  background-image: linear-gradient(180deg, #ffe14d 0 46%, #fff6b0 46% 54%, #4fc0f2 54% 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: drop-shadow(3px 3px 0 #8e1f22);
+}
+
+.ab-stripe--pink {
+  background-image: linear-gradient(180deg, #ff6fae 0 50%, #ffb6d6 50% 60%, #a98bff 60% 100%);
+  filter: drop-shadow(3px 3px 0 #2a1840);
+}
+
+/* 화면 제목 판 — 검은 판 위에 줄무늬 글자 */
+.ab-plate {
+  display: inline-block;
+  margin: 0;
+  padding: 10px 16px 12px;
+  border-radius: 14px;
+  background: var(--bezel);
+  box-shadow: 0 4px 0 var(--line-strong);
+  font-size: 33px;
+  line-height: 1.1;
+}
+
+/* 오락기 버튼 — 기본은 빨간 시작 버튼(가장 중요한 동작). 아래 두께가 눌리면 줄어든다 */
 .ab-btn {
   display: inline-flex;
   align-items: center;
@@ -20,11 +55,15 @@
   min-height: 52px;
   padding: 0 var(--space-5);
   border: 0;
-  border-radius: 16px;
-  background: var(--brand-primary);
-  box-shadow: 0 4px 0 var(--brand-primary-dark);
+  border-radius: 999px;
+  background: var(--brand-pink);
+  box-shadow:
+    0 0 0 3px var(--line-strong),
+    0 5px 0 3px #a9aebb,
+    0 0 18px 4px var(--red-glow);
   color: var(--color-text-inverse);
   font: inherit;
+  font-family: var(--font-pixel);
   font-size: var(--font-size-body);
   font-weight: 700;
   line-height: 1.2;
@@ -36,12 +75,17 @@
 
 .ab-btn:active:not(:disabled) {
   transform: translateY(3px);
-  box-shadow: 0 1px 0 var(--brand-primary-dark);
+  box-shadow:
+    0 0 0 3px var(--line-strong),
+    0 2px 0 3px #a9aebb,
+    0 0 10px 2px var(--red-glow);
 }
 
 .ab-btn:disabled {
   background: var(--color-bg-canvas);
-  box-shadow: 0 4px 0 var(--line-strong);
+  box-shadow:
+    0 0 0 3px var(--line-strong),
+    0 5px 0 3px #b9bdc7;
   color: var(--color-text-hint);
   cursor: default;
 }
@@ -49,7 +93,6 @@
 .ab-btn--sm {
   min-height: 44px;
   padding: 0 var(--space-4);
-  border-radius: 14px;
   font-size: var(--font-size-body-small);
 }
 
@@ -58,48 +101,45 @@
   width: 100%;
 }
 
+/* 예전 이름 — 빨간 버튼과 같다 */
 .ab-btn--pink {
   background: var(--brand-pink);
-  box-shadow: 0 4px 0 var(--brand-pink-dark);
-}
-
-.ab-btn--pink:active:not(:disabled) {
-  box-shadow: 0 1px 0 var(--brand-pink-dark);
 }
 
 .ab-btn--gold {
   background: var(--brand-gold);
-  box-shadow: 0 4px 0 var(--brand-gold-dark);
+  box-shadow:
+    0 0 0 3px var(--line-strong),
+    0 5px 0 3px #a9aebb,
+    0 0 18px 4px rgba(255, 182, 39, 0.4);
   color: var(--color-text-strong);
 }
 
-.ab-btn--gold:active:not(:disabled) {
-  box-shadow: 0 1px 0 var(--brand-gold-dark);
-}
-
+/* 흰 버튼 + 파란 불빛 — 보조 동작 */
 .ab-btn--ghost {
-  background: var(--color-bg);
+  background: #ffffff;
   box-shadow:
-    0 0 0 2px var(--line) inset,
-    0 4px 0 var(--line-strong);
+    0 0 0 3px var(--line-strong),
+    0 5px 0 3px #a9aebb,
+    0 0 18px 4px var(--led-glow);
   color: var(--color-text-strong);
 }
 
 .ab-btn--ghost:active:not(:disabled) {
   box-shadow:
-    0 0 0 2px var(--line) inset,
-    0 1px 0 var(--line-strong);
+    0 0 0 3px var(--line-strong),
+    0 2px 0 3px #a9aebb,
+    0 0 10px 2px var(--led-glow);
 }
 
-/* 카드 — 흰 면, 연보라 테두리, 아래로 살짝 두께 */
+/* 플라스틱 판 — 밝은 면, 아래로 두께 */
 .ab-card {
-  border: 2px solid var(--line);
-  border-radius: 22px;
+  border-radius: 16px;
   background: var(--color-bg);
-  box-shadow: 0 5px 0 var(--line);
+  box-shadow: 0 4px 0 var(--line-strong);
 }
 
-/* 동그란 아이콘 버튼 (설정 등) */
+/* 동그란 오락기 버튼 (설정·닫기·앞뒤 넘기기) */
 .ab-icon-btn {
   display: inline-flex;
   align-items: center;
@@ -108,59 +148,127 @@
   width: 44px;
   height: 44px;
   padding: 0;
-  border: 2px solid var(--line);
-  border-radius: 14px;
-  background: var(--color-bg);
-  box-shadow: 0 3px 0 var(--line);
-  color: var(--color-text-subtle);
+  border: 0;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow:
+    0 0 0 3px var(--line-strong),
+    0 4px 0 3px #a9aebb,
+    0 0 16px 4px var(--led-glow);
+  color: var(--color-text-strong);
   cursor: pointer;
 }
 
-.ab-icon-btn:active {
+.ab-icon-btn:active:not(:disabled) {
   transform: translateY(2px);
-  box-shadow: 0 1px 0 var(--line);
+  box-shadow:
+    0 0 0 3px var(--line-strong),
+    0 2px 0 3px #a9aebb,
+    0 0 8px 2px var(--led-glow);
 }
 
-/* 코인 칩 */
+.ab-icon-btn:disabled {
+  box-shadow:
+    0 0 0 3px var(--line-strong),
+    0 4px 0 3px #b9bdc7;
+  color: var(--color-text-disabled);
+  cursor: default;
+}
+
+/* 코인 칩 — 플라스틱 판 */
 .ab-chip {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
   min-height: 40px;
   padding: 0 var(--space-3);
-  border: 2px solid var(--line);
-  border-radius: 999px;
+  border-radius: 14px;
   background: var(--color-bg);
+  box-shadow: 0 3px 0 var(--line-strong);
   font-size: var(--font-size-body-small);
   color: var(--color-text-subtle);
 }
 
 .ab-chip strong {
+  font-family: var(--font-pixel);
   color: var(--color-text-strong);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
-/* 섹션 제목 — 왼쪽에 색 막대 */
+/* 액정 숫자판 — 검은 판 위에 코인 색 숫자 (--cur-ink-lcd는 game/currency.ts) */
+.ab-lcd {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--bezel);
+  box-shadow: inset 0 2px 0 #000000;
+  color: var(--cur-lcd, #ffd93d);
+  font-family: var(--font-pixel);
+  font-size: var(--font-size-body-small);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 화면 테두리 + 화면 */
+.ab-bezel {
+  position: relative;
+  padding: 10px;
+  border-radius: 18px;
+  background: var(--bezel);
+  box-shadow: 0 5px 0 #b9bcc5;
+}
+
+.ab-bezel::before,
+.ab-bezel::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #5d606b;
+}
+
+.ab-bezel::before {
+  left: 2px;
+}
+
+.ab-bezel::after {
+  right: 2px;
+}
+
+.ab-crt {
+  position: relative;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--crt);
+}
+
+/* 화면 주사선 */
+.ab-crt::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 3px);
+}
+
+/* 섹션 제목 — 픽셀 글자 */
 .ab-section-title {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   margin: var(--space-5) 0 var(--space-3);
-  font-size: var(--font-size-title);
+  font-family: var(--font-pixel);
+  font-size: 22px;
   font-weight: 700;
   color: var(--color-text-strong);
 }
 
-.ab-section-title::before {
-  content: '';
-  width: 6px;
-  height: 20px;
-  border-radius: 3px;
-  background: linear-gradient(var(--brand-pink), var(--brand-primary));
-}
-
-/* 알약 탭 */
+/* 고르기 탭 — 플라스틱 버튼, 고른 것은 파란 불이 켜진다 */
 .ab-tabs {
   display: flex;
   flex-wrap: wrap;
@@ -168,23 +276,29 @@
 }
 
 .ab-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   min-height: 44px;
   padding: 0 var(--space-4);
-  border: 2px solid var(--line);
+  border: 0;
   border-radius: 999px;
   background: var(--color-bg);
+  box-shadow: 0 3px 0 var(--line-strong);
   color: var(--color-text-subtle);
   font: inherit;
+  font-family: var(--font-pixel);
   font-size: var(--font-size-body-small);
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
 }
 
 .ab-tab.is-active,
 .ab-tab[aria-selected='true'] {
-  border-color: var(--brand-primary);
   background: var(--brand-primary);
-  box-shadow: 0 3px 0 var(--brand-primary-dark);
+  box-shadow:
+    0 3px 0 var(--brand-primary-dark),
+    0 0 14px 3px var(--led-glow);
   color: var(--color-text-inverse);
 }
 

@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import logoMark from '../assets/logo-mark.png';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { ArcadeIcon, GameIcon } from '../components/ArcadeIcon';
 import { GameArt } from '../components/GameArt';
-import { Coin, Gear, Lock, Play } from '../components/gameIcons';
+import { Coin, Lock } from '../components/gameIcons';
 import { ChevronLeft, ChevronRight, Close } from '../components/icons';
 import { API_BASE } from '../game/api';
+import { currencyVars } from '../game/currency';
 import { haptic } from '../game/haptic';
 import { ATTENDANCE_COINS, GAMES, getGame, type GameDef, type GameId } from '../game/registry';
 import type { SaveData } from '../game/save';
@@ -15,11 +15,16 @@ import '../styles/arcade.css';
 import './Home.css';
 
 export default function Home({
+  game,
+  onGameChange,
   onPlay,
   onOpenShop,
   onOpenSettings,
   onOpenLeaderboard,
 }: {
+  /** 지금 오락기 화면에 띄운 게임 — 앱 전체가 함께 쓴다(상점도 이 게임으로 열린다) */
+  game: GameId;
+  onGameChange: (id: GameId) => void;
   onPlay: (id: GameId) => void;
   onOpenShop: () => void;
   onOpenSettings: () => void;
@@ -31,37 +36,45 @@ export default function Home({
   const [claimedMessage, setClaimedMessage] = useState<string | null>(null);
 
   const unlockedGames = GAMES.filter((g) => save.unlocked.includes(g.id));
+  const active = Math.max(0, GAMES.findIndex((g) => g.id === game));
+  const current = GAMES[active];
+  const currentUnlocked = save.unlocked.includes(current.id);
 
-  // 게임 카드는 옆으로 넘긴다 — 게임이 늘어나도 화면이 길어지지 않게
+  // 오락기 화면 속 게임은 옆으로 넘긴다 — 넘기면 지금 게임(코인 표시·상점)도 따라 바뀐다
   const trackRef = useRef<HTMLUListElement>(null);
-  const [active, setActive] = useState(0);
+  const onGameChangeRef = useRef(onGameChange);
+  useEffect(() => {
+    onGameChangeRef.current = onGameChange;
+  }, [onGameChange]);
+  const initialIndex = useRef(active);
   useEffect(() => {
     const el = trackRef.current;
     if (!el) return;
+    // 처음엔 지금 게임 화면에서 시작한다(움직임 없이)
+    el.scrollLeft = initialIndex.current * el.clientWidth;
+    let last = initialIndex.current;
     const onScroll = () => {
-      const first = el.children[0] as HTMLElement | undefined;
-      const second = el.children[1] as HTMLElement | undefined;
-      const step = first && second ? second.offsetLeft - first.offsetLeft : el.clientWidth;
-      setActive(Math.max(0, Math.min(GAMES.length - 1, Math.round(el.scrollLeft / Math.max(1, step)))));
+      const index = Math.max(0, Math.min(GAMES.length - 1, Math.round(el.scrollLeft / Math.max(1, el.clientWidth))));
+      if (index !== last) {
+        last = index;
+        onGameChangeRef.current(GAMES[index].id);
+      }
     };
     el.addEventListener('scroll', onScroll, { passive: true });
     return () => el.removeEventListener('scroll', onScroll);
   }, []);
   const goTo = useCallback((index: number) => {
     const el = trackRef.current;
-    const target = el?.children[index] as HTMLElement | undefined;
-    const first = el?.children[0] as HTMLElement | undefined;
-    if (!el || !target || !first) return;
+    if (!el) return;
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    el.scrollTo({ left: target.offsetLeft - first.offsetLeft, behavior: reduce ? 'auto' : 'smooth' });
+    el.scrollTo({ left: index * el.clientWidth, behavior: reduce ? 'auto' : 'smooth' });
   }, []);
 
   // 마우스로 잡아끌어 넘기기 (손가락은 브라우저 기본 스크롤로 넘어간다)
-  const activeRef = useRef(0);
+  const activeRef = useRef(active);
   useEffect(() => {
     activeRef.current = active;
   }, [active]);
-  const suppressClick = useRef(false);
   useEffect(() => {
     const el = trackRef.current;
     if (!el) return;
@@ -91,10 +104,6 @@ export default function Home({
       drag = null;
       if (!d.moved) return;
       el.classList.remove('is-dragging');
-      suppressClick.current = true;
-      window.setTimeout(() => {
-        suppressClick.current = false;
-      }, 0);
       const dx = e.clientX - d.x;
       const next = dx < -40 ? d.from + 1 : dx > 40 ? d.from - 1 : d.from;
       goTo(Math.max(0, Math.min(GAMES.length - 1, next)));
@@ -107,55 +116,110 @@ export default function Home({
       window.removeEventListener('pointercancel', onUp);
     };
   }, [goTo]);
-  const claimTargets = unlockedGames.filter((g) => g.playable);
 
+  const claimTargets = unlockedGames.filter((g) => g.playable);
   const claim = (id: GameId) => {
     claimAttendance(id);
     haptic('success', 0);
     setChooserOpen(false);
     setClaimedMessage(`${getGame(id).name} 코인 ${ATTENDANCE_COINS}개를 받았어요`);
   };
-
   const onClaim = () => {
     if (claimTargets.length === 1) claim(claimTargets[0].id);
     else if (claimTargets.length > 1) setChooserOpen(true);
   };
 
+  const best = currentUnlocked ? bestScore(current, save) : null;
+  // 상점은 지금 게임으로 열린다. 아직 잠겼거나 준비 중이면 열린 첫 게임 상점으로 간다(Shop과 같은 규칙)
+  const shopGame = currentUnlocked && current.playable ? current : (claimTargets[0] ?? current);
+  const canPlay = currentUnlocked && current.playable;
+
   return (
     <main className="home ab-page" style={{ paddingTop: insets.top + NAV_BAR_OFFSET, paddingBottom: insets.bottom + 24 }}>
       <header className="home-top">
-        <div className="home-brand">
-          <img className="home-logo" src={logoMark} alt="" width={40} height={40} />
-          <span className="home-brand-name">아케이드박스</span>
-        </div>
-        <button type="button" className="ab-icon-btn" aria-label="설정" onClick={onOpenSettings}>
-          <Gear size={22} />
+        <ArcadeIcon name="cabinet" size={48} />
+        <span className="home-brand-name ab-pixel">아케이드박스</span>
+        <button type="button" className="ab-icon-btn home-settings" aria-label="설정" onClick={onOpenSettings}>
+          <ArcadeIcon name="gear" size={24} />
         </button>
       </header>
 
-      <section className="home-hero">
-        <h1 className="home-title">오늘은 어떤 게임을 할까요?</h1>
-        <p className="home-subtitle">점수를 올리면 다음 게임이 열려요</p>
-      </section>
-
-      <section className="wallet" aria-label="게임별 코인">
-        {unlockedGames.map((g) => (
-          <div key={g.id} className="ab-chip">
-            <GameIcon id={g.id} size={20} /> {g.name}
-            <strong>
-              <Coin game={g.id} /> {(save.coins[g.id] ?? 0).toLocaleString()}
-            </strong>
-          </div>
-        ))}
-      </section>
-
-      <section className={canClaimAttendance ? 'attendance' : 'attendance is-done'} aria-label="출석 보상">
-        <span className="attendance-icon">
-          <ArcadeIcon name="gift" size={36} />
+      {/* 지금 화면에 띄운 게임의 코인 — 게임을 넘기면 함께 바뀐다 */}
+      <section className="home-coin ab-card" aria-label={`${current.name} 코인`} style={currencyVars(current.id) as CSSProperties}>
+        <GameIcon id={current.id} size={16} />
+        <span className="home-coin-name">{current.name} 코인</span>
+        <span className="ab-lcd home-coin-lcd">
+          <Coin game={current.id} size={16} /> {(save.coins[current.id] ?? 0).toLocaleString()}
         </span>
-        <div className="attendance-text">
-          <p className="attendance-title">출석 보상</p>
-          <p className="attendance-desc">
+      </section>
+
+      <section className="machine" aria-label="게임 고르기">
+        <div className="ab-bezel">
+          <div className="ab-crt machine-crt">
+            <ul
+              className="machine-track"
+              ref={trackRef}
+              aria-label={`게임 목록, 옆으로 넘겨요. ${GAMES.length}개 중 ${active + 1}번째 ${current.name}`}
+            >
+              {GAMES.map((g) => (
+                <li key={g.id} className="machine-slide" aria-hidden={g.id !== current.id}>
+                  <GameScreen game={g} save={save} />
+                </li>
+              ))}
+            </ul>
+            <div className="machine-hud ab-pixel" aria-hidden="true">
+              <span>{!currentUnlocked ? 'LOCKED' : best !== null ? `HI ${best.toLocaleString()}` : 'NEW'}</span>
+              {GAMES.length > 1 &&
+                (GAMES.length <= 8 ? (
+                  <span className="machine-dots">
+                    {GAMES.map((g, i) => (
+                      <i key={g.id} className={i === active ? 'is-active' : undefined} />
+                    ))}
+                  </span>
+                ) : (
+                  <span>
+                    {active + 1}/{GAMES.length}
+                  </span>
+                ))}
+            </div>
+          </div>
+        </div>
+        <div className="machine-panel">
+          <span className="machine-stick" aria-hidden="true">
+            <i className="machine-stick-base" />
+            <i className="machine-stick-shaft" />
+            <i className="machine-stick-ball" />
+          </span>
+          {GAMES.length > 1 && (
+            <span className="machine-nav">
+              <button type="button" className="ab-icon-btn" aria-label="이전 게임" disabled={active <= 0} onClick={() => goTo(active - 1)}>
+                <ChevronLeft size={22} />
+              </button>
+              <button type="button" className="ab-icon-btn" aria-label="다음 게임" disabled={active >= GAMES.length - 1} onClick={() => goTo(active + 1)}>
+                <ChevronRight size={22} />
+              </button>
+            </span>
+          )}
+          <button
+            type="button"
+            className="machine-start ab-pixel"
+            disabled={!canPlay}
+            aria-label={canPlay ? `${current.name} 플레이` : currentUnlocked ? `${current.name} 준비 중` : `${current.name} 잠김`}
+            onClick={() => onPlay(current.id)}
+          >
+            {canPlay ? '플레이' : currentUnlocked ? '준비 중' : <Lock size={26} />}
+          </button>
+        </div>
+      </section>
+
+      <section className={canClaimAttendance ? 'coin-door ab-card' : 'coin-door ab-card is-done'} aria-label="출석 보상">
+        <span className="coin-door-slot" aria-hidden="true">
+          <i />
+          <b />
+        </span>
+        <div className="coin-door-text">
+          <p className="coin-door-title">출석 보상</p>
+          <p className="coin-door-desc">
             {canClaimAttendance
               ? `하루 한 번 코인 ${ATTENDANCE_COINS}개를 받을 수 있어요`
               : (claimedMessage ?? '오늘 보상을 받았어요. 내일 다시 받을 수 있어요')}
@@ -163,7 +227,7 @@ export default function Home({
         </div>
         <button
           type="button"
-          className="ab-btn ab-btn--sm ab-btn--pink attendance-button"
+          className="ab-btn ab-btn--sm ab-btn--ghost coin-door-button"
           onClick={onClaim}
           disabled={!canClaimAttendance || claimTargets.length === 0}
         >
@@ -171,73 +235,17 @@ export default function Home({
         </button>
       </section>
 
-      <div className="game-section-head">
-        <h2 className="ab-section-title game-section-title">
-          게임 <span className="game-count">{GAMES.length}</span>
-        </h2>
-        {GAMES.length > 1 && (
-          <div className="game-nav">
-            <button type="button" className="ab-icon-btn" aria-label="이전 게임" disabled={active <= 0} onClick={() => goTo(active - 1)}>
-              <ChevronLeft size={22} />
-            </button>
-            <button
-              type="button"
-              className="ab-icon-btn"
-              aria-label="다음 게임"
-              disabled={active >= GAMES.length - 1}
-              onClick={() => goTo(active + 1)}
-            >
-              <ChevronRight size={22} />
-            </button>
-          </div>
-        )}
-      </div>
-      <ul
-        className="game-carousel"
-        ref={trackRef}
-        aria-label="게임 목록, 옆으로 넘겨요"
-        onClickCapture={(e) => {
-          // 끌어서 넘긴 직후의 클릭은 게임을 열지 않는다
-          if (suppressClick.current) {
-            e.preventDefault();
-            e.stopPropagation();
-          }
-        }}
-      >
-        {GAMES.map((g, i) => (
-          <li key={g.id} aria-label={`${GAMES.length}개 중 ${i + 1}번째`}>
-            <GameCard game={g} save={save} onPlay={onPlay} />
-          </li>
-        ))}
-      </ul>
-      {GAMES.length > 1 &&
-        (GAMES.length <= 8 ? (
-          <div className="game-dots" aria-hidden="true">
-            {GAMES.map((g, i) => (
-              <span key={g.id} className={i === active ? 'game-dot is-active' : 'game-dot'} />
-            ))}
-          </div>
-        ) : (
-          <p className="game-counter" aria-hidden="true">
-            {active + 1} / {GAMES.length}
-          </p>
-        ))}
-
       <div className="home-tiles">
-        <button type="button" className="home-tile" onClick={onOpenShop}>
-          <span className="home-tile-icon is-purple">
-            <ArcadeIcon name="bag" size={32} />
-          </span>
+        <button type="button" className="home-tile ab-card" onClick={onOpenShop}>
+          <ArcadeIcon name="bag" size={32} />
           <span className="home-tile-title">상점</span>
-          <span className="home-tile-desc">모은 코인으로 판과 공을 꾸며요</span>
+          <span className="home-tile-desc">{shopGame.name} 꾸미기 아이템을 코인으로 사요</span>
         </button>
         {API_BASE && (
-          <button type="button" className="home-tile" onClick={onOpenLeaderboard}>
-            <span className="home-tile-icon is-gold">
-              <ArcadeIcon name="trophy" size={32} />
-            </span>
+          <button type="button" className="home-tile ab-card" onClick={onOpenLeaderboard}>
+            <ArcadeIcon name="trophy" size={32} />
             <span className="home-tile-title">순위표</span>
-            <span className="home-tile-desc">게임별로 다른 사람들과 기록을 겨뤄요</span>
+            <span className="home-tile-desc">다른 사람들과 기록을 겨뤄요</span>
           </button>
         )}
       </div>
@@ -271,7 +279,7 @@ export default function Home({
               {claimTargets.map((g) => (
                 <li key={g.id}>
                   <button type="button" className="ab-btn ab-btn--ghost ab-btn--block sheet-option" onClick={() => claim(g.id)}>
-                    <GameIcon id={g.id} size={22} /> {g.name} 코인 {ATTENDANCE_COINS}개
+                    <GameIcon id={g.id} size={16} /> {g.name} 코인 {ATTENDANCE_COINS}개
                   </button>
                 </li>
               ))}
@@ -283,88 +291,61 @@ export default function Home({
   );
 }
 
-function GameCard({ game, save, onPlay: play }: { game: GameDef; save: SaveData; onPlay: (id: GameId) => void }) {
+/** 오락기 화면 한 장: 게임 그림 + 이름. 잠긴 게임은 그림을 어둡게 하고 열리는 조건을 보여 준다 */
+function GameScreen({ game, save }: { game: GameDef; save: SaveData }) {
   const unlocked = save.unlocked.includes(game.id);
-
-  if (unlocked && game.playable) {
-    return (
-      <button type="button" className="game-card" onClick={() => play(game.id)}>
-        <span className="game-art">
-          <GameArt id={game.id} />
-        </span>
-        <span className="game-info">
-          <span className="game-text">
-            <span className="game-name">{game.name}</span>
-            <span className="game-desc">{game.description}</span>
-            <span className="game-meta">{bestLabel(game, save) ?? '아직 기록이 없어요'}</span>
-          </span>
-          <span className="game-play" aria-hidden="true">
-            <Play size={18} /> 플레이
-          </span>
-        </span>
-      </button>
-    );
-  }
-
   if (unlocked) {
     return (
-      <div className="game-card is-static">
-        <span className="game-art">
-          <GameArt id={game.id} />
-        </span>
-        <span className="game-info">
-          <span className="game-text">
-            <span className="game-name">{game.name}</span>
-            <span className="game-desc">열렸어요. 곧 플레이할 수 있어요</span>
-          </span>
-          <span className="game-badge">준비 중</span>
-        </span>
-      </div>
+      <>
+        <GameArt id={game.id} />
+        <div className="machine-title">
+          <h2 className="machine-name">
+            <span className="ab-stripe">{game.name}</span>
+          </h2>
+          <p className="machine-desc">{game.playable ? game.description : '열렸어요. 곧 플레이할 수 있어요'}</p>
+        </div>
+      </>
     );
   }
-
   const rule = game.unlock;
   const sourceBest = rule ? (save.best[rule.gameId] ?? 0) : 0;
   const progress = rule ? Math.min(1, sourceBest / rule.score) : 0;
   return (
-    <div className="game-card is-locked" aria-disabled="true">
-      <span className="game-art">
+    <>
+      <span className="machine-art-dim">
         <GameArt id={game.id} />
-        <span className="game-lock-badge">
-          <Lock size={22} />
-        </span>
       </span>
-      <span className="game-info">
-        <span className="game-text">
-          <span className="game-name">{game.name}</span>
-          {rule && (
-            <>
-              <span className="game-desc">
-                {getGame(rule.gameId).name} {rule.score.toLocaleString()}점을 넘기면 열려요
-              </span>
-              <span className="game-progress" aria-hidden="true">
-                <span className="game-progress-bar" style={{ width: `${progress * 100}%` }} />
-              </span>
-              <span className="game-meta">
-                지금 최고 {sourceBest.toLocaleString()}점 / {rule.score.toLocaleString()}점
-              </span>
-            </>
-          )}
-        </span>
-      </span>
-    </div>
+      <div className="machine-locked">
+        <h2 className="machine-name">
+          <span className="ab-stripe ab-stripe--pink">{game.name}</span>
+        </h2>
+        {rule && (
+          <>
+            <p className="machine-desc">
+              {getGame(rule.gameId).name} {rule.score.toLocaleString()}점을 넘기면 열려요
+            </p>
+            <span className="machine-progress" aria-hidden="true">
+              <span style={{ width: `${progress * 100}%` }} />
+            </span>
+            <p className="machine-desc ab-pixel">
+              {sourceBest.toLocaleString()} / {rule.score.toLocaleString()}
+            </p>
+          </>
+        )}
+      </div>
+    </>
   );
 }
 
-/** 홈 카드에 보여 줄 최고 기록 — 점수 게임은 최고 점수, 지뢰찾기는 가장 어려운 단계의 최고 점수 */
-function bestLabel(game: GameDef, save: SaveData): string | null {
+/** 오락기 화면 위 최고 기록 — 점수 게임은 최고 점수, 지뢰찾기는 가장 어려운 단계의 최고 점수 */
+function bestScore(game: GameDef, save: SaveData): number | null {
   if (game.id === 'minesweeper') {
     for (const d of [...DIFFICULTIES].reverse()) {
       const score = save.bestScore[stageKey(d.id)];
-      if (score !== undefined && score > 0) return `${d.name} 최고 ${score.toLocaleString()}점`;
+      if (score !== undefined && score > 0) return score;
     }
     return null;
   }
   const best = save.best[game.id] ?? 0;
-  return best > 0 ? `최고 ${best.toLocaleString()}점` : null;
+  return best > 0 ? best : null;
 }

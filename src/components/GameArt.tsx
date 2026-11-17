@@ -1,131 +1,139 @@
 /**
- * 홈 게임 카드의 표지 그림 — 게임 화면 속 물건(범퍼·공·칸·깃발)을 같은 그림체로 모아 그린다.
- * 그림체는 ArcadeIcon과 같다: 윤곽선·번짐 없이 면 색과 그 아래 진한 띠 두 톤.
- * 글자 대신 그림이라 aria-hidden이다(게임 이름은 카드 글자로 따로 읽힌다).
+ * 홈 오락기 화면에 띄우는 게임 그림 — 픽셀 아이콘과 같은 그림체(칸 하나 = 한 색).
+ * 66×42칸을 계산해 같은 색 칸을 path 하나로 묶어 그린다. 처음 한 번만 계산한다.
+ * 글자 대신 그림이라 aria-hidden이다(게임 이름은 화면 글자로 따로 읽힌다).
  */
 
-const svgProps = {
-  viewBox: '0 0 320 132',
-  preserveAspectRatio: 'xMidYMid slice',
-  width: '100%',
-  height: '100%',
-  'aria-hidden': true,
-} as const;
+const W = 66;
+const H = 42;
 
-/** 범퍼 하나: 판 그림자 → 고무 링(두 톤) → 뚜껑(두 톤) → 가운데 고리 */
-function Bumper({ x, y, r }: { x: number; y: number; r: number }) {
-  return (
-    <g>
-      <ellipse cx={x} cy={y + 7} rx={r + 4} ry={r} fill="#000000" opacity="0.25" />
-      <circle cx={x} cy={y + 5} r={r + 3} fill="#c2185b" />
-      <circle cx={x} cy={y} r={r + 3} fill="#ffb3c8" />
-      <circle cx={x} cy={y + 2} r={r - 2} fill="#c9305e" />
-      <circle cx={x} cy={y - 1} r={r - 2} fill="#ff5c86" />
-      <circle cx={x} cy={y - 2} r={r * 0.42} fill="none" stroke="#ffd6e0" strokeWidth="3" />
-    </g>
-  );
+type Raster = string[][];
+
+function raster(bg: string): Raster {
+  return Array.from({ length: H }, () => Array<string>(W).fill(bg));
+}
+function put(r: Raster, x: number, y: number, c: string) {
+  if (x >= 0 && y >= 0 && x < W && y < H) r[y][x] = c;
+}
+function rect(r: Raster, x: number, y: number, w: number, h: number, c: string) {
+  for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) put(r, i, j, c);
+}
+function disc(r: Raster, cx: number, cy: number, rad: number, c: string) {
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if ((x + 0.5 - cx) ** 2 + (y + 0.5 - cy) ** 2 <= rad * rad) put(r, x, y, c);
+}
+function line(r: Raster, x0: number, y0: number, x1: number, y1: number, c: string, t = 1) {
+  const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0));
+  for (let i = 0; i <= n; i++) rect(r, Math.round(x0 + ((x1 - x0) * i) / n), Math.round(y0 + ((y1 - y0) * i) / n), t, t, c);
+}
+function toPaths(r: Raster): [string, string][] {
+  const by = new Map<string, string>();
+  r.forEach((row, y) => row.forEach((c, x) => by.set(c, (by.get(c) ?? '') + `M${x} ${y}h1v1h-1z`)));
+  return [...by.entries()];
 }
 
-export function PinballArt() {
-  return (
-    <svg {...svgProps}>
-      <rect width="320" height="132" fill="#2b2163" />
-      <circle cx="160" cy="88" r="96" fill="#33287a" />
-      <circle cx="160" cy="88" r="64" fill="#3a2e88" />
-      {/* 레일: 아래 진한 띠 + 위 면 */}
-      <path d="M24 146 V58 Q24 20 64 20 H256 Q296 20 296 58 V146" fill="none" stroke="#6b56d6" strokeWidth="7" transform="translate(0 4)" />
-      <path d="M24 146 V58 Q24 20 64 20 H256 Q296 20 296 58 V146" fill="none" stroke="#a594ff" strokeWidth="7" />
-      <Bumper x={128} y={56} r={16} />
-      <Bumper x={194} y={56} r={16} />
-      <Bumper x={161} y={92} r={16} />
-      {/* 동전 */}
-      <circle cx="244" cy="96" r="10" fill="#d98a00" />
-      <circle cx="244" cy="93" r="10" fill="#ffc53d" />
-      <circle cx="244" cy="93" r="5.6" fill="none" stroke="#d98a00" strokeWidth="2" />
-      {/* 날아가는 공과 속도선 */}
-      <g stroke="#a594ff" strokeWidth="4" strokeLinecap="round" opacity="0.7">
-        <path d="M52 50 L70 66" />
-        <path d="M46 66 L60 78" />
-      </g>
-      <ellipse cx="90" cy="92" rx="10" ry="7" fill="#000000" opacity="0.25" />
-      <circle cx="88" cy="84" r="11" fill="#9aa3b8" />
-      <circle cx="86.4" cy="82" r="11" fill="#e4e7ef" />
-      <ellipse cx="83.5" cy="79" rx="3.4" ry="2.4" fill="#ffffff" transform="rotate(-35 83.5 79)" />
-      {/* 왼쪽 아래 플리퍼 */}
-      <path d="M40 120 L104 132 L100 140 L36 132 Z" fill="#000000" opacity="0.2" />
-      <path d="M38 112 a9 9 0 0 1 8 -11 L106 121 a5 5 0 0 1 -2 9.6 L44 125 a9 9 0 0 1 -6 -13 Z" fill="#b9a8ff" transform="translate(0 4)" />
-      <path d="M38 112 a9 9 0 0 1 8 -11 L106 121 a5 5 0 0 1 -2 9.6 L44 125 a9 9 0 0 1 -6 -13 Z" fill="#f4f1ff" />
-    </svg>
-  );
+function pinballPaths() {
+  const r = raster('#101433');
+  // 바닥 점 무늬
+  for (let x = 2; x < W; x += 8) for (let y = (x / 8) % 2 ? 3 : 7; y < H; y += 8) put(r, x, y, '#2a3170');
+  // 레일
+  const rail = '#4fc0f2';
+  line(r, 6, 42, 6, 11, rail, 2);
+  line(r, 6, 11, 12, 5, rail, 2);
+  line(r, 12, 5, 53, 5, rail, 2);
+  line(r, 53, 5, 59, 11, rail, 2);
+  line(r, 59, 11, 59, 42, rail, 2);
+  // 범퍼 셋: 빨간 그림자 + 분홍 뚜껑 + 고리
+  for (const [x, y] of [
+    [26, 14],
+    [40, 14],
+    [33, 22],
+  ]) {
+    disc(r, x + 1, y + 1.5, 4.8, '#8e1f22');
+    disc(r, x, y, 4.8, '#ff5fa2');
+    disc(r, x, y, 2.7, '#ffb6d6');
+    disc(r, x, y, 1.2, '#ff5fa2');
+  }
+  // 날아가는 공과 속도선
+  line(r, 13, 15, 15, 17, '#4a5590');
+  line(r, 11, 18, 13, 20, '#343d78');
+  disc(r, 18.5, 23.5, 2.7, '#0a0c22');
+  disc(r, 18, 22, 2.7, '#d6dbe6');
+  put(r, 17, 21, '#ffffff');
+  // 동전
+  disc(r, 50, 24, 2.4, '#c98a00');
+  disc(r, 50, 23.4, 2.2, '#ffd93d');
+  // 플리퍼 둘
+  line(r, 17, 35, 27, 38, '#ffe14d', 2);
+  line(r, 48, 35, 38, 38, '#ffe14d', 2);
+  return toPaths(r);
 }
 
-const MS_ROWS = [
-  'cc1oo1ccc1',
-  'c2oooo1cc2',
-  'f1o12ofc1o',
-  'c2oob1cc2o',
-];
-
-export function MinesweeperArt() {
-  const size = 25;
-  const gap = 4;
-  const cols = MS_ROWS[0].length;
-  const left = (320 - (size * cols + gap * (cols - 1))) / 2;
-  const top = (132 - (size * 4 + gap * 3)) / 2;
-  const numberColor: Record<string, string> = { '1': '#3b5bdb', '2': '#2b8a3e', '3': '#e03131' };
-  return (
-    <svg {...svgProps}>
-      <rect width="320" height="132" fill="#e3f4ef" />
-      <circle cx="20" cy="118" r="60" fill="#d3eee6" />
-      <circle cx="306" cy="10" r="48" fill="#ece6ff" />
-      {MS_ROWS.map((row, r) =>
-        [...row].map((ch, c) => {
-          const x = left + c * (size + gap);
-          const y = top + r * (size + gap);
-          const closed = ch === 'c' || ch === 'f';
-          const cx = x + size / 2;
-          const cy = y + size / 2;
-          return (
-            <g key={`${r}-${c}`}>
-              {closed ? (
-                <>
-                  <rect x={x} y={y} width={size} height={size} rx="7" fill="#b4bfd3" />
-                  <rect x={x} y={y} width={size} height={size - 3} rx="7" fill="#c7d1e2" />
-                </>
-              ) : (
-                <rect x={x} y={y} width={size} height={size} rx="7" fill="#ffffff" stroke="#e3e8f0" />
-              )}
-              {numberColor[ch] && (
-                <text x={cx} y={cy + 5} textAnchor="middle" fontSize="15" fontWeight="700" fill={numberColor[ch]} fontFamily="-apple-system, system-ui, sans-serif">
-                  {ch}
-                </text>
-              )}
-              {ch === 'f' && (
-                <>
-                  <rect x={x + 7.5} y={y + 4.5} width="2.6" height="15" rx="1.3" fill="#4b4570" />
-                  <path d={`M${x + 10} ${y + 5.5} C${x + 13} ${y + 4.5} ${x + 15} ${y + 7} ${x + 19.5} ${y + 6} L${x + 17.5} ${y + 9.8} L${x + 19.5} ${y + 13.6} C${x + 15} ${y + 14.6} ${x + 13} ${y + 12} ${x + 10} ${y + 13} Z`} fill="#dc3a44" />
-                  <path d={`M${x + 10} ${y + 4.5} C${x + 13} ${y + 3.5} ${x + 15} ${y + 6} ${x + 19.5} ${y + 5} L${x + 17.5} ${y + 8.8} L${x + 19.5} ${y + 12.6} C${x + 15} ${y + 13.6} ${x + 13} ${y + 11} ${x + 10} ${y + 12} Z`} fill="#ff5d61" />
-                </>
-              )}
-              {ch === 'b' && (
-                <>
-                  <path d={`M${cx + 3} ${cy - 5} q2 -4 5 -3`} fill="none" stroke="#a46a3a" strokeWidth="1.8" strokeLinecap="round" />
-                  <circle cx={cx} cy={cy + 2} r="7.5" fill="#2a2450" />
-                  <circle cx={cx} cy={cy} r="7.5" fill="#3d3768" />
-                  <circle cx={cx - 2.6} cy={cy - 2.6} r="1.8" fill="#5a5390" />
-                  <circle cx={cx + 8.5} cy={cy - 8.5} r="2.2" fill="#ffc53d" />
-                </>
-              )}
-            </g>
-          );
-        }),
-      )}
-    </svg>
+// 위쪽에 판을 두고 아래는 게임 이름 자리로 비워 둔다(화면 아래에 이름이 겹친다)
+const MS_ROWS = ['cc1oo1ccc', 'c2oooo1cf', 'f1o12occ1', 'c2oob1cc2'];
+const NUM: Record<string, string[]> = {
+  '1': ['.X.', 'XX.', '.X.', '.X.', 'XXX'],
+  '2': ['XX.', '..X', '.X.', 'X..', 'XXX'],
+};
+function minesweeperPaths() {
+  const r = raster('#0e2730');
+  for (let x = 2; x < W; x += 8) for (let y = (x / 8) % 2 ? 3 : 7; y < H; y += 8) put(r, x, y, '#1b4450');
+  const size = 5;
+  const gap = 1;
+  const left = Math.floor((W - (size * 9 + gap * 8)) / 2);
+  const top = 5;
+  MS_ROWS.forEach((row, ry) =>
+    [...row].forEach((ch, cx) => {
+      const x = left + cx * (size + gap);
+      const y = top + ry * (size + gap);
+      const closed = ch === 'c' || ch === 'f';
+      if (closed) {
+        rect(r, x, y, size, size, '#56627e');
+        rect(r, x, y, size, size - 1, '#8794b0');
+      } else {
+        rect(r, x, y, size, size, '#e8f6f1');
+      }
+      const digit = NUM[ch];
+      if (digit) {
+        const color = ch === '1' ? '#3b5bdb' : '#2b8a3e';
+        digit.forEach((d, dy) => [...d].forEach((v, dx) => v === 'X' && put(r, x + 1 + dx, y + dy, color)));
+      }
+      if (ch === 'f') {
+        rect(r, x + 1, y + 1, 1, 3, '#1c1d22');
+        rect(r, x + 2, y + 1, 2, 2, '#ff4d5a');
+      }
+      if (ch === 'b') {
+        disc(r, x + 2.5, y + 2.8, 2, '#3a3a52');
+        put(r, x + 2, y + 2, '#8f97ab');
+        put(r, x + 4, y, '#ff8a2a');
+      }
+    }),
   );
+  // 반짝이는 민트 동전 하나
+  disc(r, left + 6 * (size + gap) + 2.5, top + 2 * (size + gap) + 2.5, 1.6, '#3ccfa4');
+  return toPaths(r);
+}
+
+const cache: Record<string, [string, string][]> = {};
+function paths(id: 'pinball' | 'minesweeper') {
+  cache[id] ??= id === 'pinball' ? pinballPaths() : minesweeperPaths();
+  return cache[id];
 }
 
 export function GameArt({ id }: { id: string }) {
-  if (id === 'pinball') return <PinballArt />;
-  if (id === 'minesweeper') return <MinesweeperArt />;
-  return null;
+  if (id !== 'pinball' && id !== 'minesweeper') return null;
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      preserveAspectRatio="xMidYMid slice"
+      width="100%"
+      height="100%"
+      shapeRendering="crispEdges"
+      aria-hidden="true"
+      style={{ display: 'block' }}
+    >
+      {paths(id).map(([color, d]) => (
+        <path key={color} d={d} fill={color} />
+      ))}
+    </svg>
+  );
 }

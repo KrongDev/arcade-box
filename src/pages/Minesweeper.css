@@ -8,12 +8,6 @@
   margin-bottom: var(--space-5);
 }
 
-.ms-select-title {
-  margin: 0;
-  font-size: var(--font-size-display);
-  font-weight: var(--font-weight-display);
-  color: var(--color-text-strong);
-}
 
 .ms-select-subtitle {
   margin: var(--space-2) 0 0;
@@ -649,8 +643,8 @@ button.ms-level:active {
 
 /* 보호로 막은 지뢰 */
 .ms-cell.is-shielded {
-  background: #e5dbff;
-  box-shadow: inset 0 -3px 0 #c9b8ff;
+  background: var(--brand-primary-soft);
+  box-shadow: inset 0 -3px 0 #b7c3ff;
   font-size: 20px;
 }
 

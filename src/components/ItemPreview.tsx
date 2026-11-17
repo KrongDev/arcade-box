@@ -119,7 +119,7 @@ export function ItemPreview({ item }: { item: ShopItem }) {
           2
         </text>
         {item.ability?.shield ? (
-          <path d="M61 85 l7 3 q-1 7 -7 10 q-6 -3 -7 -10 Z" fill="#6c4cf1" stroke="#ffffff" strokeWidth="1.2" />
+          <path d="M61 85 l7 3 q-1 7 -7 10 q-6 -3 -7 -10 Z" fill="#3a56ff" stroke="#ffffff" strokeWidth="1.2" />
         ) : null}
       </svg>
     );
@@ -129,7 +129,7 @@ export function ItemPreview({ item }: { item: ShopItem }) {
   const coins = item.ability?.extraCoins ? 3 + Math.min(4, item.ability.extraCoins[0]) : 2;
   return (
     <span className="item-preview item-preview-map" style={{ background: l.bg } as CSSProperties} aria-hidden="true">
-      {l.motif && <ArcadeIcon name={l.motif} size={56} className="item-preview-motif" />}
+      {l.motif && <ArcadeIcon name={l.motif} size={48} className="item-preview-motif" />}
       <span className="item-preview-grid">
         {Array.from({ length: 9 }, (_, i) => (
           <span key={i} className="item-preview-cell">

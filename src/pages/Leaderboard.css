@@ -7,12 +7,6 @@
   margin-bottom: var(--space-4);
 }
 
-.board-title {
-  margin: 0;
-  font-size: var(--font-size-display);
-  font-weight: var(--font-weight-display);
-  color: var(--color-text-strong);
-}
 
 .board-subtitle {
   margin: var(--space-2) 0 0;

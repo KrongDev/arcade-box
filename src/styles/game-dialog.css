@@ -14,10 +14,11 @@
   width: 100%;
   max-width: 360px;
   padding: var(--space-5);
-  border: 2px solid var(--line);
-  border-radius: 28px;
-  background: var(--color-bg);
-  box-shadow: 0 8px 0 var(--line-strong);
+  border-radius: 24px;
+  background: var(--page-bg);
+  box-shadow:
+    inset 0 3px 0 #f6f7f9,
+    0 6px 0 #a9aebb;
   color: var(--color-text-default);
   text-align: center;
   animation: dialog-pop 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.25);
@@ -36,6 +37,7 @@
 
 .dialog-title {
   margin: 0;
+  font-family: var(--font-pixel);
   font-size: var(--font-size-title);
   font-weight: var(--font-weight-title);
   color: var(--color-text-strong);
@@ -51,17 +53,18 @@
 .dialog-actions {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-4);
   margin-top: var(--space-5);
 }
 
-/* 입체 버튼 — 아래 그림자가 눌리면 줄어든다 (arcade.css의 .ab-btn과 같은 모양) */
+/* 오락기 버튼 — arcade.css의 .ab-btn과 같은 모양(빨간 시작 버튼 · 흰 버튼) */
 .btn {
   min-height: 52px;
   padding: 0 var(--space-4);
   border: 0;
-  border-radius: 16px;
+  border-radius: 999px;
   font: inherit;
+  font-family: var(--font-pixel);
   font-size: var(--font-size-body);
   font-weight: 700;
   cursor: pointer;
@@ -71,14 +74,20 @@
 }
 
 .btn-primary {
-  background: var(--brand-primary);
-  box-shadow: 0 4px 0 var(--brand-primary-dark);
+  background: var(--brand-pink);
+  box-shadow:
+    0 0 0 3px var(--line-strong),
+    0 5px 0 3px #a9aebb,
+    0 0 18px 4px var(--red-glow);
   color: var(--color-text-inverse);
 }
 
 .btn-primary:active:not(:disabled) {
   transform: translateY(3px);
-  box-shadow: 0 1px 0 var(--brand-primary-dark);
+  box-shadow:
+    0 0 0 3px var(--line-strong),
+    0 2px 0 3px #a9aebb,
+    0 0 10px 2px var(--red-glow);
 }
 
 .btn:disabled {
@@ -93,18 +102,20 @@
 }
 
 .btn-secondary {
-  background: var(--color-bg);
+  background: #ffffff;
   box-shadow:
-    0 0 0 2px var(--line) inset,
-    0 4px 0 var(--line-strong);
+    0 0 0 3px var(--line-strong),
+    0 5px 0 3px #a9aebb,
+    0 0 18px 4px var(--led-glow);
   color: var(--color-text-strong);
 }
 
 .btn-secondary:active:not(:disabled) {
   transform: translateY(3px);
   box-shadow:
-    0 0 0 2px var(--line) inset,
-    0 1px 0 var(--line-strong);
+    0 0 0 3px var(--line-strong),
+    0 2px 0 3px #a9aebb,
+    0 0 10px 2px var(--led-glow);
 }
 
 .result-badge {
@@ -112,21 +123,24 @@
   margin: 0 0 var(--space-3);
   padding: var(--space-1) var(--space-3);
   border-radius: 999px;
-  background: linear-gradient(90deg, #ffe08a, #ffc94d);
-  box-shadow: 0 3px 0 #e8a92a;
-  color: #6b4500;
+  background: #ffd93d;
+  box-shadow: 0 3px 0 #c98a00;
+  color: #5c3b00;
+  font-family: var(--font-pixel);
   font-size: var(--font-size-body-small);
   font-weight: 700;
 }
 
-/* 점수 — 보라·분홍 그라데이션 글자 */
+/* 점수 — 검은 액정 위 노란 픽셀 숫자 */
 .result-score {
-  margin: var(--space-2) 0 0;
-  background: linear-gradient(90deg, var(--brand-pink), var(--brand-primary));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  font-size: 36px;
+  margin: var(--space-3) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: 12px;
+  background: var(--bezel);
+  box-shadow: inset 0 2px 0 #000000;
+  color: #ffe14d;
+  font-family: var(--font-pixel);
+  font-size: 33px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }

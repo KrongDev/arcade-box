@@ -78,8 +78,8 @@ function DifficultySelect({ onExit, onStart }: { onExit: () => void; onStart: (i
   return (
     <main className="ms-select ab-page" style={{ paddingTop: insets.top + NAV_BAR_OFFSET, paddingBottom: insets.bottom + 24 }}>
       <header className="ms-select-header">
-        <h1 className="ms-select-title">
-          지뢰찾기
+        <h1 className="ab-plate">
+          <span className="ab-stripe">지뢰찾기</span>
         </h1>
         <p className="ms-select-subtitle">숫자를 보고 지뢰를 피해 모든 칸을 열어요</p>
         <p className="ab-chip ms-wallet">
@@ -532,11 +532,11 @@ function MinesweeperPlay({
         </div>
         <div className="ms-hud-side">
           <span aria-label={`남은 지뢰 ${minesLeft}개`}>
-            <ArcadeIcon name="flag" size={20} /> {minesLeft}
+            <ArcadeIcon name="flag" size={16} /> {minesLeft}
           </span>
           {gear.shield > 0 && (
             <span className={shieldsLeft > 0 ? 'ms-hud-shield' : 'ms-hud-shield is-used'} aria-label={`남은 지뢰 보호 ${shieldsLeft}번`}>
-              <ArcadeIcon name="shield" size={20} /> {shieldsLeft}
+              <ArcadeIcon name="shield" size={16} /> {shieldsLeft}
             </span>
           )}
           <span className="ms-hud-coins">
@@ -546,7 +546,7 @@ function MinesweeperPlay({
       </header>
 
       {map.motif && (
-        <ArcadeIcon name={map.motif} size={132} className="ms-motif" />
+        <ArcadeIcon name={map.motif} size={128} className="ms-motif" />
       )}
       <div className={shaking ? 'ms-viewport is-shaking' : 'ms-viewport'} ref={viewportRef}>
         <div
@@ -623,7 +623,7 @@ function MinesweeperPlay({
             aria-pressed={!flagMode}
             onClick={() => setFlagMode(false)}
           >
-            <ArcadeIcon name="shovel" size={22} /> 열기
+            <ArcadeIcon name="shovel" size={16} /> 열기
           </button>
           <button
             type="button"
@@ -631,7 +631,7 @@ function MinesweeperPlay({
             aria-pressed={flagMode}
             onClick={() => setFlagMode(true)}
           >
-            <ArcadeIcon name="flag" size={22} /> 깃발
+            <ArcadeIcon name="flag" size={16} /> 깃발
           </button>
         </div>
         )}
@@ -663,7 +663,7 @@ function MinesweeperPlay({
           <section className="game-dialog" role="dialog" aria-modal="true" aria-labelledby="ms-result-title">
             {result.isBestScore && (
               <p className="result-badge">
-                <ArcadeIcon name="party" size={20} /> 새 최고 점수
+                <ArcadeIcon name="party" size={16} /> 새 최고 점수
               </p>
             )}
             <h2 id="ms-result-title" className="dialog-title">
@@ -713,7 +713,7 @@ function MinesweeperPlay({
             </dl>
             {result.unlockedName && (
               <p className="result-unlock">
-                <ArcadeIcon name="unlock" size={20} /> {result.unlockedName}이 열렸어요
+                <ArcadeIcon name="unlock" size={16} /> {result.unlockedName}이 열렸어요
               </p>
             )}
             <div className="dialog-actions">
@@ -817,15 +817,15 @@ const CellView = memo(function CellView({
   if (shielded) {
     return (
       <div role="gridcell" aria-label="보호로 막은 지뢰" className="ms-cell is-shielded">
-        <ArcadeIcon name="shield" size={26} />
+        <ArcadeIcon name="shield" size={32} />
       </div>
     );
   }
   if (exploded) {
     return (
       <div role="gridcell" aria-label="밟은 지뢰" className="ms-cell is-exploded">
-        <ArcadeIcon name="bomb" size={28} />
-        <ArcadeIcon name="boom" size={44} className="ms-burst" />
+        <ArcadeIcon name="bomb" size={32} />
+        <ArcadeIcon name="boom" size={48} className="ms-burst" />
       </div>
     );
   }
@@ -833,7 +833,7 @@ const CellView = memo(function CellView({
     if (flag || won) {
       return (
         <div role="gridcell" aria-label="찾은 지뢰" className="ms-cell is-flag">
-          <ArcadeIcon name="flag" size={26} />
+          <ArcadeIcon name="flag" size={32} />
         </div>
       );
     }
@@ -844,7 +844,7 @@ const CellView = memo(function CellView({
         className={revealDelay !== undefined ? 'ms-cell is-mine is-revealing' : 'ms-cell is-mine'}
         style={revealDelay !== undefined ? ({ '--reveal-delay': `${revealDelay}ms` } as CSSProperties) : undefined}
       >
-        <ArcadeIcon name="bomb" size={28} />
+        <ArcadeIcon name="bomb" size={32} />
       </div>
     );
   }
@@ -853,7 +853,7 @@ const CellView = memo(function CellView({
       // 지뢰가 아닌 곳에 꽂은 깃발 — X로 표시
       return (
         <div role="gridcell" aria-label="잘못 꽂은 깃발" className="ms-cell is-flag is-wrong">
-          <ArcadeIcon name="flag" size={26} />
+          <ArcadeIcon name="flag" size={32} />
           <svg className="ms-wrong-mark" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M5 5 L19 19 M19 5 L5 19" />
           </svg>
@@ -862,7 +862,7 @@ const CellView = memo(function CellView({
     }
     return (
       <div role="gridcell" className="ms-cell is-flag">
-        <ArcadeIcon name="flag" size={26} />
+        <ArcadeIcon name="flag" size={32} />
       </div>
     );
   }

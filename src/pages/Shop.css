@@ -7,60 +7,69 @@
   margin-bottom: var(--space-4);
 }
 
-.shop-title {
-  margin: 0;
-  font-size: var(--font-size-display);
-  font-weight: var(--font-weight-display);
-  color: var(--color-text-strong);
-}
-
 .shop-subtitle {
-  margin: var(--space-2) 0 0;
+  margin: var(--space-3) 0 0;
   font-size: var(--font-size-body-small);
   color: var(--color-text-subtle);
 }
 
 .shop-games {
-  margin-bottom: var(--space-4);
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  margin: 0 calc(-1 * var(--space-5)) var(--space-4);
+  padding: 4px var(--space-5) 18px;
+  scrollbar-width: none;
 }
 
-/* 잔액 — 지금 고른 게임의 코인 색 카드(--cur-*: game/currency.ts) */
+.shop-games::-webkit-scrollbar {
+  display: none;
+}
+
+.shop-games .ab-tab {
+  flex-shrink: 0;
+}
+
+/* 잔액 — 플라스틱 판 위 액정, 숫자는 지금 게임의 코인 색(--cur-*: game/currency.ts) */
 .shop-balance {
-  margin-bottom: var(--space-3);
-  padding: var(--space-4);
-  border: 2px solid var(--cur-edge);
-  border-radius: 22px;
-  background: var(--cur-soft);
-  box-shadow: 0 5px 0 var(--cur-edge);
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4) var(--space-4);
+}
+
+.shop-balance-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-pixel);
+  font-size: var(--font-size-body-small);
+  font-weight: 700;
+  color: var(--color-text-strong);
 }
 
 .shop-balance-amount {
   display: flex;
-  align-items: center;
-  gap: var(--space-2);
+  width: 100%;
   margin: 0;
+  padding: 10px 14px;
   font-size: var(--font-size-display);
-  font-weight: 700;
-  color: var(--color-text-strong);
-  font-variant-numeric: tabular-nums;
 }
 
 .shop-balance-desc {
-  margin: var(--space-1) 0 0;
+  margin: var(--space-2) 0 0;
   font-size: var(--font-size-caption);
-  color: var(--cur-ink);
+  color: var(--color-text-subtle);
 }
 
-/* 광고 보상 — 보라 카드 */
+/* 광고 보상 — 검은 화면 판 */
 .shop-ad {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-5);
   padding: var(--space-4);
-  border-radius: 22px;
-  background: var(--brand-primary);
-  box-shadow: 0 5px 0 var(--brand-primary-dark);
+  border-radius: 18px;
+  background: var(--bezel);
+  box-shadow: 0 5px 0 #b9bcc5;
   color: var(--color-text-inverse);
 }
 
@@ -72,8 +81,7 @@
   width: 48px;
   height: 48px;
   border-radius: 14px;
-  background: var(--color-bg);
-  box-shadow: 0 3px 0 var(--brand-primary-dark);
+  background: #2a2c38;
 }
 
 .shop-ad-text {
@@ -91,7 +99,7 @@
   margin: var(--space-1) 0 0;
   font-size: var(--font-size-caption);
   line-height: 1.45;
-  color: rgba(255, 255, 255, 0.86);
+  color: #c9cbe0;
 }
 
 .shop-ad-button {
@@ -105,15 +113,15 @@
   box-shadow: 0 1px 0 var(--cur-side);
 }
 
-/* 코인·유료 탭 — 둘로 나뉜 스위치 */
+/* 코인·유료 탭 — 둘로 나뉜 스위치, 고른 쪽에 파란 불 */
 .shop-tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--space-1);
   padding: var(--space-1);
-  border: 2px solid var(--line);
   border-radius: 18px;
-  background: var(--color-bg);
+  background: var(--color-bg-canvas);
+  box-shadow: inset 0 2px 0 var(--line-strong);
 }
 
 .shop-tab {
@@ -123,6 +131,7 @@
   background: transparent;
   color: var(--color-text-subtle);
   font: inherit;
+  font-family: var(--font-pixel);
   font-size: var(--font-size-body-small);
   font-weight: 700;
   cursor: pointer;
@@ -130,7 +139,9 @@
 
 .shop-tab.is-active {
   background: var(--brand-primary);
-  box-shadow: 0 3px 0 var(--brand-primary-dark);
+  box-shadow:
+    0 3px 0 var(--brand-primary-dark),
+    0 0 14px 3px var(--led-glow);
   color: var(--color-text-inverse);
 }
 
@@ -153,17 +164,19 @@
   align-items: center;
   gap: var(--space-2);
   margin: 0 0 var(--space-3);
-  font-size: var(--font-size-title);
+  font-family: var(--font-pixel);
+  font-size: 22px;
   font-weight: 700;
   color: var(--color-text-strong);
 }
 
+/* 섹션 제목 앞 파란 불 하나 */
 .shop-section-title::before {
   content: '';
-  width: 6px;
-  height: 20px;
-  border-radius: 3px;
-  background: linear-gradient(var(--brand-pink), var(--brand-primary));
+  width: 10px;
+  height: 10px;
+  background: var(--brand-primary);
+  box-shadow: 0 0 8px 2px var(--led-glow);
 }
 
 .shop-grid {
@@ -175,39 +188,30 @@
   list-style: none;
 }
 
-/* 아이템 카드 — 가격 종류마다 테두리 색 */
+/* 아이템 카드 — 플라스틱 판, 미리보기는 작은 화면(검은 테두리). 유료는 파란 불이 둘린다 */
 .shop-item {
   position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
   padding: var(--space-3);
-  border: 2px solid var(--line);
-  border-radius: 20px;
+  border-radius: 16px;
   background: var(--color-bg);
-  box-shadow: 0 5px 0 var(--line);
-}
-
-.shop-item.is-free {
-  border-color: #bfeee6;
-  box-shadow: 0 5px 0 #bfeee6;
-}
-
-.shop-item.is-coin {
-  border-color: #ffe0a0;
-  box-shadow: 0 5px 0 #ffe0a0;
+  box-shadow: 0 4px 0 var(--line-strong);
 }
 
 .shop-item.is-paid {
-  border-color: #c9b8ff;
-  background: linear-gradient(180deg, #faf7ff 0%, #ffffff 60%);
-  box-shadow: 0 5px 0 #c9b8ff;
+  box-shadow:
+    inset 0 0 0 2px var(--brand-primary),
+    0 4px 0 var(--line-strong),
+    0 0 16px 3px var(--led-glow);
 }
 
 .shop-item-frame {
   display: block;
   overflow: hidden;
-  border-radius: 14px;
+  border: 4px solid var(--bezel);
+  border-radius: 12px;
   line-height: 0;
 }
 
@@ -244,7 +248,7 @@
 }
 
 .shop-item-tier.tier-legend {
-  background: linear-gradient(90deg, var(--brand-pink), var(--brand-primary));
+  background: var(--brand-pink);
 }
 
 .shop-item-name {
