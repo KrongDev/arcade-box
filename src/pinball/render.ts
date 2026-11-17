@@ -115,16 +115,12 @@ function drawInserts(ctx: CanvasRenderingContext2D, engine: PinballEngine, theme
     const x = 128 + (m - 2) * 33;
     const y = 400;
     const lit = engine.multiplier >= m;
-    ctx.beginPath();
-    ctx.arc(x, y, 13, 0, Math.PI * 2);
     if (lit) {
-      ctx.fillStyle = theme.coin;
-      ctx.shadowColor = theme.coin;
-      ctx.shadowBlur = 12;
-      ctx.fill();
-      ctx.shadowBlur = 0;
+      solidCircle(ctx, x, y, 13, theme.coin, theme.coinRing, 2.5);
       ctx.fillStyle = theme.table;
     } else {
+      ctx.beginPath();
+      ctx.arc(x, y, 13, 0, Math.PI * 2);
       ctx.fillStyle = withAlpha(theme.wall, 0.1);
       ctx.fill();
       ctx.strokeStyle = withAlpha(theme.wall, 0.35);
@@ -152,8 +148,6 @@ function arrow(ctx: CanvasRenderingContext2D, x: number, y: number, angle: numbe
   ctx.closePath();
   if (litColor) {
     ctx.fillStyle = litColor;
-    ctx.shadowColor = litColor;
-    ctx.shadowBlur = 12;
     ctx.fill();
   } else {
     ctx.fillStyle = withAlpha(theme.wall, 0.12);
@@ -176,8 +170,6 @@ function shield(ctx: CanvasRenderingContext2D, x: number, y: number, litColor: s
   ctx.closePath();
   if (litColor) {
     ctx.fillStyle = litColor;
-    ctx.shadowColor = litColor;
-    ctx.shadowBlur = 14;
     ctx.fill();
   } else {
     ctx.fillStyle = withAlpha(theme.wall, 0.1);
@@ -192,20 +184,29 @@ function shield(ctx: CanvasRenderingContext2D, x: number, y: number, litColor: s
 function drawWalls(ctx: CanvasRenderingContext2D, engine: PinballEngine, theme: TableTheme, glow: number): void {
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
+  const path = (dy: number) => {
+    ctx.beginPath();
+    for (const w of WALLS) {
+      if (w.oneWay) continue; // 발사대 바닥은 플런저로 따로 그린다
+      ctx.moveTo(w.ax, w.ay + dy);
+      ctx.lineTo(w.bx, w.by + dy);
+    }
+    if (engine.gateClosed) {
+      ctx.moveTo(GATE.ax, GATE.ay + dy);
+      ctx.lineTo(GATE.bx, GATE.by + dy);
+    }
+  };
+  // 레일 두께: 아래쪽 진한 띠
+  ctx.strokeStyle = mix(theme.wall, theme.table, 0.55);
+  ctx.lineWidth = 5;
+  path(3);
+  ctx.stroke();
   ctx.strokeStyle = theme.wall;
-  ctx.shadowColor = theme.wall;
-  ctx.shadowBlur = 10 * glow;
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  for (const w of WALLS) {
-    if (w.oneWay) continue; // 발사대 바닥은 플런저로 따로 그린다
-    ctx.moveTo(w.ax, w.ay);
-    ctx.lineTo(w.bx, w.by);
+  if (glow > 0) {
+    ctx.shadowColor = theme.wall;
+    ctx.shadowBlur = 10 * glow;
   }
-  if (engine.gateClosed) {
-    ctx.moveTo(GATE.ax, GATE.ay);
-    ctx.lineTo(GATE.bx, GATE.by);
-  }
+  path(0);
   ctx.stroke();
   ctx.shadowBlur = 0;
 }
@@ -217,10 +218,14 @@ function drawLanes(ctx: CanvasRenderingContext2D, engine: PinballEngine, theme: 
     ctx.arc(l.x, l.y, 7 + l.flash * 2, 0, Math.PI * 2);
     if (glow > 0) {
       ctx.fillStyle = l.lit ? theme.coin : withAlpha(theme.coin, glow);
-      ctx.shadowColor = theme.coin;
-      ctx.shadowBlur = 10 + l.flash * 14;
       ctx.fill();
-      ctx.shadowBlur = 0;
+      if (l.flash > 0) {
+        ctx.strokeStyle = withAlpha(theme.coin, l.flash * 0.6);
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(l.x, l.y, 11 + l.flash * 6, 0, Math.PI * 2);
+        ctx.stroke();
+      }
     } else {
       ctx.strokeStyle = withAlpha(theme.coin, 0.45);
       ctx.lineWidth = 2;
@@ -240,75 +245,73 @@ function drawTargets(ctx: CanvasRenderingContext2D, engine: PinballEngine, theme
       ctx.stroke();
       continue;
     }
-    const grad = ctx.createLinearGradient(tg.x - 4, 0, tg.x + 4, 0);
-    grad.addColorStop(0, theme.bumperRing);
-    grad.addColorStop(1, theme.bumper);
-    ctx.fillStyle = grad;
-    ctx.shadowColor = theme.bumper;
-    ctx.shadowBlur = 8;
+    ctx.fillStyle = mix(theme.bumper, '#000000', 0.3);
     ctx.beginPath();
-    ctx.roundRect(tg.x - 4, tg.y1 - 1, 8, tg.y2 - tg.y1 + 2, 3);
+    ctx.roundRect(tg.x - 4, tg.y1 + 2, 8, tg.y2 - tg.y1 + 2, 3);
     ctx.fill();
-    ctx.shadowBlur = 0;
+    ctx.fillStyle = theme.bumper;
+    ctx.beginPath();
+    ctx.roundRect(tg.x - 4, tg.y1 - 1, 8, tg.y2 - tg.y1, 3);
+    ctx.fill();
+    ctx.fillStyle = theme.bumperFlash;
+    ctx.beginPath();
+    ctx.roundRect(tg.x - 1.5, tg.y1 + 3, 3, tg.y2 - tg.y1 - 8, 1.5);
+    ctx.fill();
   }
 }
 
 function drawSaucer(ctx: CanvasRenderingContext2D, engine: PinballEngine, theme: TableTheme, t: number): void {
   const { x, y, r } = SAUCER;
   const pulse = engine.lockLit ? 0.5 + 0.5 * Math.sin(t * 8) : 0;
-  const hole = ctx.createRadialGradient(x, y, 2, x, y, r);
-  hole.addColorStop(0, '#000000');
-  hole.addColorStop(1, withAlpha(theme.table, 1));
-  ctx.fillStyle = hole;
+  ctx.fillStyle = mix(theme.table, '#000000', 0.55);
   ctx.beginPath();
   ctx.arc(x, y, r, 0, Math.PI * 2);
   ctx.fill();
+  ctx.fillStyle = mix(theme.table, '#000000', 0.25);
+  ctx.beginPath();
+  ctx.arc(x, y + r * 0.35, r * 0.62, 0, Math.PI * 2);
+  ctx.fill();
   const ring = engine.saucerFlash > 0 ? theme.bumperFlash : engine.lockLit ? theme.bumper : theme.wall;
   ctx.strokeStyle = ring;
-  ctx.shadowColor = ring;
-  ctx.shadowBlur = 8 + pulse * 14 + engine.saucerFlash * 16;
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 3 + pulse * 2.5 + engine.saucerFlash * 3;
   ctx.beginPath();
   ctx.arc(x, y, r + 1, 0, Math.PI * 2);
   ctx.stroke();
-  ctx.shadowBlur = 0;
 }
 
 function drawSlings(ctx: CanvasRenderingContext2D, engine: PinballEngine, theme: TableTheme): void {
   for (const s of engine.slings) {
     // 몸통: 판보다 밝게 채우고 테두리에 빛을 둔다
-    const body = ctx.createLinearGradient(s.corner.x, s.corner.y, s.top.x + s.nx * 20, s.top.y + s.ny * 20);
-    body.addColorStop(0, withAlpha(theme.wall, 0.18));
-    body.addColorStop(1, withAlpha(theme.wall, 0.45 + s.flash * 0.4));
-    ctx.fillStyle = body;
-    ctx.strokeStyle = theme.wall;
-    ctx.shadowColor = theme.wall;
-    ctx.shadowBlur = 8;
-    ctx.lineWidth = 3;
+    const tri = (dy: number) => {
+      ctx.beginPath();
+      ctx.moveTo(s.top.x, s.top.y + dy);
+      ctx.lineTo(s.corner.x, s.corner.y + dy);
+      ctx.lineTo(s.tip.x, s.tip.y + dy);
+      ctx.closePath();
+    };
     ctx.lineJoin = 'round';
-    ctx.beginPath();
-    ctx.moveTo(s.top.x, s.top.y);
-    ctx.lineTo(s.corner.x, s.corner.y);
-    ctx.lineTo(s.tip.x, s.tip.y);
-    ctx.closePath();
+    ctx.lineWidth = 3;
+    ctx.fillStyle = ctx.strokeStyle = mix(theme.wall, theme.table, 0.6);
+    tri(4);
     ctx.fill();
     ctx.stroke();
-    ctx.shadowBlur = 0;
+    ctx.fillStyle = mix(theme.table, theme.wall, 0.3 + s.flash * 0.35);
+    ctx.strokeStyle = theme.wall;
+    tri(0);
+    ctx.fill();
+    ctx.stroke();
 
     // 차는 면의 고무줄 — 맞으면 바깥으로 튀어나왔다 돌아온다
     const bulge = s.flash * 7;
     const mx = (s.top.x + s.tip.x) / 2 + s.nx * bulge;
     const my = (s.top.y + s.tip.y) / 2 + s.ny * bulge;
     ctx.strokeStyle = s.flash > 0 ? theme.bumperFlash : theme.flipper;
-    ctx.shadowColor = s.flash > 0 ? theme.bumper : theme.wall;
-    ctx.shadowBlur = 8 + s.flash * 20;
     ctx.lineWidth = 6;
     ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.moveTo(s.tip.x, s.tip.y);
     ctx.quadraticCurveTo(mx, my, s.top.x, s.top.y);
     ctx.stroke();
-    ctx.shadowBlur = 0;
 
     // 꼭짓점 기둥
     for (const p of [s.top, s.corner, s.tip]) {
@@ -326,47 +329,37 @@ function drawSlings(ctx: CanvasRenderingContext2D, engine: PinballEngine, theme:
 
 function drawBumpers(ctx: CanvasRenderingContext2D, engine: PinballEngine, theme: TableTheme): void {
   for (const b of engine.bumpers) {
-    const scale = 1 + b.flash * 0.16;
-    const r = b.r * scale;
-    // 받침 그림자
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+    const pop = b.flash * 0.16;
+    const r = b.r * (1 + pop);
+    const lift = 5 - b.flash * 3; // 맞으면 뚜껑이 눌렸다가 올라온다
+    // 판에 닿는 그림자
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
     ctx.beginPath();
-    ctx.arc(b.x + 2, b.y + 4, b.r + 3, 0, Math.PI * 2);
+    ctx.ellipse(b.x, b.y + lift + 2, b.r + 3, b.r * 0.9, 0, 0, Math.PI * 2);
     ctx.fill();
-    // 바깥 링
-    ctx.strokeStyle = theme.bumperRing;
-    ctx.shadowColor = theme.bumper;
-    ctx.shadowBlur = 10 + b.flash * 22;
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.arc(b.x, b.y, r + 2, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.shadowBlur = 0;
+    // 바깥 고무 링
+    solidCircle(ctx, b.x, b.y, r + 3, theme.bumperRing, mix(theme.bumperRing, '#000000', 0.35), lift);
     // 뚜껑
-    const cap = ctx.createRadialGradient(b.x - r * 0.35, b.y - r * 0.4, 2, b.x, b.y, r);
-    cap.addColorStop(0, b.flash > 0 ? theme.bumperFlash : mix(theme.bumper, theme.bumperFlash, 0.45));
-    cap.addColorStop(1, b.flash > 0 ? mix(theme.bumper, theme.bumperFlash, b.flash) : theme.bumper);
-    ctx.fillStyle = cap;
+    const cap = b.flash > 0 ? mix(theme.bumper, theme.bumperFlash, b.flash) : theme.bumper;
+    solidCircle(ctx, b.x, b.y - 1, r - 2, cap, mix(theme.bumper, '#000000', 0.3), 3);
+    // 가운데 고리
+    ctx.strokeStyle = withAlpha(theme.bumperFlash, 0.9);
+    ctx.lineWidth = 2.5;
     ctx.beginPath();
-    ctx.arc(b.x, b.y, r - 1, 0, Math.PI * 2);
-    ctx.fill();
-    // 가운데 별
-    star(ctx, b.x, b.y, r * 0.42, withAlpha(theme.bumperFlash, 0.85));
+    ctx.arc(b.x, b.y - 2, r * 0.42, 0, Math.PI * 2);
+    ctx.stroke();
   }
 }
 
-function star(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color: string): void {
-  ctx.fillStyle = color;
+/** 두 톤 원: 아래로 depth만큼 진한 색을 깔고 그 위에 면 색 */
+function solidCircle(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, face: string, side: string, depth: number): void {
+  ctx.fillStyle = side;
   ctx.beginPath();
-  for (let i = 0; i < 10; i++) {
-    const a = -Math.PI / 2 + (i * Math.PI) / 5;
-    const rr = i % 2 === 0 ? r : r * 0.45;
-    const px = x + Math.cos(a) * rr;
-    const py = y + Math.sin(a) * rr;
-    if (i === 0) ctx.moveTo(px, py);
-    else ctx.lineTo(px, py);
-  }
-  ctx.closePath();
+  ctx.arc(x, y + depth, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = face;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
   ctx.fill();
 }
 
@@ -400,14 +393,8 @@ function drawPlunger(ctx: CanvasRenderingContext2D, engine: PinballEngine, theme
     const h = GAUGE_HEIGHT * engine.charge;
     ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
     ctx.fillRect(x, bottom - GAUGE_HEIGHT, 4, GAUGE_HEIGHT);
-    const grad = ctx.createLinearGradient(0, bottom, 0, bottom - GAUGE_HEIGHT);
-    grad.addColorStop(0, theme.coin);
-    grad.addColorStop(1, theme.bumper);
-    ctx.fillStyle = grad;
-    ctx.shadowColor = engine.charge >= 1 ? theme.bumper : theme.coin;
-    ctx.shadowBlur = engine.charge >= 1 ? 12 : 6;
+    ctx.fillStyle = engine.charge >= 1 ? theme.bumper : theme.coin;
     ctx.fillRect(x, bottom - h, 4, h);
-    ctx.shadowBlur = 0;
   }
 }
 
@@ -421,23 +408,17 @@ function drawCoins(ctx: CanvasRenderingContext2D, engine: PinballEngine, theme: 
     ctx.save();
     ctx.translate(c.x, c.y + bob);
     ctx.scale(spin, 1);
-    ctx.fillStyle = theme.coin;
-    ctx.shadowColor = theme.coin;
-    ctx.shadowBlur = 12;
-    ctx.beginPath();
-    ctx.arc(0, 0, r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.shadowBlur = 0;
+    solidCircle(ctx, 0, 0, r, theme.coin, theme.coinRing, 2.5);
     ctx.strokeStyle = theme.coinRing;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 1.8;
     ctx.beginPath();
-    ctx.arc(0, 0, r * 0.6, 0, Math.PI * 2);
+    ctx.arc(0, -0.5, r * 0.58, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
   }
 }
 
-/** 플리퍼: 축 쪽이 두껍고 끝으로 갈수록 가는 모양 */
+/** 플리퍼: 축 쪽이 두껍고 끝으로 갈수록 가는 모양. 아래 진한 띠가 두께다 */
 function drawFlipper(ctx: CanvasRenderingContext2D, f: Flipper, theme: TableTheme): void {
   const tip = flipperTip(f);
   const ang = Math.atan2(tip.y - f.py, tip.x - f.px);
@@ -445,57 +426,55 @@ function drawFlipper(ctx: CanvasRenderingContext2D, f: Flipper, theme: TableThem
   const r2 = 5;
   const nx = -Math.sin(ang);
   const ny = Math.cos(ang);
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-  ctx.beginPath();
-  ctx.arc(f.px + 2, f.py + 4, r1, 0, Math.PI * 2);
+  const shape = (dy: number) => {
+    ctx.beginPath();
+    ctx.moveTo(f.px + nx * r1, f.py + dy + ny * r1);
+    ctx.lineTo(tip.x + nx * r2, tip.y + dy + ny * r2);
+    ctx.arc(tip.x, tip.y + dy, r2, ang + Math.PI / 2, ang - Math.PI / 2, true);
+    ctx.lineTo(f.px - nx * r1, f.py + dy - ny * r1);
+    ctx.arc(f.px, f.py + dy, r1, ang - Math.PI / 2, ang + Math.PI / 2, true);
+    ctx.closePath();
+  };
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+  shape(7);
   ctx.fill();
-
-  ctx.beginPath();
-  ctx.moveTo(f.px + nx * r1, f.py + ny * r1);
-  ctx.lineTo(tip.x + nx * r2, tip.y + ny * r2);
-  ctx.arc(tip.x, tip.y, r2, ang + Math.PI / 2, ang - Math.PI / 2, true);
-  ctx.lineTo(f.px - nx * r1, f.py - ny * r1);
-  ctx.arc(f.px, f.py, r1, ang - Math.PI / 2, ang + Math.PI / 2, true);
-  ctx.closePath();
-  const grad = ctx.createLinearGradient(f.px - nx * r1, f.py - ny * r1, f.px + nx * r1, f.py + ny * r1);
-  grad.addColorStop(0, theme.flipper);
-  grad.addColorStop(1, mix(theme.flipper, theme.plunger, 0.35));
-  ctx.fillStyle = grad;
-  ctx.shadowColor = f.pressed ? theme.wall : 'transparent';
-  ctx.shadowBlur = f.pressed ? 14 : 0;
+  ctx.fillStyle = mix(theme.flipper, theme.plunger, 0.55);
+  shape(3.5);
   ctx.fill();
-  ctx.shadowBlur = 0;
+  ctx.fillStyle = f.pressed ? mix(theme.flipper, '#ffffff', 0.2) : theme.flipper;
+  shape(0);
+  ctx.fill();
   // 고무 테
   ctx.strokeStyle = theme.bumper;
   ctx.lineWidth = 2;
   ctx.stroke();
   // 축
-  ctx.fillStyle = theme.plunger;
-  ctx.beginPath();
-  ctx.arc(f.px, f.py, 3, 0, Math.PI * 2);
-  ctx.fill();
+  solidCircle(ctx, f.px, f.py - 1, 3.2, theme.plunger, mix(theme.plunger, '#000000', 0.35), 1.5);
 }
 
 function drawBall(ctx: CanvasRenderingContext2D, p: Point, theme: TableTheme, held: boolean): void {
   const { x, y } = p;
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
   ctx.beginPath();
-  ctx.ellipse(x + 3, y + 5, BALL_R, BALL_R * 0.8, 0, 0, Math.PI * 2);
+  ctx.ellipse(x + 2, y + 5, BALL_R, BALL_R * 0.75, 0, 0, Math.PI * 2);
   ctx.fill();
-  const grad = ctx.createRadialGradient(x - 3, y - 3, 1, x, y, BALL_R);
-  grad.addColorStop(0, theme.ballLight);
-  grad.addColorStop(0.55, mix(theme.ballLight, theme.ballDark, 0.45));
-  grad.addColorStop(1, theme.ballDark);
-  ctx.fillStyle = grad;
   ctx.globalAlpha = held ? 0.85 : 1;
+  // 그늘(진한 색) 위에 면 색을 왼쪽 위로 비껴 덮어 오른쪽 아래에 초승달 그늘을 남긴다
+  ctx.save();
   ctx.beginPath();
   ctx.arc(x, y, BALL_R, 0, Math.PI * 2);
+  ctx.fillStyle = theme.ballDark;
   ctx.fill();
-  ctx.globalAlpha = 1;
-  // 반짝임
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+  ctx.clip();
+  ctx.fillStyle = mix(theme.ballLight, theme.ballDark, 0.3);
   ctx.beginPath();
-  ctx.arc(x - 3, y - 3.5, 2.2, 0, Math.PI * 2);
+  ctx.arc(x - 1.6, y - 2, BALL_R, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = theme.ballLight;
+  ctx.beginPath();
+  ctx.ellipse(x - 3, y - 3.4, 2.6, 1.8, -0.6, 0, Math.PI * 2);
   ctx.fill();
 }
 

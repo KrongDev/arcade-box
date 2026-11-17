@@ -167,7 +167,7 @@
 
 .settings-empty-emoji {
   margin: 0;
-  font-size: 40px;
+  line-height: 0;
 }
 
 .settings-empty {

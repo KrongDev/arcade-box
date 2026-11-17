@@ -1,5 +1,6 @@
 import { IAP, graniteEvent } from '@apps-in-toss/web-framework';
 import { useCallback, useEffect, useState } from 'react';
+import { ArcadeIcon } from '../components/ArcadeIcon';
 import { ChevronRight } from '../components/icons';
 import { SUPPORT_EMAIL } from '../game/appInfo';
 import { haptic } from '../game/haptic';
@@ -45,7 +46,7 @@ function SettingsMain({ onExit, onOpenPurchases }: { onExit: () => void; onOpenP
 
       <section className="settings-group" aria-labelledby="settings-sound">
         <h2 id="settings-sound" className="settings-group-title">
-          <span className="tf">🔊</span> 소리와 진동
+          소리와 진동
         </h2>
         <ToggleRow
           label="효과음"
@@ -66,7 +67,7 @@ function SettingsMain({ onExit, onOpenPurchases }: { onExit: () => void; onOpenP
 
       <section className="settings-group" aria-labelledby="settings-purchase">
         <h2 id="settings-purchase" className="settings-group-title">
-          <span className="tf">🧾</span> 구매
+          구매
         </h2>
         <button type="button" className="settings-row is-link" onClick={onOpenPurchases}>
           <span className="settings-row-text">
@@ -81,7 +82,7 @@ function SettingsMain({ onExit, onOpenPurchases }: { onExit: () => void; onOpenP
 
       <section className="settings-group" aria-labelledby="settings-help">
         <h2 id="settings-help" className="settings-group-title">
-          <span className="tf">💬</span> 도움말
+          도움말
         </h2>
         {SUPPORT_EMAIL && (
           <div className="settings-row">
@@ -99,7 +100,7 @@ function SettingsMain({ onExit, onOpenPurchases }: { onExit: () => void; onOpenP
         </div>
         <div className="settings-info">
           <p className="settings-info-title">
-            <span className="tf">💾</span> 데이터 저장 안내
+            데이터 저장 안내
           </p>
           {serverStatus === 'off' ? (
             <ul className="settings-info-list">
@@ -233,7 +234,7 @@ function PurchaseHistory({ onBack }: { onBack: () => void }) {
       {state.kind === 'ready' && state.orders.length === 0 && (
         <div className="settings-empty-box">
           <p className="settings-empty-emoji">
-            <span className="tf">🧾</span>
+            <ArcadeIcon name="receipt" size={56} />
           </p>
           <p className="settings-empty">아직 구매한 유료 아이템이 없어요</p>
         </div>

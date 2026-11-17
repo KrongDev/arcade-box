@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import logoMark from '../assets/logo-mark.png';
+import { ArcadeIcon, GameIcon } from '../components/ArcadeIcon';
 import { GameArt } from '../components/GameArt';
 import { Coin, Gear, Lock, Play } from '../components/gameIcons';
 import { ChevronLeft, ChevronRight, Close } from '../components/icons';
@@ -140,7 +141,7 @@ export default function Home({
       <section className="wallet" aria-label="게임별 코인">
         {unlockedGames.map((g) => (
           <div key={g.id} className="ab-chip">
-            <span className="tf">{g.emoji}</span> {g.name}
+            <GameIcon id={g.id} size={20} /> {g.name}
             <strong>
               <Coin /> {(save.coins[g.id] ?? 0).toLocaleString()}
             </strong>
@@ -150,7 +151,7 @@ export default function Home({
 
       <section className={canClaimAttendance ? 'attendance' : 'attendance is-done'} aria-label="출석 보상">
         <span className="attendance-icon">
-          <span className="tf">🎁</span>
+          <ArcadeIcon name="gift" size={36} />
         </span>
         <div className="attendance-text">
           <p className="attendance-title">출석 보상</p>
@@ -224,8 +225,8 @@ export default function Home({
 
       <div className="home-tiles">
         <button type="button" className="home-tile" onClick={onOpenShop}>
-          <span className="home-tile-icon is-pink">
-            <span className="tf">🛍️</span>
+          <span className="home-tile-icon is-purple">
+            <ArcadeIcon name="bag" size={32} />
           </span>
           <span className="home-tile-title">상점</span>
           <span className="home-tile-desc">모은 코인으로 판과 공을 꾸며요</span>
@@ -233,7 +234,7 @@ export default function Home({
         {API_BASE && (
           <button type="button" className="home-tile" onClick={onOpenLeaderboard}>
             <span className="home-tile-icon is-gold">
-              <span className="tf">🏆</span>
+              <ArcadeIcon name="trophy" size={32} />
             </span>
             <span className="home-tile-title">순위표</span>
             <span className="home-tile-desc">게임별로 다른 사람들과 기록을 겨뤄요</span>
@@ -270,7 +271,7 @@ export default function Home({
               {claimTargets.map((g) => (
                 <li key={g.id}>
                   <button type="button" className="ab-btn ab-btn--ghost ab-btn--block sheet-option" onClick={() => claim(g.id)}>
-                    <span className="tf">{g.emoji}</span> {g.name} 코인 {ATTENDANCE_COINS}개
+                    <GameIcon id={g.id} size={22} /> {g.name} 코인 {ATTENDANCE_COINS}개
                   </button>
                 </li>
               ))}

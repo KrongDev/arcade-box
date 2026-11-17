@@ -15,7 +15,6 @@ export interface UnlockRule {
 export interface GameDef {
   id: GameId;
   name: string;
-  emoji: string;
   description: string;
   /** null이면 처음부터 열려 있다 */
   unlock: UnlockRule | null;
@@ -27,7 +26,6 @@ export const GAMES: GameDef[] = [
   {
     id: 'pinball',
     name: '핀볼',
-    emoji: '🕹️',
     description: '플리퍼로 공을 튕겨 점수를 모아요',
     unlock: null,
     playable: true,
@@ -35,7 +33,6 @@ export const GAMES: GameDef[] = [
   {
     id: 'minesweeper',
     name: '지뢰찾기',
-    emoji: '💣',
     description: '숫자를 보고 지뢰를 피해 칸을 열어요',
     // 커트라인 값은 밸런싱 단계에서 확정한다 (PRD 4번 확인 필요)
     unlock: { gameId: 'pinball', score: 30000 },

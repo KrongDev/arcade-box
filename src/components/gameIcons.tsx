@@ -15,7 +15,7 @@ export function Pause({ size = '1em' }: IconProps) {
   );
 }
 
-/** 게임 코인 — 판 위 동전과 같은 금색. 글자와 같은 높이로 나란히 놓인다 */
+/** 게임 코인 — ArcadeIcon 동전과 같은 두 톤 그림체. 글자와 같은 높이로 나란히 놓인다 */
 export function Coin({ size = '1em' }: IconProps) {
   return (
     <svg
@@ -25,9 +25,9 @@ export function Coin({ size = '1em' }: IconProps) {
       aria-hidden="true"
       style={{ display: 'inline-block', verticalAlign: '-0.15em' }}
     >
-      <circle cx="12" cy="12" r="10" fill="#f5b70a" />
-      <circle cx="12" cy="12" r="7" fill="#ffd54d" stroke="#e0a000" strokeWidth="1.5" />
-      <path d="M9.5 9.5 L12 7.5 L14.5 9.5 L14.5 14.5 L12 16.5 L9.5 14.5 Z" fill="#f5b70a" />
+      <circle cx="12" cy="13.2" r="10" fill="#eaa012" />
+      <circle cx="12" cy="11" r="10" fill="#ffc53d" />
+      <circle cx="12" cy="11" r="5.8" fill="none" stroke="#eaa012" strokeWidth="2" />
     </svg>
   );
 }

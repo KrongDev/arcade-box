@@ -1,6 +1,7 @@
 import { graniteEvent } from '@apps-in-toss/web-framework';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { Coin, Pause } from '../components/gameIcons';
+import { ArcadeIcon } from '../components/ArcadeIcon';
+import { Coin, Lock, Pause } from '../components/gameIcons';
 import { abilityLines } from '../game/catalog';
 import { mapLook, minesweeperGear, tileLook } from '../game/equipped';
 import { haptic } from '../game/haptic';
@@ -77,7 +78,7 @@ function DifficultySelect({ onExit, onStart }: { onExit: () => void; onStart: (i
     <main className="ms-select ab-page" style={{ paddingTop: insets.top + NAV_BAR_OFFSET, paddingBottom: insets.bottom + 24 }}>
       <header className="ms-select-header">
         <h1 className="ms-select-title">
-          <span className="tf">💣</span> 지뢰찾기
+          지뢰찾기
         </h1>
         <p className="ms-select-subtitle">숫자를 보고 지뢰를 피해 모든 칸을 열어요</p>
         <p className="ab-chip ms-wallet">
@@ -107,7 +108,7 @@ function DifficultySelect({ onExit, onStart }: { onExit: () => void; onStart: (i
                   <LevelIcon level={d.id} />
                   <span className="ms-level-body">
                     <span className="ms-level-name">
-                      {d.name} <span className="tf">🔒</span>
+                      {d.name} <Lock size={16} />
                     </span>
                     <span className="ms-level-spec">{spec}</span>
                     <span className="ms-level-meta">{getDifficulty(d.requires as DifficultyId).name}을 깨면 열려요</span>
@@ -138,7 +139,7 @@ function DifficultySelect({ onExit, onStart }: { onExit: () => void; onStart: (i
 
       <section className="ms-howto" aria-label="하는 방법">
         <h2 className="ms-howto-title">
-          <span className="tf">💡</span> 하는 방법
+          하는 방법
         </h2>
         <ul className="ms-howto-list">
           <li>칸을 누르면 열리고, 길게 누르면 깃발을 꽂아요.</li>
@@ -530,11 +531,11 @@ function MinesweeperPlay({
         </div>
         <div className="ms-hud-side">
           <span aria-label={`남은 지뢰 ${minesLeft}개`}>
-            <span className="tf">🚩</span> {minesLeft}
+            <ArcadeIcon name="flag" size={20} /> {minesLeft}
           </span>
           {gear.shield > 0 && (
             <span className={shieldsLeft > 0 ? 'ms-hud-shield' : 'ms-hud-shield is-used'} aria-label={`남은 지뢰 보호 ${shieldsLeft}번`}>
-              <span className="tf">🛡️</span> {shieldsLeft}
+              <ArcadeIcon name="shield" size={20} /> {shieldsLeft}
             </span>
           )}
           <span className="ms-hud-coins">
@@ -544,9 +545,7 @@ function MinesweeperPlay({
       </header>
 
       {map.motif && (
-        <span className="ms-motif tf" aria-hidden="true">
-          {map.motif}
-        </span>
+        <ArcadeIcon name={map.motif} size={132} className="ms-motif" />
       )}
       <div className={shaking ? 'ms-viewport is-shaking' : 'ms-viewport'} ref={viewportRef}>
         <div
@@ -623,7 +622,7 @@ function MinesweeperPlay({
             aria-pressed={!flagMode}
             onClick={() => setFlagMode(false)}
           >
-            <span className="tf">⛏️</span> 열기
+            <ArcadeIcon name="shovel" size={22} /> 열기
           </button>
           <button
             type="button"
@@ -631,7 +630,7 @@ function MinesweeperPlay({
             aria-pressed={flagMode}
             onClick={() => setFlagMode(true)}
           >
-            <span className="tf">🚩</span> 깃발
+            <ArcadeIcon name="flag" size={22} /> 깃발
           </button>
         </div>
         )}
@@ -663,7 +662,7 @@ function MinesweeperPlay({
           <section className="game-dialog" role="dialog" aria-modal="true" aria-labelledby="ms-result-title">
             {result.isBestScore && (
               <p className="result-badge">
-                <span className="tf">🎉</span> 새 최고 점수
+                <ArcadeIcon name="party" size={20} /> 새 최고 점수
               </p>
             )}
             <h2 id="ms-result-title" className="dialog-title">
@@ -713,7 +712,7 @@ function MinesweeperPlay({
             </dl>
             {result.unlockedName && (
               <p className="result-unlock">
-                <span className="tf">🔓</span> {result.unlockedName}이 열렸어요
+                <ArcadeIcon name="unlock" size={20} /> {result.unlockedName}이 열렸어요
               </p>
             )}
             <div className="dialog-actions">
@@ -817,17 +816,15 @@ const CellView = memo(function CellView({
   if (shielded) {
     return (
       <div role="gridcell" aria-label="보호로 막은 지뢰" className="ms-cell is-shielded">
-        <span className="tf">🛡️</span>
+        <ArcadeIcon name="shield" size={26} />
       </div>
     );
   }
   if (exploded) {
     return (
       <div role="gridcell" aria-label="밟은 지뢰" className="ms-cell is-exploded">
-        <span className="tf">💣</span>
-        <span className="tf ms-burst" aria-hidden="true">
-          💥
-        </span>
+        <ArcadeIcon name="bomb" size={28} />
+        <ArcadeIcon name="boom" size={44} className="ms-burst" />
       </div>
     );
   }
@@ -835,7 +832,7 @@ const CellView = memo(function CellView({
     if (flag || won) {
       return (
         <div role="gridcell" aria-label="찾은 지뢰" className="ms-cell is-flag">
-          <span className="tf">🚩</span>
+          <ArcadeIcon name="flag" size={26} />
         </div>
       );
     }
@@ -846,7 +843,7 @@ const CellView = memo(function CellView({
         className={revealDelay !== undefined ? 'ms-cell is-mine is-revealing' : 'ms-cell is-mine'}
         style={revealDelay !== undefined ? ({ '--reveal-delay': `${revealDelay}ms` } as CSSProperties) : undefined}
       >
-        <span className="tf">💣</span>
+        <ArcadeIcon name="bomb" size={28} />
       </div>
     );
   }
@@ -855,7 +852,7 @@ const CellView = memo(function CellView({
       // 지뢰가 아닌 곳에 꽂은 깃발 — X로 표시
       return (
         <div role="gridcell" aria-label="잘못 꽂은 깃발" className="ms-cell is-flag is-wrong">
-          <span className="tf">🚩</span>
+          <ArcadeIcon name="flag" size={26} />
           <svg className="ms-wrong-mark" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M5 5 L19 19 M19 5 L5 19" />
           </svg>
@@ -864,7 +861,7 @@ const CellView = memo(function CellView({
     }
     return (
       <div role="gridcell" className="ms-cell is-flag">
-        <span className="tf">🚩</span>
+        <ArcadeIcon name="flag" size={26} />
       </div>
     );
   }

@@ -308,10 +308,7 @@ button.ms-level:active {
 .ms-burst {
   position: absolute;
   inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 40px;
+  margin: auto;
   pointer-events: none;
   animation: ms-burst 0.7s ease-out forwards;
 }
@@ -342,7 +339,7 @@ button.ms-level:active {
   animation-delay: var(--reveal-delay, 0ms);
 }
 
-.ms-cell.is-wrong .tf {
+.ms-cell.is-wrong .arcade-icon:not(.ms-wrong-mark) {
   opacity: 0.5;
 }
 
@@ -641,9 +638,7 @@ button.ms-level:active {
   right: 8px;
   bottom: 96px;
   z-index: 0;
-  font-size: 112px;
-  line-height: 1;
-  opacity: 0.14;
+  opacity: 0.16;
   pointer-events: none;
 }
 

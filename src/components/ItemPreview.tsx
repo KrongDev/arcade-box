@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { ArcadeIcon } from './ArcadeIcon';
 import type { ShopItem, TileLook } from '../game/catalog';
 
 /** 상점 아이템 미리보기 — 실제 게임 색으로 그린 작은 그림. 이펙트가 있으면 함께 보여 준다 */
@@ -48,10 +49,9 @@ export function ItemPreview({ item }: { item: ShopItem }) {
     return (
       <svg viewBox="0 0 80 100" className="item-preview" aria-hidden="true">
         <defs>
-          <radialGradient id={gid} cx="40%" cy="38%" r="65%">
-            <stop offset="0%" stopColor={l.ballLight} />
-            <stop offset="100%" stopColor={l.ballDark} />
-          </radialGradient>
+          <clipPath id={gid}>
+            <circle cx="42" cy="54" r="18" />
+          </clipPath>
         </defs>
         <rect width="80" height="100" fill="#1b1d38" />
         {!trail && (
@@ -83,8 +83,11 @@ export function ItemPreview({ item }: { item: ShopItem }) {
         {trail === 'lightning' && (
           <polyline points="12,12 22,20 17,24 28,32 23,36 34,44" fill="none" stroke="#74c0fc" strokeWidth="3" strokeLinejoin="round" opacity="0.95" />
         )}
-        <circle cx="42" cy="54" r="18" fill={`url(#${gid})`} />
-        <circle cx="36" cy="48" r="4" fill="#ffffff" opacity="0.7" />
+        <ellipse cx="45" cy="74" rx="16" ry="5" fill="#000000" opacity="0.3" />
+        {/* 게임 속 공과 같은 두 톤: 진한 색 위에 면 색을 왼쪽 위로 비껴 덮는다 */}
+        <circle cx="42" cy="54" r="18" fill={l.ballDark} />
+        <circle cx="39" cy="50.5" r="18" fill={mixHex(l.ballLight, l.ballDark, 0.3)} clipPath={`url(#${gid})`} />
+        <ellipse cx="35" cy="45" rx="5" ry="3.4" fill={l.ballLight} transform="rotate(-35 35 45)" />
         {item.effect?.hit === 'boom' && <circle cx="42" cy="54" r="26" fill="none" stroke="#74c0fc" strokeWidth="2" opacity="0.6" />}
       </svg>
     );
@@ -126,7 +129,7 @@ export function ItemPreview({ item }: { item: ShopItem }) {
   const coins = item.ability?.extraCoins ? 3 + Math.min(4, item.ability.extraCoins[0]) : 2;
   return (
     <span className="item-preview item-preview-map" style={{ background: l.bg } as CSSProperties} aria-hidden="true">
-      {l.motif && <span className="item-preview-motif tf">{l.motif}</span>}
+      {l.motif && <ArcadeIcon name={l.motif} size={56} className="item-preview-motif" />}
       <span className="item-preview-grid">
         {Array.from({ length: 9 }, (_, i) => (
           <span key={i} className="item-preview-cell">
@@ -177,4 +180,15 @@ function TilePatternDefs({ id, look }: { id: string; look: TileLook }) {
     default:
       return null;
   }
+}
+
+/** 두 색 섞기(#rrggbb) — 공 면 색을 게임 렌더러와 같은 비율로 만든다 */
+function mixHex(a: string, b: string, t: number): string {
+  const pa = parseInt(a.slice(1), 16);
+  const pb = parseInt(b.slice(1), 16);
+  const ch = (shift: number) =>
+    Math.round(((pa >> shift) & 0xff) + (((pb >> shift) & 0xff) - ((pa >> shift) & 0xff)) * t)
+      .toString(16)
+      .padStart(2, '0');
+  return `#${ch(16)}${ch(8)}${ch(0)}`;
 }

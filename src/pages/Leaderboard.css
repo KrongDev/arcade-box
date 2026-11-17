@@ -73,8 +73,7 @@
 }
 
 .podium-medal {
-  font-size: 32px;
-  line-height: 1.2;
+  margin-bottom: 2px;
 }
 
 .podium-player {
@@ -194,7 +193,7 @@
 }
 
 .board-empty-emoji {
-  font-size: 44px;
+  display: block;
 }
 
 .board-empty {

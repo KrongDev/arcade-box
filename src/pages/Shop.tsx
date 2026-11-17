@@ -1,5 +1,6 @@
 import { graniteEvent } from '@apps-in-toss/web-framework';
 import { useEffect, useRef, useState } from 'react';
+import { ArcadeIcon, GameIcon } from '../components/ArcadeIcon';
 import { ItemPreview } from '../components/ItemPreview';
 import { CATALOG, SLOT_NAMES, TIER_NAMES, abilityLines, effectLine, slotsOf, tierOf, type ShopItem } from '../game/catalog';
 import { isEquipped, isOwned } from '../game/equipped';
@@ -159,7 +160,7 @@ export default function Shop({ onExit }: { onExit: () => void }) {
     <main className="shop ab-page" style={{ paddingTop: insets.top + NAV_BAR_OFFSET, paddingBottom: insets.bottom + 24 }}>
       <header className="shop-header">
         <h1 className="shop-title">
-          <span className="tf">🛍️</span> 상점
+          상점
         </h1>
         <p className="shop-subtitle">게임에서 모은 코인으로 판과 공을 꾸며요</p>
       </header>
@@ -175,7 +176,7 @@ export default function Shop({ onExit }: { onExit: () => void }) {
               className={g.id === game ? 'ab-tab is-active' : 'ab-tab'}
               onClick={() => setGame(g.id)}
             >
-              <span className="tf">{g.emoji}</span> {g.name}
+              <GameIcon id={g.id} size={20} /> {g.name}
             </button>
           ))}
         </div>
@@ -190,10 +191,11 @@ export default function Shop({ onExit }: { onExit: () => void }) {
 
       {ad.status !== 'unsupported' && (
         <section className="shop-ad" aria-label="광고 보고 코인 받기">
+          <span className="shop-ad-icon">
+            <ArcadeIcon name="tv" size={34} />
+          </span>
           <div className="shop-ad-text">
-            <p className="shop-ad-title">
-              <span className="tf">📺</span> 광고 보고 코인 {AD_REWARD_COINS}개 받기
-            </p>
+            <p className="shop-ad-title">광고 보고 코인 {AD_REWARD_COINS}개 받기</p>
             <p className="shop-ad-desc">
               {adRewardsLeft > 0
                 ? `광고를 끝까지 보면 ${gameName} 코인을 받아요. 오늘 ${adRewardsLeft}번 남았어요`
@@ -329,7 +331,7 @@ function ItemPerks({ item }: { item: ShopItem }) {
       ))}
       {effect && (
         <p className="shop-item-perk is-effect">
-          <span className="tf">✨</span> {effect}
+          <ArcadeIcon name="sparkle" size={16} /> {effect}
         </p>
       )}
     </>

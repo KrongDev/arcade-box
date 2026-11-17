@@ -1,5 +1,6 @@
 import { graniteEvent } from '@apps-in-toss/web-framework';
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { ArcadeIcon } from '../components/ArcadeIcon';
 import { Coin, Pause } from '../components/gameIcons';
 import { abilityLines } from '../game/catalog';
 import { equippedItem, pinballGear, pinballLooks } from '../game/equipped';
@@ -488,7 +489,7 @@ export default function Pinball({ onExit }: { onExit: () => void }) {
           <section className="game-dialog" role="dialog" aria-modal="true" aria-labelledby="result-title">
             {result.isBest && (
               <p className="result-badge">
-                <span className="tf">🎉</span> 새 최고 기록
+                <ArcadeIcon name="party" size={20} /> 새 최고 기록
               </p>
             )}
             <h2 id="result-title" className="dialog-title">
@@ -509,7 +510,7 @@ export default function Pinball({ onExit }: { onExit: () => void }) {
             </dl>
             {result.unlockedNames.map((name) => (
               <p key={name} className="result-unlock">
-                <span className="tf">🔓</span> 새 게임 {name}
+                <ArcadeIcon name="unlock" size={20} /> 새 게임 {name}
                 {subjectParticle(name)} 열렸어요
               </p>
             ))}

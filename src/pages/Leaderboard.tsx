@@ -1,5 +1,6 @@
 import { graniteEvent } from '@apps-in-toss/web-framework';
 import { useCallback, useEffect, useState } from 'react';
+import { ArcadeIcon } from '../components/ArcadeIcon';
 import { API_BASE, api, type LeaderboardData } from '../game/api';
 import { useSave } from '../game/save-context';
 import { NAV_BAR_OFFSET, useSafeArea } from '../game/useSafeArea';
@@ -17,7 +18,7 @@ type BoardId = (typeof BOARDS)[number]['id'];
 
 type State = { kind: 'loading' } | { kind: 'ready'; data: LeaderboardData } | { kind: 'error' };
 
-const MEDALS = ['🥇', '🥈', '🥉'];
+const MEDALS = ['medal1', 'medal2', 'medal3'] as const;
 
 function formatValue(value: number): string {
   return `${value.toLocaleString()}점`;
@@ -65,7 +66,7 @@ export default function Leaderboard({ onExit }: { onExit: () => void }) {
     <main className="board ab-page" style={{ paddingTop: insets.top + NAV_BAR_OFFSET, paddingBottom: insets.bottom + 24 }}>
       <header className="board-header">
         <h1 className="board-title">
-          <span className="tf">🏆</span> 순위표
+          순위표
         </h1>
         <p className="board-subtitle">
           {board === 'pinball'
@@ -95,9 +96,7 @@ export default function Leaderboard({ onExit }: { onExit: () => void }) {
 
       {API_BASE && state.kind === 'error' && (
         <div className="board-empty-box">
-          <span className="board-empty-emoji tf" aria-hidden="true">
-            📡
-          </span>
+          <ArcadeIcon name="signal" size={56} className="board-empty-emoji" />
           <p className="board-empty">순위표를 불러오지 못했어요. 네트워크를 확인하고 다시 시도해 주세요.</p>
           <button type="button" className="ab-btn ab-btn--sm ab-btn--ghost board-secondary-button" onClick={retry}>
             다시 불러오기
@@ -120,9 +119,7 @@ export default function Leaderboard({ onExit }: { onExit: () => void }) {
 
           {state.data.entries.length === 0 ? (
             <div className="board-empty-box">
-              <span className="board-empty-emoji tf" aria-hidden="true">
-                🏆
-              </span>
+              <ArcadeIcon name="trophy" size={56} className="board-empty-emoji" />
               <p className="board-empty">아직 아무도 기록을 남기지 않았어요</p>
             </div>
           ) : (
@@ -134,7 +131,7 @@ export default function Leaderboard({ onExit }: { onExit: () => void }) {
                 .filter((e): e is LeaderboardData['entries'][number] => e !== undefined)
                 .map((e) => (
                   <li key={`p-${e.rank}-${e.player}`} className={`podium-step is-rank-${e.rank}${e.me ? ' is-me' : ''}`}>
-                    <span className="podium-medal tf">{MEDALS[e.rank - 1]}</span>
+                    <ArcadeIcon name={MEDALS[e.rank - 1]} size={40} className="podium-medal" />
                     <span className="podium-player">{e.me ? `${e.player} (나)` : e.player}</span>
                     <span className="podium-value">{formatValue(e.value)}</span>
                     <span className="podium-base" aria-hidden="true">
@@ -147,7 +144,7 @@ export default function Leaderboard({ onExit }: { onExit: () => void }) {
               {state.data.entries.slice(3).map((e) => (
                 <li key={`${e.rank}-${e.player}`} className={e.me ? 'board-row is-me' : 'board-row'}>
                   <span className="board-rank">
-                    {e.rank <= 3 ? <span className="tf">{MEDALS[e.rank - 1]}</span> : e.rank}
+                    {e.rank <= 3 ? <ArcadeIcon name={MEDALS[e.rank - 1]} size={26} label={`${e.rank}위`} /> : e.rank}
                   </span>
                   <span className="board-player">{e.me ? `${e.player} (나)` : e.player}</span>
                   <span className="board-value">{formatValue(e.value)}</span>

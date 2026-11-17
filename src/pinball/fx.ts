@@ -73,7 +73,7 @@ export class PinballFx {
 
   /** 네온 판: 벽 빛 세기 (평소엔 숨 쉬듯, 맞으면 번쩍) */
   wallGlow(): number {
-    if (this.skin.table !== 'neon') return 1;
+    if (this.skin.table !== 'neon') return 0; // 번지는 빛은 네온 판에만
     return 1.2 + 0.5 * Math.sin(this.clock * 2.4) + this.neon * 1.6;
   }
 
@@ -365,11 +365,10 @@ export class PinballFx {
       ctx.lineWidth = 6;
       ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
       ctx.strokeText(b.text, 0, -10);
-      ctx.shadowColor = b.color;
-      ctx.shadowBlur = 18;
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+      ctx.fillText(b.text, 0, -7);
       ctx.fillStyle = b.color;
       ctx.fillText(b.text, 0, -10);
-      ctx.shadowBlur = 0;
       if (b.sub) {
         ctx.font = '700 17px -apple-system, system-ui, sans-serif';
         ctx.fillStyle = '#ffffff';

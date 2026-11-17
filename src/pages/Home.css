@@ -400,8 +400,8 @@ button.game-card:active {
   font-size: 26px;
 }
 
-.home-tile-icon.is-pink {
-  background: var(--brand-pink-soft);
+.home-tile-icon.is-purple {
+  background: var(--brand-primary-soft);
 }
 
 .home-tile-icon.is-gold {

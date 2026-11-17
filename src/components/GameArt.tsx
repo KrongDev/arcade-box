@@ -1,5 +1,6 @@
 /**
- * 홈 게임 카드의 표지 그림 — 게임 화면과 같은 색으로 그린 장식용 SVG.
+ * 홈 게임 카드의 표지 그림 — 게임 화면 속 물건(범퍼·공·칸·깃발)을 같은 그림체로 모아 그린다.
+ * 그림체는 ArcadeIcon과 같다: 윤곽선·번짐 없이 면 색과 그 아래 진한 띠 두 톤.
  * 글자 대신 그림이라 aria-hidden이다(게임 이름은 카드 글자로 따로 읽힌다).
  */
 
@@ -11,55 +12,49 @@ const svgProps = {
   'aria-hidden': true,
 } as const;
 
+/** 범퍼 하나: 판 그림자 → 고무 링(두 톤) → 뚜껑(두 톤) → 가운데 고리 */
+function Bumper({ x, y, r }: { x: number; y: number; r: number }) {
+  return (
+    <g>
+      <ellipse cx={x} cy={y + 7} rx={r + 4} ry={r} fill="#000000" opacity="0.25" />
+      <circle cx={x} cy={y + 5} r={r + 3} fill="#c2185b" />
+      <circle cx={x} cy={y} r={r + 3} fill="#ffb3c8" />
+      <circle cx={x} cy={y + 2} r={r - 2} fill="#c9305e" />
+      <circle cx={x} cy={y - 1} r={r - 2} fill="#ff5c86" />
+      <circle cx={x} cy={y - 2} r={r * 0.42} fill="none" stroke="#ffd6e0" strokeWidth="3" />
+    </g>
+  );
+}
+
 export function PinballArt() {
   return (
     <svg {...svgProps}>
-      <defs>
-        <linearGradient id="pa-bg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#1b1d38" />
-          <stop offset="1" stopColor="#2c2166" />
-        </linearGradient>
-        <filter id="pa-glow" x="-30%" y="-30%" width="160%" height="160%">
-          <feGaussianBlur stdDeviation="3" result="b" />
-          <feMerge>
-            <feMergeNode in="b" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
-        <radialGradient id="pa-ball" cx="0.35" cy="0.35" r="0.7">
-          <stop offset="0" stopColor="#ffffff" />
-          <stop offset="1" stopColor="#9aa3b8" />
-        </radialGradient>
-      </defs>
-      <rect width="320" height="132" fill="url(#pa-bg)" />
-      <g stroke="#a594ff" strokeOpacity="0.08">
-        {Array.from({ length: 16 }, (_, i) => (
-          <line key={i} x1={i * 24 - 60} y1="0" x2={i * 24 + 72} y2="132" />
-        ))}
+      <rect width="320" height="132" fill="#2b2163" />
+      <circle cx="160" cy="88" r="96" fill="#33287a" />
+      <circle cx="160" cy="88" r="64" fill="#3a2e88" />
+      {/* 레일: 아래 진한 띠 + 위 면 */}
+      <path d="M24 146 V58 Q24 20 64 20 H256 Q296 20 296 58 V146" fill="none" stroke="#6b56d6" strokeWidth="7" transform="translate(0 4)" />
+      <path d="M24 146 V58 Q24 20 64 20 H256 Q296 20 296 58 V146" fill="none" stroke="#a594ff" strokeWidth="7" />
+      <Bumper x={128} y={56} r={16} />
+      <Bumper x={194} y={56} r={16} />
+      <Bumper x={161} y={92} r={16} />
+      {/* 동전 */}
+      <circle cx="244" cy="96" r="10" fill="#d98a00" />
+      <circle cx="244" cy="93" r="10" fill="#ffc53d" />
+      <circle cx="244" cy="93" r="5.6" fill="none" stroke="#d98a00" strokeWidth="2" />
+      {/* 날아가는 공과 속도선 */}
+      <g stroke="#a594ff" strokeWidth="4" strokeLinecap="round" opacity="0.7">
+        <path d="M52 50 L70 66" />
+        <path d="M46 66 L60 78" />
       </g>
-      <path d="M24 140 V54 Q24 16 64 16 H256 Q296 16 296 54 V140" fill="none" stroke="#a594ff" strokeWidth="4" filter="url(#pa-glow)" />
-      <g filter="url(#pa-glow)">
-        <circle cx="128" cy="58" r="17" fill="#ff5c86" />
-        <circle cx="192" cy="58" r="17" fill="#ff5c86" />
-        <circle cx="160" cy="94" r="17" fill="#ff5c86" />
-        <circle cx="238" cy="92" r="9" fill="#ffc53d" />
-      </g>
-      <g fill="none" stroke="#ffc2d2" strokeWidth="3">
-        <circle cx="128" cy="58" r="9" />
-        <circle cx="192" cy="58" r="9" />
-        <circle cx="160" cy="94" r="9" />
-      </g>
-      <circle cx="238" cy="92" r="5" fill="none" stroke="#fff0b3" strokeWidth="2" />
-      <g fill="#ffffff">
-        <circle cx="62" cy="40" r="3" opacity="0.15" />
-        <circle cx="70" cy="52" r="4" opacity="0.22" />
-        <circle cx="78" cy="64" r="5" opacity="0.3" />
-      </g>
-      <circle cx="88" cy="78" r="9" fill="url(#pa-ball)" />
-      <g fill="#fff0b3">
-        <path d="M268 40 l3 7 l7 3 l-7 3 l-3 7 l-3 -7 l-7 -3 l7 -3 Z" />
-        <path d="M48 104 l2 5 l5 2 l-5 2 l-2 5 l-2 -5 l-5 -2 l5 -2 Z" opacity="0.8" />
-      </g>
+      <ellipse cx="90" cy="92" rx="10" ry="7" fill="#000000" opacity="0.25" />
+      <circle cx="88" cy="84" r="11" fill="#9aa3b8" />
+      <circle cx="86.4" cy="82" r="11" fill="#e4e7ef" />
+      <ellipse cx="83.5" cy="79" rx="3.4" ry="2.4" fill="#ffffff" transform="rotate(-35 83.5 79)" />
+      {/* 왼쪽 아래 플리퍼 */}
+      <path d="M40 120 L104 132 L100 140 L36 132 Z" fill="#000000" opacity="0.2" />
+      <path d="M38 112 a9 9 0 0 1 8 -11 L106 121 a5 5 0 0 1 -2 9.6 L44 125 a9 9 0 0 1 -6 -13 Z" fill="#b9a8ff" transform="translate(0 4)" />
+      <path d="M38 112 a9 9 0 0 1 8 -11 L106 121 a5 5 0 0 1 -2 9.6 L44 125 a9 9 0 0 1 -6 -13 Z" fill="#f4f1ff" />
     </svg>
   );
 }
@@ -80,18 +75,16 @@ export function MinesweeperArt() {
   const numberColor: Record<string, string> = { '1': '#3b5bdb', '2': '#2b8a3e', '3': '#e03131' };
   return (
     <svg {...svgProps}>
-      <defs>
-        <linearGradient id="ma-bg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#dcf7f3" />
-          <stop offset="1" stopColor="#ece6ff" />
-        </linearGradient>
-      </defs>
-      <rect width="320" height="132" fill="url(#ma-bg)" />
+      <rect width="320" height="132" fill="#e3f4ef" />
+      <circle cx="20" cy="118" r="60" fill="#d3eee6" />
+      <circle cx="306" cy="10" r="48" fill="#ece6ff" />
       {MS_ROWS.map((row, r) =>
         [...row].map((ch, c) => {
           const x = left + c * (size + gap);
           const y = top + r * (size + gap);
           const closed = ch === 'c' || ch === 'f';
+          const cx = x + size / 2;
+          const cy = y + size / 2;
           return (
             <g key={`${r}-${c}`}>
               {closed ? (
@@ -103,21 +96,24 @@ export function MinesweeperArt() {
                 <rect x={x} y={y} width={size} height={size} rx="7" fill="#ffffff" stroke="#e3e8f0" />
               )}
               {numberColor[ch] && (
-                <text x={x + size / 2} y={y + size / 2 + 5} textAnchor="middle" fontSize="15" fontWeight="700" fill={numberColor[ch]} fontFamily="-apple-system, system-ui, sans-serif">
+                <text x={cx} y={cy + 5} textAnchor="middle" fontSize="15" fontWeight="700" fill={numberColor[ch]} fontFamily="-apple-system, system-ui, sans-serif">
                   {ch}
                 </text>
               )}
               {ch === 'f' && (
                 <>
-                  <line x1={x + 9} y1={y + 6} x2={x + 9} y2={y + 19} stroke="#4e5968" strokeWidth="2.2" strokeLinecap="round" />
-                  <path d={`M${x + 10} ${y + 6} L${x + 19} ${y + 10} L${x + 10} ${y + 14} Z`} fill="#f03e3e" />
+                  <rect x={x + 7.5} y={y + 4.5} width="2.6" height="15" rx="1.3" fill="#4b4570" />
+                  <path d={`M${x + 10} ${y + 5.5} C${x + 13} ${y + 4.5} ${x + 15} ${y + 7} ${x + 19.5} ${y + 6} L${x + 17.5} ${y + 9.8} L${x + 19.5} ${y + 13.6} C${x + 15} ${y + 14.6} ${x + 13} ${y + 12} ${x + 10} ${y + 13} Z`} fill="#dc3a44" />
+                  <path d={`M${x + 10} ${y + 4.5} C${x + 13} ${y + 3.5} ${x + 15} ${y + 6} ${x + 19.5} ${y + 5} L${x + 17.5} ${y + 8.8} L${x + 19.5} ${y + 12.6} C${x + 15} ${y + 13.6} ${x + 13} ${y + 11} ${x + 10} ${y + 12} Z`} fill="#ff5d61" />
                 </>
               )}
               {ch === 'b' && (
                 <>
-                  <circle cx={x + size / 2} cy={y + size / 2 + 1} r="7" fill="#1f1a3d" />
-                  <circle cx={x + size / 2 - 2.5} cy={y + size / 2 - 1.5} r="1.8" fill="#ffffff" opacity="0.7" />
-                  <path d={`M${x + 17} ${y + 6} l2 -3`} stroke="#ff922b" strokeWidth="2.2" strokeLinecap="round" />
+                  <path d={`M${cx + 3} ${cy - 5} q2 -4 5 -3`} fill="none" stroke="#a46a3a" strokeWidth="1.8" strokeLinecap="round" />
+                  <circle cx={cx} cy={cy + 2} r="7.5" fill="#2a2450" />
+                  <circle cx={cx} cy={cy} r="7.5" fill="#3d3768" />
+                  <circle cx={cx - 2.6} cy={cy - 2.6} r="1.8" fill="#5a5390" />
+                  <circle cx={cx + 8.5} cy={cy - 8.5} r="2.2" fill="#ffc53d" />
                 </>
               )}
             </g>

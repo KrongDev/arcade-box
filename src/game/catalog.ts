@@ -46,7 +46,8 @@ export interface MapLook {
   ink: string;
   inkSub: string;
   /** 판 바탕 구석에 흐리게 놓는 이모지 */
-  motif: string | null;
+  /** 판 구석에 크게 깔리는 그림(ArcadeIcon 이름) */
+  motif: 'pine' | 'palm' | 'temple' | null;
 }
 
 export interface Ability {
@@ -353,7 +354,7 @@ export const CATALOG: ShopItem[] = [
     name: '숲속 맵',
     price: coin(2000),
     ability: { extraCoins: [1, 2, 3] },
-    look: { bg: 'linear-gradient(180deg, #e6f6ea 0%, #d3eedc 100%)', ink: '#163024', inkSub: '#3d6650', motif: '🌲' },
+    look: { bg: 'linear-gradient(180deg, #e6f6ea 0%, #d3eedc 100%)', ink: '#163024', inkSub: '#3d6650', motif: 'pine' },
   },
   {
     id: 'minesweeper.map.island',
@@ -362,7 +363,7 @@ export const CATALOG: ShopItem[] = [
     name: '보물섬 맵',
     price: coin(4000),
     ability: { extraCoins: [2, 4, 6] },
-    look: { bg: 'linear-gradient(180deg, #e3f6ff 0%, #fff3d6 100%)', ink: '#14304a', inkSub: '#4a6a85', motif: '🏝️' },
+    look: { bg: 'linear-gradient(180deg, #e3f6ff 0%, #fff3d6 100%)', ink: '#14304a', inkSub: '#4a6a85', motif: 'palm' },
   },
   {
     id: 'minesweeper.map.temple',
@@ -372,7 +373,7 @@ export const CATALOG: ShopItem[] = [
     price: paid(3900),
     ability: { extraCoins: [4, 7, 10] },
     effect: { coinGlow: true },
-    look: { bg: 'linear-gradient(180deg, #fff4d1 0%, #ffe08a 100%)', ink: '#3d2a00', inkSub: '#7a5a14', motif: '🛕' },
+    look: { bg: 'linear-gradient(180deg, #fff4d1 0%, #ffe08a 100%)', ink: '#3d2a00', inkSub: '#7a5a14', motif: 'temple' },
   },
 ];
 
