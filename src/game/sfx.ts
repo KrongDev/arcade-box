@@ -6,6 +6,17 @@
 export type Sfx =
   | 'launch'
   | 'bumper'
+  | 'flip'
+  | 'sling'
+  | 'target'
+  | 'bank'
+  | 'rollover'
+  | 'lanes'
+  | 'saucer'
+  | 'jackpot'
+  | 'multiball'
+  | 'ballSave'
+  | 'combo'
   | 'coin'
   | 'milestone'
   | 'drain'
@@ -82,7 +93,7 @@ function noise(ac: AudioContext, at: number, dur: number, gain: number) {
   src.start(at);
 }
 
-const MIN_GAP: Partial<Record<Sfx, number>> = { bumper: 45, open: 40 };
+const MIN_GAP: Partial<Record<Sfx, number>> = { bumper: 45, open: 40, flip: 30, sling: 40, target: 30, rollover: 40 };
 
 export function playSfx(name: Sfx): void {
   if (!enabled || suspended || (typeof document !== 'undefined' && document.hidden)) return;
@@ -98,8 +109,54 @@ export function playSfx(name: Sfx): void {
     case 'launch':
       tone(ac, t, 180, 0.25, 'sawtooth', 0.08, 520);
       break;
-    case 'bumper':
-      tone(ac, t, 660 + Math.random() * 120, 0.08, 'square', 0.05);
+    case 'bumper': {
+      // 통통 튀는 소리: 높은 음이 짧게 떨어지고 낮은 '퉁'이 받친다
+      const f = 520 + Math.random() * 260;
+      tone(ac, t, f, 0.09, 'square', 0.05, f * 0.6);
+      tone(ac, t, 150, 0.12, 'sine', 0.12, 70);
+      break;
+    }
+    case 'flip':
+      tone(ac, t, 180, 0.05, 'square', 0.03, 90);
+      noise(ac, t, 0.04, 0.06);
+      break;
+    case 'sling':
+      noise(ac, t, 0.07, 0.18);
+      tone(ac, t, 620, 0.09, 'square', 0.05, 240);
+      break;
+    case 'target':
+      tone(ac, t, 880, 0.06, 'triangle', 0.07);
+      tone(ac, t + 0.05, 1320, 0.08, 'triangle', 0.06);
+      noise(ac, t, 0.05, 0.08);
+      break;
+    case 'bank':
+      [659, 784, 988, 1319, 1568].forEach((f, i) => tone(ac, t + i * 0.06, f, 0.16, 'square', 0.05));
+      break;
+    case 'rollover':
+      tone(ac, t, 1175, 0.08, 'sine', 0.08);
+      break;
+    case 'lanes':
+      [784, 988, 1175, 1568].forEach((f, i) => tone(ac, t + i * 0.07, f, 0.2, 'triangle', 0.08));
+      tone(ac, t + 0.3, 2093, 0.3, 'sine', 0.05);
+      break;
+    case 'saucer':
+      tone(ac, t, 110, 0.18, 'sine', 0.18, 60);
+      tone(ac, t + 0.08, 330, 0.3, 'triangle', 0.06, 660);
+      break;
+    case 'jackpot':
+      [523, 659, 784, 1047].forEach((f) => tone(ac, t, f, 0.5, 'square', 0.035));
+      [659, 784, 1047, 1319].forEach((f) => tone(ac, t + 0.22, f, 0.6, 'square', 0.035));
+      noise(ac, t, 0.3, 0.12);
+      break;
+    case 'multiball':
+      for (let i = 0; i < 4; i++) tone(ac, t + i * 0.12, 440 + i * 110, 0.12, 'sawtooth', 0.05, 880 + i * 110);
+      break;
+    case 'ballSave':
+      tone(ac, t, 988, 0.14, 'triangle', 0.08);
+      tone(ac, t + 0.12, 1319, 0.24, 'triangle', 0.08);
+      break;
+    case 'combo':
+      tone(ac, t, 1047, 0.07, 'square', 0.04, 1568);
       break;
     case 'coin':
       tone(ac, t, 988, 0.08, 'square', 0.06);

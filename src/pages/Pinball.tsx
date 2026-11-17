@@ -9,6 +9,7 @@ import { getGame } from '../game/registry';
 import { useSave } from '../game/save-context';
 import { NAV_BAR_OFFSET, useSafeArea } from '../game/useSafeArea';
 import { BALLS_PER_GAME, PinballEngine, TABLE_H, TABLE_W, type PinballEvent } from '../pinball/engine';
+import { PinballFx } from '../pinball/fx';
 import { drawTable, type TableTheme } from '../pinball/render';
 import '../styles/game-dialog.css';
 import './Pinball.css';
@@ -22,6 +23,8 @@ interface Hud {
   coins: number;
   ready: boolean;
   charging: boolean;
+  multiplier: number;
+  multiball: boolean;
 }
 
 interface Result {
@@ -32,7 +35,16 @@ interface Result {
   unlockedNames: string[];
 }
 
-const INITIAL_HUD: Hud = { score: 0, balls: BALLS_PER_GAME, coins: 0, ready: true, charging: false };
+const INITIAL_HUD: Hud = { score: 0, balls: BALLS_PER_GAME, coins: 0, ready: true, charging: false, multiplier: 1, multiball: false };
+
+/** '동작 줄이기' 설정이면 화면 흔들림·번쩍임을 끈다 */
+function prefersReducedMotion(): boolean {
+  try {
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  } catch {
+    return false;
+  }
+}
 
 /** 받침 유무에 맞춘 주격 조사 (지뢰찾기가 / 블록퍼즐이) */
 function subjectParticle(word: string): string {
@@ -50,15 +62,14 @@ export default function Pinball({ onExit }: { onExit: () => void }) {
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef(new PinballEngine());
+  const fxRef = useRef(new PinballFx(prefersReducedMotion()));
   const phaseRef = useRef<Phase>('playing');
   const pointers = useRef(new Map<number, Side>());
   const keys = useRef(new Set<Side>());
   const settledRef = useRef(false);
-  const toastTimer = useRef<number | undefined>(undefined);
 
   const [phase, setPhaseState] = useState<Phase>('playing');
   const [hud, setHud] = useState<Hud>(INITIAL_HUD);
-  const [toast, setToast] = useState<string | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [sharing, setSharing] = useState(false);
   const [shareError, setShareError] = useState(false);
@@ -66,12 +77,6 @@ export default function Pinball({ onExit }: { onExit: () => void }) {
   const setPhase = useCallback((next: Phase) => {
     phaseRef.current = next;
     setPhaseState(next);
-  }, []);
-
-  const showToast = useCallback((message: string) => {
-    setToast(message);
-    window.clearTimeout(toastTimer.current);
-    toastTimer.current = window.setTimeout(() => setToast(null), 1800);
   }, []);
 
   /** 이번 판의 점수·코인을 한 번만 저장한다 */
@@ -129,12 +134,12 @@ export default function Pinball({ onExit }: { onExit: () => void }) {
 
   const restart = useCallback(() => {
     engineRef.current = new PinballEngine();
+    fxRef.current = new PinballFx(prefersReducedMotion());
     settledRef.current = false;
     releaseAll();
     setResult(null);
     setShareError(false);
     setHud(INITIAL_HUD);
-    setToast(null);
     setPhase('playing');
   }, [releaseAll, setPhase]);
 
@@ -173,9 +178,47 @@ export default function Pinball({ onExit }: { onExit: () => void }) {
   const handleEngineEvent = useCallback(
     (ev: PinballEvent) => {
       switch (ev.type) {
+        case 'flip':
+          playSfx('flip');
+          break;
         case 'bumper':
-          haptic('tickWeak');
+          haptic('tickMedium');
           playSfx('bumper');
+          break;
+        case 'sling':
+          haptic('tickMedium');
+          playSfx('sling');
+          break;
+        case 'target':
+          haptic('tap');
+          playSfx('target');
+          break;
+        case 'bank':
+          haptic('success', 0);
+          playSfx('bank');
+          break;
+        case 'rollover':
+          haptic('tickWeak');
+          playSfx('rollover');
+          break;
+        case 'lanes':
+          haptic('success', 0);
+          playSfx('lanes');
+          break;
+        case 'saucer':
+          haptic(ev.jackpot ? 'confetti' : 'basicMedium', 0);
+          playSfx(ev.jackpot ? 'jackpot' : 'saucer');
+          break;
+        case 'multiball':
+          haptic('confetti', 0);
+          playSfx('multiball');
+          break;
+        case 'ballSaved':
+          haptic('success', 0);
+          playSfx('ballSave');
+          break;
+        case 'combo':
+          playSfx('combo');
           break;
         case 'coin':
           haptic('tap');
@@ -184,12 +227,10 @@ export default function Pinball({ onExit }: { onExit: () => void }) {
         case 'milestone':
           haptic('success', 0);
           playSfx('milestone');
-          showToast(`${ev.score.toLocaleString()}점 달성 · 코인 +${ev.coins}`);
           break;
         case 'drain':
           haptic('error', 0);
           playSfx('drain');
-          if (ev.ballsLeft > 0) showToast(`공이 ${ev.ballsLeft}개 남았어요`);
           break;
         case 'gameOver':
           releaseAll();
@@ -197,10 +238,13 @@ export default function Pinball({ onExit }: { onExit: () => void }) {
           setPhase('over');
           break;
         case 'launch':
+          if (ev.auto) playSfx('launch');
+          break;
+        case 'multiballEnd':
           break;
       }
     },
-    [releaseAll, setPhase, settle, showToast],
+    [releaseAll, setPhase, settle],
   );
   useEffect(() => {
     onEngineEvent.current = handleEngineEvent;
@@ -234,11 +278,17 @@ export default function Pinball({ onExit }: { onExit: () => void }) {
       const dt = (now - last) / 1000;
       last = now;
       const e = engineRef.current;
+      const fx = fxRef.current;
       if (phaseRef.current === 'playing') {
         e.step(dt);
-        for (const ev of e.drainEvents()) onEngineEvent.current(ev);
+        for (const ev of e.drainEvents()) {
+          fx.handle(ev, themeRef.current);
+          onEngineEvent.current(ev);
+        }
+        fx.trackBalls(e.balls);
+        fx.update(dt);
       }
-      drawTable(ctx, e, themeRef.current);
+      drawTable(ctx, e, themeRef.current, fx);
 
       hudClock += dt;
       if (hudClock >= 0.1) {
@@ -249,9 +299,17 @@ export default function Pinball({ onExit }: { onExit: () => void }) {
           coins: e.coinsEarned,
           ready: e.ballState === 'ready',
           charging: e.charging,
+          multiplier: e.multiplier,
+          multiball: e.isMultiball,
         };
         setHud((prev) =>
-          prev.score === next.score && prev.balls === next.balls && prev.coins === next.coins && prev.ready === next.ready && prev.charging === next.charging
+          prev.score === next.score &&
+          prev.balls === next.balls &&
+          prev.coins === next.coins &&
+          prev.ready === next.ready &&
+          prev.charging === next.charging &&
+          prev.multiplier === next.multiplier &&
+          prev.multiball === next.multiball
             ? prev
             : next,
         );
@@ -325,8 +383,6 @@ export default function Pinball({ onExit }: { onExit: () => void }) {
     };
   }, [syncFlippers, startCharge, releaseCharge]);
 
-  useEffect(() => () => window.clearTimeout(toastTimer.current), []);
-
   const onPointerDown = (ev: ReactPointerEvent<HTMLDivElement>) => {
     if (phaseRef.current !== 'playing') return;
     const rect = ev.currentTarget.getBoundingClientRect();
@@ -354,7 +410,11 @@ export default function Pinball({ onExit }: { onExit: () => void }) {
           <Pause size={22} />
         </button>
         <div className="hud-score">
-          <span className="hud-label">점수</span>
+          <span className="hud-label">
+            점수
+            {hud.multiplier > 1 && <span className="hud-tag hud-tag-mult">×{hud.multiplier}</span>}
+            {hud.multiball && <span className="hud-tag hud-tag-multi">멀티볼 2배</span>}
+          </span>
           <strong className="hud-score-value">{hud.score.toLocaleString()}</strong>
         </div>
         <div className="hud-side">
@@ -382,12 +442,6 @@ export default function Pinball({ onExit }: { onExit: () => void }) {
           <div className="pinball-hint" aria-live="polite">
             <p className="pinball-hint-title">화면을 누르고 있다가 떼면 공이 발사돼요</p>
             <p className="pinball-hint-desc">오래 누를수록 세게 나가요. 공이 들어가면 왼쪽·오른쪽을 눌러 플리퍼를 움직여요</p>
-          </div>
-        )}
-
-        {toast && (
-          <div className="pinball-toast" role="status">
-            {toast}
           </div>
         )}
       </div>

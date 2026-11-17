@@ -134,17 +134,28 @@
   color: var(--pb-muted);
 }
 
-.pinball-toast {
-  position: absolute;
-  top: var(--space-3);
-  left: 50%;
-  transform: translateX(-50%);
-  padding: var(--space-2) var(--space-4);
+
+/* 점수 옆 배율·멀티볼 표시 */
+.hud-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.hud-tag {
+  padding: 1px 6px;
   border-radius: 999px;
+  font-size: var(--font-size-caption);
+  font-weight: 700;
+  line-height: 1.4;
+  color: #12142a;
+}
+
+.hud-tag-mult {
   background: var(--pb-coin);
-  color: var(--color-text-strong);
-  font-size: var(--font-size-body-small);
-  font-weight: 600;
-  white-space: nowrap;
-  pointer-events: none;
+}
+
+.hud-tag-multi {
+  background: #ff5c86;
+  color: #ffffff;
 }
