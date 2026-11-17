@@ -34,7 +34,8 @@ npm run dev                                                             # http:/
 | `DEPLOY_KNOWN_HOSTS` | `ssh-keyscan -H <서버 주소>` 결과 — 접속한 서버가 진짜인지 확인하는 데 써요 |
 | `DEPLOY_PORT` | (선택) SSH 포트, 기본 22 |
 | `GCP_PROJECT_ID`, `GCP_ZONE`, `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_SERVICE_ACCOUNT` | (GCP VM일 때) `setup-gcp.sh`가 출력하는 값. 있으면 공개 SSH 대신 IAP 터널로 접속해요 |
-| `SERVER_DOMAIN` | 서버 도메인 이름만 (예: `arcade-box.duckdns.org`). Caddy가 이 이름으로 HTTPS 인증서를 자동 발급해요 |
+| `SERVER_DOMAIN` | 서버 도메인 이름만 (예: `arcade-api.geonbox.com`) |
+| `CF_ORIGIN_CERT`, `CF_ORIGIN_KEY` | (Cloudflare 프록시를 켤 때) Cloudflare Origin 인증서와 개인 키. 없으면 Caddy가 Let's Encrypt로 직접 발급해요 |
 | `POSTGRES_PASSWORD` | DB 비밀번호 — 영문·숫자·`-`·`_`만 (예: `openssl rand -hex 32`) |
 | `TOSS_MTLS_CERT` | 앱인토스 콘솔 mTLS 인증서 zip 안의 인증서(`*_public.crt`) 내용 전체 |
 | `TOSS_MTLS_KEY` | 같은 zip 안의 개인 키(`*_private.key`) 내용 전체 |
@@ -96,11 +97,31 @@ bash setup-gcp.sh "<공개 키 한 줄>"
 
 마지막에 `VM_IP`, `DEPLOY_HOST`, `GCP_*`, `DEPLOY_KNOWN_HOSTS` 값이 출력돼요. 비밀값이 아니니 그대로 secret으로 등록하면 돼요.
 
-외부 IP는 VM을 '중지 → 시작'하면 바뀔 수 있어요(재부팅은 그대로). 바뀌면 도메인의 IP만 새로 바꿔 주세요.
+외부 IP는 VM을 '중지 → 시작'하면 바뀔 수 있어요(재부팅은 그대로). 바뀌면 Cloudflare A 레코드의 IP만 새로 바꿔 주세요.
 
-### 3. 도메인 연결
+### 3. 도메인 연결 (Cloudflare 프록시)
 
-[DuckDNS](https://www.duckdns.org)에 로그인해 서브도메인(예: `arcade-box`)을 만들고 `VM_IP`를 넣어요. 그러면 `arcade-box.duckdns.org`가 `SERVER_DOMAIN`이 돼요. 가진 도메인이 있으면 A 레코드를 VM IP로 지정해도 돼요.
+서버 앞에 Cloudflare 프록시를 둬요. 서버 IP가 숨겨지고 DDoS 공격을 Cloudflare가 막아 줘요.
+
+1. Cloudflare DNS에 A 레코드를 만들어요. 이름 `arcade-api`, 값 `VM_IP`, 프록시 **켜기**(주황 구름).
+2. **SSL/TLS → Overview**에서 암호화 모드를 **Full (strict)**로 바꿔요. Flexible로 두면 요청이 무한히 리다이렉트돼요.
+3. **SSL/TLS → Origin Server → Create Certificate**를 기본값으로 만들고, Origin Certificate와 Private Key를 파일로 저장해 `CF_ORIGIN_CERT`, `CF_ORIGIN_KEY` secret으로 등록해요. 개인 키는 이 화면에서 한 번만 보여요.
+   ```bash
+   # 화면의 값을 복사한 뒤 붙여 넣기 (macOS)
+   pbpaste > ~/안전한/경로/origin.pem   # Origin Certificate
+   pbpaste > ~/안전한/경로/origin.key   # Private Key
+   chmod 600 ~/안전한/경로/origin.*
+   gh secret set CF_ORIGIN_CERT < ~/안전한/경로/origin.pem
+   gh secret set CF_ORIGIN_KEY  < ~/안전한/경로/origin.key
+   ```
+4. Cloud Shell에서 VM의 80·443을 Cloudflare IP 대역에서만 받게 좁혀요. Cloudflare를 건너뛴 직접 접속이 막혀요.
+   ```bash
+   gcloud compute firewall-rules update arcade-allow-web \
+     --source-ranges="$(curl -fsSL https://www.cloudflare.com/ips-v4 | paste -sd, -)"
+   ```
+   Cloudflare가 대역을 바꾸면(드물어요) 같은 명령을 다시 실행해요.
+
+프록시 없이(DNS only) 쓰려면 1번에서 프록시를 끄고 2~4번을 건너뛰어요. 그러면 Caddy가 Let's Encrypt 인증서를 직접 받아요.
 
 ### 4. secret 등록하고 배포
 

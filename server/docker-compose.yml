@@ -49,11 +49,14 @@ services:
       - server
     environment:
       DOMAIN: ${DOMAIN:?서버 도메인(DOMAIN)을 지정하세요}
+      # tls-auto(Let's Encrypt 자동) 또는 tls-origin(Cloudflare Origin 인증서) — Caddyfile 참고
+      CADDY_TLS: ${CADDY_TLS:-tls-auto}
     ports:
       - "80:80"
       - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs:/etc/caddy/certs:ro
       - caddy-data:/data
       - caddy-config:/config
     restart: unless-stopped

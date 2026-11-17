@@ -75,12 +75,17 @@ jobs:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           TOSS_MTLS_CERT: ${{ secrets.TOSS_MTLS_CERT }}
           TOSS_MTLS_KEY: ${{ secrets.TOSS_MTLS_KEY }}
+          CF_ORIGIN_CERT: ${{ secrets.CF_ORIGIN_CERT }}
+          CF_ORIGIN_KEY: ${{ secrets.CF_ORIGIN_KEY }}
         run: |
           missing=""
           for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS SERVER_DOMAIN POSTGRES_PASSWORD TOSS_MTLS_CERT TOSS_MTLS_KEY; do
             if [ -z "${!name}" ]; then missing="$missing $name"; fi
           done
           if [ -n "$missing" ]; then echo "::error::다음 secret이 없어요:$missing"; exit 1; fi
+          if { [ -n "$CF_ORIGIN_CERT" ] && [ -z "$CF_ORIGIN_KEY" ]; } || { [ -z "$CF_ORIGIN_CERT" ] && [ -n "$CF_ORIGIN_KEY" ]; }; then
+            echo "::error::CF_ORIGIN_CERT와 CF_ORIGIN_KEY는 둘 다 넣거나 둘 다 비워 주세요"; exit 1
+          fi
           if [ -n "$GCP_WORKLOAD_IDENTITY_PROVIDER" ] && { [ -z "$GCP_PROJECT_ID" ] || [ -z "$GCP_SERVICE_ACCOUNT" ]; }; then
             echo "::error::GCP로 배포하려면 GCP_PROJECT_ID와 GCP_SERVICE_ACCOUNT secret도 필요해요"; exit 1
           fi
@@ -88,9 +93,9 @@ jobs:
           case "$POSTGRES_PASSWORD" in
             *[!A-Za-z0-9_-]*) echo "::error::POSTGRES_PASSWORD는 영문·숫자·-·_만 써 주세요 (예: openssl rand -hex 32)"; exit 1 ;;
           esac
-          # 도메인 이름만 받는다 (https:// 나 경로 없이, 예: arcade-box.duckdns.org)
+          # 도메인 이름만 받는다 (https:// 나 경로 없이, 예: arcade-api.geonbox.com)
           case "$SERVER_DOMAIN" in
-            *[!A-Za-z0-9.-]*|"") echo "::error::SERVER_DOMAIN에는 도메인 이름만 넣어 주세요 (예: arcade-box.duckdns.org)"; exit 1 ;;
+            *[!A-Za-z0-9.-]*|"") echo "::error::SERVER_DOMAIN에는 도메인 이름만 넣어 주세요 (예: arcade-api.geonbox.com)"; exit 1 ;;
           esac
 
       - name: GCP 인증 (Workload Identity)
@@ -134,6 +139,8 @@ jobs:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           TOSS_MTLS_CERT: ${{ secrets.TOSS_MTLS_CERT }}
           TOSS_MTLS_KEY: ${{ secrets.TOSS_MTLS_KEY }}
+          CF_ORIGIN_CERT: ${{ secrets.CF_ORIGIN_CERT }}
+          CF_ORIGIN_KEY: ${{ secrets.CF_ORIGIN_KEY }}
           SERVER_IMAGE: ${{ needs.image.outputs.image }}
           GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -142,13 +149,22 @@ jobs:
           remote() { ssh deploy-target "$@"; }
 
           # 비밀값은 표준 입력으로만 넘긴다 — 명령줄·로그에 남기지 않는다
-          remote 'umask 077 && mkdir -p ~/arcade-box/mtls'
+          remote 'umask 077 && mkdir -p ~/arcade-box/mtls ~/arcade-box/certs'
           remote 'cat > ~/arcade-box/docker-compose.yml' < server/docker-compose.yml
           remote 'cat > ~/arcade-box/Caddyfile' < server/Caddyfile
           printf '%s\n' "$TOSS_MTLS_CERT" | remote 'umask 077 && cat > ~/arcade-box/mtls/client.crt'
           printf '%s\n' "$TOSS_MTLS_KEY" | remote 'umask 077 && cat > ~/arcade-box/mtls/client.key'
+          # Cloudflare 프록시 뒤라면 Origin 인증서를 쓰고, 아니면 Let's Encrypt 자동 발급
+          if [ -n "$CF_ORIGIN_CERT" ]; then
+            printf '%s\n' "$CF_ORIGIN_CERT" | remote 'umask 077 && cat > ~/arcade-box/certs/origin.pem'
+            printf '%s\n' "$CF_ORIGIN_KEY" | remote 'umask 077 && cat > ~/arcade-box/certs/origin.key'
+            CADDY_TLS=tls-origin
+          else
+            CADDY_TLS=tls-auto
+          fi
           {
             echo "DOMAIN=$SERVER_DOMAIN"
+            echo "CADDY_TLS=$CADDY_TLS"
             echo "POSTGRES_PASSWORD=$POSTGRES_PASSWORD"
             echo "MTLS_DIR=./mtls"
             echo "MTLS_CERT_FILE=client.crt"

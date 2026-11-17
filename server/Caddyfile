@@ -1,6 +1,17 @@
-# 서버 앞단 HTTPS. DOMAIN(.env)으로 Let's Encrypt 인증서를 자동으로 받고 갱신한다.
+# 서버 앞단 HTTPS. .env의 CADDY_TLS로 인증서 방식을 고른다.
+#   tls-auto   (기본) DOMAIN으로 Let's Encrypt 인증서를 자동 발급·갱신한다
+#   tls-origin Cloudflare 프록시 뒤. Cloudflare Origin 인증서(certs/origin.pem, certs/origin.key)를 쓴다
+#              Cloudflare SSL/TLS 모드는 Full (strict)로 둔다
 # DOMAIN=localhost로 띄우면 Caddy 내부 인증서를 쓴다(로컬 확인용).
+(tls-auto) {
+}
+
+(tls-origin) {
+	tls /etc/caddy/certs/origin.pem /etc/caddy/certs/origin.key
+}
+
 {$DOMAIN} {
+	import {$CADDY_TLS:tls-auto}
 	encode gzip
 	reverse_proxy server:8080
 }
