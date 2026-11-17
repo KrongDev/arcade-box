@@ -54,6 +54,58 @@ export default function Home({
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     el.scrollTo({ left: target.offsetLeft - first.offsetLeft, behavior: reduce ? 'auto' : 'smooth' });
   }, []);
+
+  // 마우스로 잡아끌어 넘기기 (손가락은 브라우저 기본 스크롤로 넘어간다)
+  const activeRef = useRef(0);
+  useEffect(() => {
+    activeRef.current = active;
+  }, [active]);
+  const suppressClick = useRef(false);
+  useEffect(() => {
+    const el = trackRef.current;
+    if (!el) return;
+    let drag: { x: number; left: number; from: number; moved: boolean } | null = null;
+    const onDown = (e: PointerEvent) => {
+      if (e.pointerType !== 'mouse' || e.button !== 0) return;
+      drag = { x: e.clientX, left: el.scrollLeft, from: activeRef.current, moved: false };
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+      window.addEventListener('pointercancel', onUp);
+    };
+    const onMove = (e: PointerEvent) => {
+      if (!drag) return;
+      const dx = e.clientX - drag.x;
+      if (!drag.moved && Math.abs(dx) > 6) {
+        drag.moved = true;
+        el.classList.add('is-dragging');
+      }
+      if (drag.moved) el.scrollLeft = drag.left - dx;
+    };
+    const onUp = (e: PointerEvent) => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+      if (!drag) return;
+      const d = drag;
+      drag = null;
+      if (!d.moved) return;
+      el.classList.remove('is-dragging');
+      suppressClick.current = true;
+      window.setTimeout(() => {
+        suppressClick.current = false;
+      }, 0);
+      const dx = e.clientX - d.x;
+      const next = dx < -40 ? d.from + 1 : dx > 40 ? d.from - 1 : d.from;
+      goTo(Math.max(0, Math.min(GAMES.length - 1, next)));
+    };
+    el.addEventListener('pointerdown', onDown);
+    return () => {
+      el.removeEventListener('pointerdown', onDown);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+  }, [goTo]);
   const claimTargets = unlockedGames.filter((g) => g.playable);
 
   const claim = (id: GameId) => {
@@ -139,7 +191,18 @@ export default function Home({
           </div>
         )}
       </div>
-      <ul className="game-carousel" ref={trackRef} aria-label="게임 목록, 옆으로 넘겨요">
+      <ul
+        className="game-carousel"
+        ref={trackRef}
+        aria-label="게임 목록, 옆으로 넘겨요"
+        onClickCapture={(e) => {
+          // 끌어서 넘긴 직후의 클릭은 게임을 열지 않는다
+          if (suppressClick.current) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        }}
+      >
         {GAMES.map((g, i) => (
           <li key={g.id} aria-label={`${GAMES.length}개 중 ${i + 1}번째`}>
             <GameCard game={g} save={save} onPlay={onPlay} />

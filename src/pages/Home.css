@@ -164,6 +164,24 @@
   display: none;
 }
 
+/* 마우스로 끄는 동안에는 스냅을 끄고 손에 붙어 움직인다 */
+.game-carousel.is-dragging {
+  scroll-snap-type: none;
+  cursor: grabbing;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.game-carousel.is-dragging .game-card {
+  pointer-events: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .game-carousel {
+    cursor: grab;
+  }
+}
+
 .game-carousel > li {
   display: flex;
   flex: 0 0 calc(100% - 44px);
