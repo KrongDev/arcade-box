@@ -1,0 +1,306 @@
+.shop {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  /* biome-ignore lint/suspicious/noDuplicateProperties: dvh 미지원 브라우저용 vh 폴백 */
+  min-height: 100dvh;
+  background: var(--color-bg);
+}
+
+.shop-header {
+  margin-bottom: var(--space-5);
+}
+
+.shop-title {
+  margin: 0;
+  font-size: var(--font-size-display);
+  font-weight: var(--font-weight-display);
+  color: var(--color-text-strong);
+}
+
+.shop-subtitle {
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-body-small);
+  color: var(--color-text-subtle);
+}
+
+/* 게임 선택 */
+.shop-segment {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.shop-segment-button {
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: 1px solid #e5e8eb;
+  border-radius: 999px;
+  background: var(--color-bg);
+  color: var(--color-text-subtle);
+  font: inherit;
+  font-size: var(--font-size-body-small);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.shop-segment-button.is-active {
+  border-color: var(--brand-primary);
+  background: var(--brand-primary);
+  color: var(--color-text-inverse);
+}
+
+/* 보유 코인 */
+.shop-balance {
+  margin-bottom: var(--space-2);
+  padding: var(--space-4);
+  border-radius: 16px;
+  background: var(--color-bg-canvas);
+}
+
+.shop-balance-amount {
+  margin: 0;
+  font-size: var(--font-size-title);
+  font-weight: var(--font-weight-title);
+  color: var(--color-text-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.shop-balance-desc {
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-caption);
+  color: var(--color-text-subtle);
+}
+
+/* 광고 보고 코인 받기 */
+.shop-ad {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid #e5e8eb;
+  border-radius: 16px;
+}
+
+.shop-ad-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.shop-ad-title {
+  margin: 0;
+  font-size: var(--font-size-body-small);
+  font-weight: 600;
+  color: var(--color-text-strong);
+}
+
+.shop-ad-desc {
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-caption);
+  color: var(--color-text-subtle);
+}
+
+.shop-ad-button {
+  flex-shrink: 0;
+  min-width: 88px;
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: 12px;
+  background: var(--brand-primary);
+  color: var(--color-text-inverse);
+  font: inherit;
+  font-size: var(--font-size-body-small);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.shop-ad-button:disabled {
+  background: var(--color-bg-canvas);
+  color: var(--color-text-disabled);
+  cursor: default;
+}
+
+/* 코인 / 유료 탭 */
+.shop-tabs {
+  display: grid;
+  margin-top: var(--space-4);
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-1);
+  margin-bottom: var(--space-4);
+  padding: var(--space-1);
+  border-radius: 14px;
+  background: var(--color-bg-canvas);
+}
+
+.shop-tab {
+  min-height: 44px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--color-text-subtle);
+  font: inherit;
+  font-size: var(--font-size-body-small);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.shop-tab.is-active {
+  background: var(--color-bg);
+  color: var(--color-text-strong);
+  box-shadow: 0 1px 3px rgba(25, 31, 40, 0.12);
+}
+
+.shop-notice {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: 12px;
+  background: #fff8e6;
+  color: #7a4f00;
+  font-size: var(--font-size-body-small);
+  line-height: 1.5;
+}
+
+/* 아이템 목록 */
+.shop-section {
+  margin-bottom: var(--space-5);
+}
+
+.shop-section-title {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-body);
+  font-weight: 700;
+  color: var(--color-text-strong);
+}
+
+.shop-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.shop-item {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-3);
+  border: 1px solid #e5e8eb;
+  border-radius: 16px;
+}
+
+.item-preview {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 5;
+  border-radius: 10px;
+}
+
+.shop-item-name {
+  margin: var(--space-3) 0 var(--space-2);
+  font-size: var(--font-size-body-small);
+  font-weight: 600;
+  color: var(--color-text-strong);
+}
+
+.shop-item-price {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-body-small);
+  color: var(--color-text-subtle);
+}
+
+.shop-item-button {
+  min-height: 44px;
+  margin-top: auto;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: 12px;
+  background: var(--brand-primary);
+  color: var(--color-text-inverse);
+  font: inherit;
+  font-size: var(--font-size-body-small);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.shop-item-button.is-secondary {
+  background: var(--color-bg-canvas);
+  color: var(--color-text-strong);
+}
+
+.shop-item-button:disabled {
+  background: var(--color-bg-canvas);
+  color: var(--color-text-disabled);
+  cursor: default;
+}
+
+.shop-item-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  margin: auto 0 0;
+  border: 1px solid #e5e8eb;
+  border-radius: 12px;
+  color: var(--color-success);
+  font-size: var(--font-size-body-small);
+  font-weight: 600;
+}
+
+.shop-item-lack {
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-caption);
+  color: var(--color-text-subtle);
+  text-align: center;
+}
+
+.shop-footnote {
+  margin: 0;
+  font-size: var(--font-size-caption);
+  color: var(--color-text-subtle);
+}
+
+.shop-home-button {
+  min-height: 52px;
+  margin-top: var(--space-5);
+  border: 0;
+  border-radius: 14px;
+  background: var(--color-bg-canvas);
+  color: var(--color-text-strong);
+  font: inherit;
+  font-size: var(--font-size-body);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.shop-toast {
+  position: fixed;
+  left: 50%;
+  z-index: 5;
+  width: max-content;
+  max-width: calc(100% - 48px);
+  transform: translateX(-50%);
+  padding: var(--space-3) var(--space-4);
+  border-radius: 16px;
+  text-align: center;
+  background: var(--color-text-strong);
+  color: var(--color-text-inverse);
+  font-size: var(--font-size-body-small);
+  font-weight: 600;
+  pointer-events: none;
+}
+
+/* 상점은 고정 화면이 아니라서 오버레이를 화면에 고정한다 */
+.shop-overlay {
+  position: fixed;
+  z-index: 10;
+}
+
+.shop-confirm-preview {
+  width: 96px;
+  margin: 0 auto var(--space-4);
+}

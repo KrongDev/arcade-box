@@ -1,0 +1,66 @@
+# 미니앱 번들을 secret 값으로 빌드해 앱인토스 콘솔에 올린다. Actions 탭에서 직접 실행한다.
+# 필요한 secret: AIT_API_KEY, VITE_API_BASE, (선택) VITE_REWARDED_AD_GROUP_ID — README '비밀값 관리'
+name: 미니앱 배포
+
+on:
+  workflow_dispatch:
+    inputs:
+      memo:
+        description: 배포 메모 (콘솔에 함께 남아요, 1000자 이내)
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-miniapp
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: 빌드·업로드
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+
+      - name: secret 확인
+        env:
+          AIT_API_KEY: ${{ secrets.AIT_API_KEY }}
+          VITE_API_BASE: ${{ secrets.VITE_API_BASE }}
+          VITE_REWARDED_AD_GROUP_ID: ${{ secrets.VITE_REWARDED_AD_GROUP_ID }}
+        run: |
+          if [ -z "$AIT_API_KEY" ]; then echo "::error::AIT_API_KEY secret이 없어요"; exit 1; fi
+          case "$VITE_API_BASE" in
+            https://*) ;;
+            *) echo "::error::VITE_API_BASE secret은 https 주소여야 해요"; exit 1 ;;
+          esac
+          if [ -z "$VITE_REWARDED_AD_GROUP_ID" ]; then
+            echo "::warning::VITE_REWARDED_AD_GROUP_ID가 없어 테스트 광고 ID로 빌드해요. 출시 전에 실제 광고 그룹 ID를 넣어 주세요"
+          fi
+
+      # 디버그 빌드 플래그(AIT_DEBUG_BUILD)는 넣지 않는다 — 검수·출시용 릴리즈 빌드
+      - name: 빌드
+        env:
+          VITE_API_BASE: ${{ secrets.VITE_API_BASE }}
+          VITE_REWARDED_AD_GROUP_ID: ${{ secrets.VITE_REWARDED_AD_GROUP_ID }}
+        run: npm run build
+
+      # npx 대신 설치된 bin을 직접 부른다 — 레지스트리의 다른 'ait' 패키지를 받아 실행하지 않도록
+      - name: 콘솔에 업로드
+        env:
+          AIT_API_KEY: ${{ secrets.AIT_API_KEY }}
+          MEMO: ${{ inputs.memo }}
+        run: |
+          if [ -n "$MEMO" ]; then
+            ./node_modules/.bin/ait deploy --api-key "$AIT_API_KEY" -m "$MEMO"
+          else
+            ./node_modules/.bin/ait deploy --api-key "$AIT_API_KEY"
+          fi

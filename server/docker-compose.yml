@@ -1,0 +1,45 @@
+# 운영과 같은 구성: 서버 + PostgreSQL.
+# 실제 파트너 API(mTLS)를 쓰므로 인증서가 든 디렉터리를 MTLS_DIR로 마운트한다.
+#   직접 띄우기: MTLS_DIR=/안전한/경로 POSTGRES_PASSWORD=... docker compose up -d --build
+#   GitHub Actions '서버 배포' 워크플로는 이 파일을 서버로 복사하고, .env와 인증서를 secret으로 채워 SERVER_IMAGE를 받아 띄운다.
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: pinball
+      POSTGRES_USER: pinball
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD를 지정하세요}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pinball -d pinball"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  server:
+    # 직접 띄울 때는 이 폴더에서 빌드하고, 배포 워크플로는 GHCR에 올린 이미지(SERVER_IMAGE)를 받아 쓴다
+    image: ${SERVER_IMAGE:-arcade-box-server}
+    build: .
+    # 인증서 파일 주인과 같은 사용자로 돌려, 개인 키를 600 권한 그대로 읽게 한다
+    user: "${APP_UID:-1000}:${APP_GID:-1000}"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "8080"
+      DATABASE_URL: postgres://pinball:${POSTGRES_PASSWORD}@db:5432/pinball
+      TOSS_API_BASE: https://apps-in-toss-api.toss.im
+      TOSS_MTLS_CERT_PATH: /run/secrets/mtls/${MTLS_CERT_FILE:?인증서 파일 이름(MTLS_CERT_FILE)을 지정하세요}
+      TOSS_MTLS_KEY_PATH: /run/secrets/mtls/${MTLS_KEY_FILE:?개인 키 파일 이름(MTLS_KEY_FILE)을 지정하세요}
+    volumes:
+      # 인증서·키는 저장소 밖 디렉터리에서 읽기 전용으로 마운트한다
+      - ${MTLS_DIR:?인증서 디렉터리(MTLS_DIR)를 지정하세요}:/run/secrets/mtls:ro
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+volumes:
+  pgdata:

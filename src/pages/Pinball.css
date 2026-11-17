@@ -1,0 +1,150 @@
+.pinball {
+  --pb-bg: #12142a;
+  --pb-surface: rgba(255, 255, 255, 0.1);
+  --pb-text: #f2f4f6;
+  --pb-muted: #b9bdd6;
+  --pb-coin: #ffc53d;
+
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  max-width: 480px;
+  margin: 0 auto;
+  background: var(--pb-bg);
+  color: var(--pb-text);
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* 상단 HUD */
+.pinball-hud {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 var(--space-4) var(--space-3);
+}
+
+.hud-pause {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: var(--pb-surface);
+  color: var(--pb-text);
+  cursor: pointer;
+}
+
+.hud-score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+}
+
+.hud-label {
+  font-size: var(--font-size-caption);
+  color: var(--pb-muted);
+}
+
+.hud-score-value {
+  font-size: var(--font-size-display);
+  font-weight: var(--font-weight-display);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.hud-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-1);
+}
+
+.hud-balls {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.hud-ball {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--pb-muted);
+}
+
+.hud-ball.is-on {
+  background: var(--pb-text);
+  border-color: var(--pb-text);
+}
+
+.hud-coins {
+  font-size: var(--font-size-body-small);
+  font-weight: 600;
+  color: var(--pb-coin);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 테이블 */
+.pinball-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--space-2);
+  touch-action: none;
+}
+
+.pinball-canvas {
+  display: block;
+  border-radius: 16px;
+}
+
+.pinball-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 22%;
+  transform: translateX(-50%);
+  width: min(300px, calc(100% - 48px));
+  padding: var(--space-3) var(--space-4);
+  border-radius: 14px;
+  background: rgba(18, 20, 42, 0.88);
+  text-align: center;
+  pointer-events: none;
+}
+
+.pinball-hint-title {
+  margin: 0;
+  font-size: var(--font-size-body);
+  font-weight: 600;
+}
+
+.pinball-hint-desc {
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-body-small);
+  color: var(--pb-muted);
+}
+
+.pinball-toast {
+  position: absolute;
+  top: var(--space-3);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: var(--space-2) var(--space-4);
+  border-radius: 999px;
+  background: var(--pb-coin);
+  color: var(--color-text-strong);
+  font-size: var(--font-size-body-small);
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+}

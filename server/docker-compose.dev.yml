@@ -1,0 +1,46 @@
+# 로컬 개발 전용: 실제 인증서 없이 가짜 파트너로 로그인 흐름까지 돌린다.
+#   docker compose -f docker-compose.dev.yml up -d --build
+# 운영 compose(docker-compose.yml)와 섞지 않는다.
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: pinball
+      POSTGRES_USER: pinball
+      POSTGRES_PASSWORD: pinball-dev
+    volumes:
+      - pgdata-dev:/var/lib/postgresql/data
+    ports:
+      # 개발 비밀번호가 공개돼 있으니 이 컴퓨터(127.0.0.1)에서만 연다
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pinball -d pinball"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  mock-partner:
+    build: .
+    command: ["node", "mock-partner/server.ts"]
+    environment:
+      PORT: "9090"
+
+  server:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+      mock-partner:
+        condition: service_started
+    environment:
+      NODE_ENV: development
+      PORT: "8080"
+      DATABASE_URL: postgres://pinball:pinball-dev@db:5432/pinball
+      TOSS_API_BASE: http://mock-partner:9090
+      # 브라우저 개발 서버(vite) origin — 개발 compose에서만
+      CORS_DEV_ORIGINS: http://localhost:5173
+    ports:
+      - "127.0.0.1:8080:8080"
+
+volumes:
+  pgdata-dev:

@@ -1,0 +1,387 @@
+.home {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  /* biome-ignore lint/suspicious/noDuplicateProperties: dvh 미지원 브라우저용 vh 폴백 */
+  min-height: 100dvh;
+  background: var(--color-bg);
+}
+
+.home-header {
+  margin-bottom: var(--space-5);
+}
+
+.home-title {
+  margin: 0;
+  font-size: var(--font-size-display);
+  font-weight: var(--font-weight-display);
+  color: var(--color-text-strong);
+  line-height: 1.3;
+}
+
+.home-subtitle {
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-body-small);
+  color: var(--color-text-subtle);
+}
+
+/* 게임별 코인 */
+.wallet {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.wallet-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 40px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: 999px;
+  background: var(--color-bg-canvas);
+  font-size: var(--font-size-body-small);
+}
+
+.wallet-name {
+  color: var(--color-text-subtle);
+}
+
+.wallet-amount {
+  font-weight: 600;
+  color: var(--color-text-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 출석 보상 */
+.attendance {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid #e5e8eb;
+  border-radius: 16px;
+}
+
+.attendance-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.attendance-title {
+  margin: 0;
+  font-size: var(--font-size-body);
+  font-weight: 600;
+  color: var(--color-text-strong);
+}
+
+.attendance-desc {
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-body-small);
+  color: var(--color-text-subtle);
+}
+
+.attendance-button {
+  flex-shrink: 0;
+  min-width: 72px;
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: 12px;
+  background: var(--brand-primary);
+  color: var(--color-text-inverse);
+  font: inherit;
+  font-size: var(--font-size-body-small);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.attendance-button:disabled {
+  background: var(--color-bg-canvas);
+  color: var(--color-text-disabled);
+  cursor: default;
+}
+
+/* 상점 입구 */
+.shop-entry {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+  min-height: 72px;
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid #e5e8eb;
+  border-radius: 16px;
+  background: var(--color-bg);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.shop-entry-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--color-bg-canvas);
+  font-size: 24px;
+}
+
+.shop-entry-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.shop-entry-title {
+  font-size: var(--font-size-body);
+  font-weight: 600;
+  color: var(--color-text-strong);
+}
+
+.shop-entry-desc {
+  font-size: var(--font-size-body-small);
+  color: var(--color-text-subtle);
+}
+
+/* 게임 목록 */
+.section-title {
+  margin: var(--space-5) 0 var(--space-3);
+  font-size: var(--font-size-body);
+  font-weight: 700;
+  color: var(--color-text-strong);
+}
+
+.game-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.game-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+  min-height: 88px;
+  padding: var(--space-4);
+  border: 0;
+  border-radius: 16px;
+  background: var(--color-bg-canvas);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+button.game-card {
+  cursor: pointer;
+}
+
+button.game-card:active {
+  transform: scale(0.98);
+  transition: transform 0.1s ease;
+}
+
+.game-tile {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  background: var(--color-bg);
+  font-size: 30px;
+}
+
+.game-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.game-name {
+  font-size: var(--font-size-body);
+  font-weight: 600;
+  color: var(--color-text-strong);
+}
+
+.game-desc {
+  font-size: var(--font-size-body-small);
+  color: var(--color-text-subtle);
+}
+
+.game-meta {
+  margin-top: 2px;
+  font-size: var(--font-size-caption);
+  color: var(--color-text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.game-chevron {
+  display: flex;
+  flex-shrink: 0;
+  color: var(--color-text-hint);
+}
+
+.game-badge {
+  flex-shrink: 0;
+  padding: var(--space-1) var(--space-2);
+  border-radius: 8px;
+  background: var(--color-bg);
+  font-size: var(--font-size-caption);
+  color: var(--color-text-subtle);
+}
+
+.game-card.is-locked .game-tile-emoji {
+  opacity: 0.35;
+}
+
+.game-lock {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  font-size: 20px;
+}
+
+.game-progress {
+  display: block;
+  height: 6px;
+  margin-top: var(--space-2);
+  border-radius: 3px;
+  background: #e5e8eb;
+  overflow: hidden;
+}
+
+.game-progress-bar {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--brand-primary);
+}
+
+.settings-entry {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 56px;
+  margin-top: var(--space-5);
+  padding: 0 var(--space-4);
+  border: 1px solid #e5e8eb;
+  border-radius: 14px;
+  background: var(--color-bg);
+  color: inherit;
+  font: inherit;
+  font-size: var(--font-size-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings-entry-label {
+  font-weight: 600;
+  color: var(--color-text-strong);
+}
+
+.settings-entry-desc {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--font-size-body-small);
+  color: var(--color-text-subtle);
+  text-align: right;
+}
+
+.home-note {
+  margin: var(--space-5) 0 0;
+  font-size: var(--font-size-caption);
+  color: var(--color-text-subtle);
+  line-height: 1.5;
+}
+
+/* 출석 코인 선택 시트 */
+.sheet-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: var(--dim);
+}
+
+.sheet {
+  width: 100%;
+  max-width: 480px;
+  padding: var(--space-5) var(--space-5) 34px;
+  border-radius: 20px 20px 0 0;
+  background: var(--color-bg);
+}
+
+.sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.sheet-title {
+  margin: 0;
+  font-size: var(--font-size-title);
+  font-weight: var(--font-weight-title);
+  color: var(--color-text-strong);
+}
+
+.sheet-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: var(--color-bg-canvas);
+  color: var(--color-text-subtle);
+  cursor: pointer;
+}
+
+.sheet-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sheet-option {
+  width: 100%;
+  min-height: 56px;
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: 14px;
+  background: var(--color-bg-canvas);
+  color: var(--color-text-strong);
+  font: inherit;
+  font-size: var(--font-size-body);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}

@@ -1,0 +1,522 @@
+/* ───── 난이도 선택 ───── */
+.ms-select {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  /* biome-ignore lint/suspicious/noDuplicateProperties: dvh 미지원 브라우저용 vh 폴백 */
+  min-height: 100dvh;
+  background: var(--color-bg);
+}
+
+.ms-select-header {
+  margin-bottom: var(--space-5);
+}
+
+.ms-select-title {
+  margin: 0;
+  font-size: var(--font-size-display);
+  font-weight: var(--font-weight-display);
+  color: var(--color-text-strong);
+}
+
+.ms-select-subtitle {
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-body-small);
+  color: var(--color-text-subtle);
+}
+
+.ms-wallet {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: var(--space-4) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: 999px;
+  background: var(--color-bg-canvas);
+  font-size: var(--font-size-body-small);
+  font-weight: 600;
+  color: var(--color-text-strong);
+}
+
+.ms-levels {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ms-level {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 88px;
+  padding: var(--space-4);
+  border: 0;
+  border-radius: 16px;
+  background: var(--color-bg-canvas);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+button.ms-level {
+  cursor: pointer;
+}
+
+button.ms-level:active {
+  transform: scale(0.98);
+  transition: transform 0.1s ease;
+}
+
+.ms-level-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.ms-level-name {
+  font-size: var(--font-size-body);
+  font-weight: 700;
+  color: var(--color-text-strong);
+}
+
+.ms-level-spec {
+  font-size: var(--font-size-body-small);
+  color: var(--color-text-subtle);
+}
+
+.ms-level-meta {
+  margin-top: 2px;
+  font-size: var(--font-size-caption);
+  color: var(--color-text-subtle);
+}
+
+.ms-level.is-locked .ms-level-name,
+.ms-level.is-locked .ms-level-spec {
+  color: var(--color-text-hint);
+}
+
+.ms-level-cta {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border-radius: 12px;
+  background: var(--brand-primary);
+  color: var(--color-text-inverse);
+  font-size: var(--font-size-body-small);
+  font-weight: 600;
+}
+
+.ms-howto {
+  margin-top: var(--space-6);
+  padding: var(--space-4);
+  border: 1px solid #e5e8eb;
+  border-radius: 16px;
+}
+
+.ms-howto-title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-body);
+  font-weight: 600;
+  color: var(--color-text-strong);
+}
+
+.ms-howto-list {
+  margin: 0;
+  padding-left: 20px;
+  font-size: var(--font-size-body-small);
+  color: var(--color-text-subtle);
+  line-height: 1.6;
+}
+
+.ms-home-button {
+  min-height: 52px;
+  margin-top: var(--space-5);
+  border: 0;
+  border-radius: 14px;
+  background: var(--color-bg-canvas);
+  color: var(--color-text-strong);
+  font: inherit;
+  font-size: var(--font-size-body);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* ───── 플레이 ───── */
+.ms-play {
+  --ms-bg: #eef1f6;
+  --ms-closed: #c7d1e2;
+  --ms-closed-edge: #b4bfd3;
+  --ms-open: #ffffff;
+  --ms-open-edge: #e3e8f0;
+  --ms-ink: #191f28;
+  --ms-ink-sub: #4e5968;
+  --ms-coin-ink: #9a6700;
+
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  max-width: 480px;
+  margin: 0 auto;
+  background: var(--ms-bg);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.ms-hud {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 var(--space-4) var(--space-3);
+}
+
+.ms-hud-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: var(--color-bg);
+  color: var(--color-text-strong);
+  cursor: pointer;
+}
+
+.ms-hud-button:disabled {
+  color: var(--color-text-disabled);
+  cursor: default;
+}
+
+.ms-hud-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.ms-hud-label {
+  font-size: var(--font-size-caption);
+  color: var(--ms-ink-sub);
+}
+
+.ms-hud-time {
+  font-size: var(--font-size-display);
+  font-weight: var(--font-weight-display);
+  color: var(--ms-ink);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.ms-hud-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-1);
+  font-size: var(--font-size-body-small);
+  font-weight: 600;
+  color: var(--ms-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.ms-hud-coins {
+  color: var(--ms-coin-ink);
+}
+
+.ms-viewport {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  touch-action: none;
+}
+
+.ms-board {
+  position: relative;
+  display: grid;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.ms-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 2px solid var(--ms-bg);
+  border-radius: 8px;
+  background: var(--ms-closed);
+  box-shadow: inset 0 -3px 0 var(--ms-closed-edge);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.ms-cell.is-open {
+  background: var(--ms-open);
+  box-shadow: inset 0 0 0 1px var(--ms-open-edge);
+}
+
+.ms-cell.is-mine,
+.ms-cell.is-flag {
+  font-size: 20px;
+}
+
+.ms-cell.is-exploded {
+  z-index: 1;
+  background: var(--color-danger);
+  box-shadow: none;
+  font-size: 22px;
+  animation: ms-explode 0.6s ease-out;
+}
+
+/* 밟은 순간 칸 위로 크게 터졌다 사라지는 폭발 */
+.ms-burst {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40px;
+  pointer-events: none;
+  animation: ms-burst 0.7s ease-out forwards;
+}
+
+@keyframes ms-burst {
+  0% {
+    transform: scale(0.4);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.6);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+/* 드러난 지뢰 — 연한 붉은 칸 */
+.ms-cell.is-mine {
+  background: #fbd9de;
+  box-shadow: inset 0 -3px 0 #f2b8c1;
+}
+
+.ms-cell.is-revealing {
+  animation: ms-reveal 0.32s cubic-bezier(0.2, 0.9, 0.3, 1.4) both;
+  animation-delay: var(--reveal-delay, 0ms);
+}
+
+.ms-cell.is-wrong .tf {
+  opacity: 0.5;
+}
+
+.ms-wrong-mark {
+  position: absolute;
+  inset: 7px;
+  fill: none;
+  stroke: var(--color-danger);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+/* 충격파 — 터진 칸에서 퍼지는 고리 (판과 함께 확대·축소된다) */
+.ms-blast {
+  position: absolute;
+  z-index: 2;
+  box-sizing: border-box;
+  border: 4px solid var(--color-danger);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: ms-blast 0.7s ease-out forwards;
+}
+
+.ms-viewport.is-shaking {
+  animation: ms-shake 0.45s linear;
+}
+
+@keyframes ms-explode {
+  0% {
+    transform: scale(0.6);
+    filter: brightness(2.2);
+  }
+  40% {
+    transform: scale(1.3);
+  }
+  100% {
+    transform: scale(1);
+    filter: none;
+  }
+}
+
+@keyframes ms-reveal {
+  0% {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes ms-blast {
+  0% {
+    transform: scale(0.5);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(5);
+    opacity: 0;
+  }
+}
+
+@keyframes ms-shake {
+  10%,
+  90% {
+    transform: translate(-2px, 1px);
+  }
+  20%,
+  80% {
+    transform: translate(4px, -2px);
+  }
+  30%,
+  50%,
+  70% {
+    transform: translate(-6px, 2px);
+  }
+  40%,
+  60% {
+    transform: translate(6px, -1px);
+  }
+}
+
+/* 움직임 줄이기 설정이면 흔들림·순차 등장·충격파를 끈다 (지뢰는 바로 다 보인다) */
+@media (prefers-reduced-motion: reduce) {
+  .ms-viewport.is-shaking,
+  .ms-cell.is-exploded,
+  .ms-cell.is-revealing {
+    animation: none;
+  }
+  .ms-blast,
+  .ms-burst {
+    display: none;
+  }
+}
+
+.ms-cell-coin {
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  font-size: 16px;
+}
+
+/* 숫자 색 — 이 게임 고유 팔레트 */
+.ms-cell.n1 { color: #3b5bdb; }
+.ms-cell.n2 { color: #2b8a3e; }
+.ms-cell.n3 { color: #e03131; }
+.ms-cell.n4 { color: #6741d9; }
+.ms-cell.n5 { color: #c2255c; }
+.ms-cell.n6 { color: #0b7285; }
+.ms-cell.n7 { color: #343a40; }
+.ms-cell.n8 { color: #5c636a; }
+
+.ms-hint {
+  position: absolute;
+  left: 50%;
+  bottom: var(--space-4);
+  transform: translateX(-50%);
+  width: min(320px, calc(100% - 32px));
+  padding: var(--space-3) var(--space-4);
+  border-radius: 14px;
+  background: var(--color-text-strong);
+  color: var(--color-text-inverse);
+  text-align: center;
+  pointer-events: none;
+}
+
+.ms-hint-title {
+  margin: 0;
+  font-size: var(--font-size-body);
+  font-weight: 600;
+}
+
+.ms-hint-desc {
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-body-small);
+  color: #d1d6db;
+}
+
+.ms-toast {
+  position: absolute;
+  top: var(--space-3);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: var(--space-2) var(--space-4);
+  border-radius: 999px;
+  background: #ffc53d;
+  color: var(--color-text-strong);
+  font-size: var(--font-size-body-small);
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.ms-toolbar {
+  padding: var(--space-3) var(--space-4) 34px;
+  background: var(--color-bg);
+}
+
+.ms-mode {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border-radius: 14px;
+  background: var(--color-bg-canvas);
+}
+
+.ms-mode-button {
+  min-height: 48px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--color-text-subtle);
+  font: inherit;
+  font-size: var(--font-size-body);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ms-mode-button.is-active {
+  background: var(--color-bg);
+  color: var(--color-text-strong);
+  box-shadow: 0 1px 3px rgba(25, 31, 40, 0.12);
+}
+
+/* 결과 창이 판을 너무 가리지 않게 — 끝난 판을 살짝 비쳐 보이게 */
+.game-overlay.is-soft {
+  background: rgba(25, 31, 40, 0.3);
+}
+
+/* 판이 끝난 뒤 아래 버튼 — 결과 보기 / 다시 하기 */
+.ms-end-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+

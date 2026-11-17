@@ -1,0 +1,46 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+*.ait
+
+# Apps in Toss design-guide failure trace
+.ait-design-guide-failed
+
+# 비밀값 — 저장소에 올리지 않고 GitHub Actions secrets로 채운다 (README '비밀값 관리')
+.env
+.env.production
+.env.*.local
+secrets/
+mtls/
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+# 디버그 빌드로 올린 배포 기록
+.ait-debug-deployments.json
+
+# 기획 문서는 저장소에 올리지 않는다
+PRD.md

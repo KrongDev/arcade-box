@@ -1,0 +1,140 @@
+import { graniteEvent } from '@apps-in-toss/web-framework';
+import { useCallback, useEffect, useState } from 'react';
+import { API_BASE, api, type LeaderboardData } from '../game/api';
+import { useSave } from '../game/save-context';
+import { NAV_BAR_OFFSET, useSafeArea } from '../game/useSafeArea';
+import './Leaderboard.css';
+
+const BOARDS = [
+  { id: 'pinball', label: '핀볼' },
+  { id: 'minesweeper.easy', label: '지뢰찾기 초급' },
+  { id: 'minesweeper.normal', label: '지뢰찾기 중급' },
+  { id: 'minesweeper.hard', label: '지뢰찾기 고급' },
+] as const;
+
+type BoardId = (typeof BOARDS)[number]['id'];
+
+type State = { kind: 'loading' } | { kind: 'ready'; data: LeaderboardData } | { kind: 'error' };
+
+const MEDALS = ['🥇', '🥈', '🥉'];
+
+function formatValue(value: number): string {
+  return `${value.toLocaleString()}점`;
+}
+
+export default function Leaderboard({ onExit }: { onExit: () => void }) {
+  const insets = useSafeArea();
+  const { save } = useSave();
+  const boards = BOARDS.filter((b) => b.id === 'pinball' || save.unlocked.includes('minesweeper'));
+  const [board, setBoard] = useState<BoardId>('pinball');
+  const [state, setState] = useState<State>({ kind: 'loading' });
+  const [reload, setReload] = useState(0);
+
+  useEffect(() => {
+    try {
+      return graniteEvent.addEventListener('backEvent', { onEvent: onExit, onError: () => undefined });
+    } catch {
+      return undefined;
+    }
+  }, [onExit]);
+
+  useEffect(() => {
+    if (!API_BASE) return;
+    let alive = true;
+    api
+      .leaderboard(board)
+      .then((data) => alive && setState({ kind: 'ready', data }))
+      .catch(() => alive && setState({ kind: 'error' }));
+    return () => {
+      alive = false;
+    };
+  }, [board, reload]);
+
+  const choose = useCallback((id: BoardId) => {
+    setState({ kind: 'loading' });
+    setBoard(id);
+  }, []);
+
+  const retry = () => {
+    setState({ kind: 'loading' });
+    setReload((n) => n + 1);
+  };
+
+  return (
+    <main className="board" style={{ paddingTop: insets.top + NAV_BAR_OFFSET, paddingBottom: insets.bottom + 24 }}>
+      <header className="board-header">
+        <h1 className="board-title">
+          <span className="tf">🏆</span> 순위표
+        </h1>
+        <p className="board-subtitle">
+          {board === 'pinball'
+            ? '순위는 익명 이름으로 보여요'
+            : '연 칸·맞힌 깃발·클리어·빠른 시간으로 매긴 점수예요. 순위는 익명 이름으로 보여요'}
+        </p>
+      </header>
+
+      <div className="board-tabs" role="tablist" aria-label="순위표 종류">
+        {boards.map((b) => (
+          <button
+            key={b.id}
+            type="button"
+            role="tab"
+            aria-selected={b.id === board}
+            className={b.id === board ? 'board-tab is-active' : 'board-tab'}
+            onClick={() => choose(b.id)}
+          >
+            {b.label}
+          </button>
+        ))}
+      </div>
+
+      {!API_BASE && <p className="board-empty">순위표는 서버에 연결된 버전에서 볼 수 있어요.</p>}
+
+      {API_BASE && state.kind === 'loading' && <p className="board-empty">불러오는 중이에요</p>}
+
+      {API_BASE && state.kind === 'error' && (
+        <div className="board-empty-box">
+          <p className="board-empty">순위표를 불러오지 못했어요. 네트워크를 확인하고 다시 시도해 주세요.</p>
+          <button type="button" className="board-secondary-button" onClick={retry}>
+            다시 불러오기
+          </button>
+        </div>
+      )}
+
+      {API_BASE && state.kind === 'ready' && (
+        <>
+          <section className="board-me" aria-label="내 순위">
+            {state.data.me ? (
+              <>
+                <p className="board-me-rank">{state.data.me.rank.toLocaleString()}위</p>
+                <p className="board-me-value">내 기록 {formatValue(state.data.me.value)}</p>
+              </>
+            ) : (
+              <p className="board-me-value">아직 기록이 없어요. 한 판 해 보면 순위에 올라가요.</p>
+            )}
+          </section>
+
+          {state.data.entries.length === 0 ? (
+            <p className="board-empty">아직 아무도 기록을 남기지 않았어요</p>
+          ) : (
+            <ol className="board-list">
+              {state.data.entries.map((e) => (
+                <li key={`${e.rank}-${e.player}`} className={e.me ? 'board-row is-me' : 'board-row'}>
+                  <span className="board-rank">
+                    {e.rank <= 3 ? <span className="tf">{MEDALS[e.rank - 1]}</span> : e.rank}
+                  </span>
+                  <span className="board-player">{e.me ? `${e.player} (나)` : e.player}</span>
+                  <span className="board-value">{formatValue(e.value)}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </>
+      )}
+
+      <button type="button" className="board-home-button" onClick={onExit}>
+        홈으로
+      </button>
+    </main>
+  );
+}

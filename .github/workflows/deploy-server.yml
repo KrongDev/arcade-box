@@ -1,0 +1,145 @@
+# 게임 서버를 배포한다. Actions 탭에서 직접 실행한다.
+#   1) server/ 이미지를 GHCR에 올린다 (비밀값은 이미지에 넣지 않는다)
+#   2) SSH로 서버에 접속해 .env·mTLS 인증서를 secret에서 바로 쓰고 docker compose로 다시 띄운다
+# 서버에는 Docker와 Docker Compose v2가 있어야 하고, DEPLOY_USER가 docker를 실행할 수 있어야 한다.
+# 필요한 secret: README '비밀값 관리'
+name: 서버 배포
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-server
+  cancel-in-progress: false
+
+jobs:
+  image:
+    name: 이미지 빌드·업로드
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.name.outputs.image }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: 이미지 이름
+        id: name
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: echo "image=ghcr.io/$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')/arcade-box-server:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: server
+          push: true
+          tags: ${{ steps.name.outputs.image }}
+
+  deploy:
+    name: 서버에 배포
+    needs: image
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      packages: read
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: secret 확인
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          TOSS_MTLS_CERT: ${{ secrets.TOSS_MTLS_CERT }}
+          TOSS_MTLS_KEY: ${{ secrets.TOSS_MTLS_KEY }}
+        run: |
+          missing=""
+          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS POSTGRES_PASSWORD TOSS_MTLS_CERT TOSS_MTLS_KEY; do
+            if [ -z "${!name}" ]; then missing="$missing $name"; fi
+          done
+          if [ -n "$missing" ]; then echo "::error::다음 secret이 없어요:$missing"; exit 1; fi
+          # DB 주소(postgres://user:비밀번호@...)에 그대로 들어가므로 특수문자를 받지 않는다
+          case "$POSTGRES_PASSWORD" in
+            *[!A-Za-z0-9_-]*) echo "::error::POSTGRES_PASSWORD는 영문·숫자·-·_만 써 주세요 (예: openssl rand -hex 32)"; exit 1 ;;
+          esac
+
+      - name: SSH 준비
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          umask 077
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          # 서버 진위를 known_hosts로 확인한다 (StrictHostKeyChecking을 끄지 않는다)
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: 설정·인증서 쓰고 다시 띄우기
+        env:
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          TOSS_MTLS_CERT: ${{ secrets.TOSS_MTLS_CERT }}
+          TOSS_MTLS_KEY: ${{ secrets.TOSS_MTLS_KEY }}
+          SERVER_IMAGE: ${{ needs.image.outputs.image }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          remote() {
+            ssh -i ~/.ssh/deploy_key -p "${DEPLOY_PORT:-22}" \
+              -o BatchMode=yes -o StrictHostKeyChecking=yes \
+              "$DEPLOY_USER@$DEPLOY_HOST" "$@"
+          }
+
+          # 비밀값은 표준 입력으로만 넘긴다 — 명령줄·로그에 남기지 않는다
+          remote 'umask 077 && mkdir -p ~/arcade-box/mtls'
+          remote 'cat > ~/arcade-box/docker-compose.yml' < server/docker-compose.yml
+          printf '%s\n' "$TOSS_MTLS_CERT" | remote 'umask 077 && cat > ~/arcade-box/mtls/client.crt'
+          printf '%s\n' "$TOSS_MTLS_KEY" | remote 'umask 077 && cat > ~/arcade-box/mtls/client.key'
+          {
+            echo "POSTGRES_PASSWORD=$POSTGRES_PASSWORD"
+            echo "MTLS_DIR=./mtls"
+            echo "MTLS_CERT_FILE=client.crt"
+            echo "MTLS_KEY_FILE=client.key"
+            echo "SERVER_IMAGE=$SERVER_IMAGE"
+          } | remote 'umask 077 && cat > ~/arcade-box/.env && printf "APP_UID=%s\nAPP_GID=%s\n" "$(id -u)" "$(id -g)" >> ~/arcade-box/.env'
+
+          # 이 작업 동안만 유효한 토큰으로 이미지를 받고 바로 로그아웃한다
+          printf '%s' "$GHCR_TOKEN" | remote "docker login ghcr.io -u '$GHCR_USER' --password-stdin"
+          remote 'cd ~/arcade-box && docker compose pull server; status=$?; docker logout ghcr.io >/dev/null; exit $status'
+          remote 'cd ~/arcade-box && docker compose up -d --no-build'
+
+      - name: 상태 확인
+        run: |
+          remote() {
+            ssh -i ~/.ssh/deploy_key -p "${DEPLOY_PORT:-22}" \
+              -o BatchMode=yes -o StrictHostKeyChecking=yes \
+              "$DEPLOY_USER@$DEPLOY_HOST" "$@"
+          }
+          for i in $(seq 1 20); do
+            if remote 'cd ~/arcade-box && docker compose exec -T server wget -qO- http://127.0.0.1:8080/healthz' >/dev/null 2>&1; then
+              echo "서버가 응답해요"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "::error::서버가 60초 안에 응답하지 않았어요"
+          remote 'cd ~/arcade-box && docker compose ps && docker compose logs --tail 50 server'
+          exit 1
+
+      - name: SSH 키 지우기
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
