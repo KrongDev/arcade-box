@@ -191,6 +191,54 @@
   display: block;
 }
 
+/* 막대 + 손잡이 — 막대 아래 끝(받침 가운데)을 축으로 기운다 */
+.machine-stick-lever {
+  position: absolute;
+  inset: 0;
+  transform-origin: 28.5px 40px;
+}
+
+.machine-stick-lever.is-right {
+  animation: stick-right 0.32s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+.machine-stick-lever.is-left {
+  animation: stick-left 0.32s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+/* 딸각: 확 넘어갔다가 잠깐 머물고, 살짝 반대로 튕겼다 제자리 */
+@keyframes stick-right {
+  0% {
+    transform: rotate(0deg);
+  }
+  20%,
+  55% {
+    transform: rotate(24deg);
+  }
+  78% {
+    transform: rotate(-5deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+@keyframes stick-left {
+  0% {
+    transform: rotate(0deg);
+  }
+  20%,
+  55% {
+    transform: rotate(-24deg);
+  }
+  78% {
+    transform: rotate(5deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
 .machine-stick-base {
   inset: 14px 6px 4px;
   border-radius: 50%;
@@ -435,5 +483,10 @@
 @media (prefers-reduced-motion: reduce) {
   .machine-start {
     transition: none;
+  }
+
+  .machine-stick-lever.is-left,
+  .machine-stick-lever.is-right {
+    animation: none;
   }
 }

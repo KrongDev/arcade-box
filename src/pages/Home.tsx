@@ -46,6 +46,14 @@ export default function Home({
   useEffect(() => {
     onGameChangeRef.current = onGameChange;
   }, [onGameChange]);
+  // 조이스틱 딸각: 게임을 넘기는 방향으로 잠깐 기울었다가 돌아온다(n이 바뀌면 동작을 처음부터 다시)
+  const [tilt, setTilt] = useState<{ dir: 'left' | 'right'; n: number } | null>(null);
+  const kick = useCallback((dir: 'left' | 'right') => {
+    setTilt((t) => ({ dir, n: (t?.n ?? 0) + 1 }));
+    haptic('tickWeak');
+  }, []);
+  /** 버튼으로 넘길 때는 누르는 순간 이미 기울였으니, 화면이 그 게임에 닿을 때 다시 기울이지 않는다 */
+  const tiltedFor = useRef<number | null>(null);
   const initialIndex = useRef(active);
   useEffect(() => {
     const el = trackRef.current;
@@ -56,13 +64,21 @@ export default function Home({
     const onScroll = () => {
       const index = Math.max(0, Math.min(GAMES.length - 1, Math.round(el.scrollLeft / Math.max(1, el.clientWidth))));
       if (index !== last) {
+        if (tiltedFor.current === index) tiltedFor.current = null;
+        else kick(index > last ? 'right' : 'left');
         last = index;
         onGameChangeRef.current(GAMES[index].id);
       }
     };
     el.addEventListener('scroll', onScroll, { passive: true });
     return () => el.removeEventListener('scroll', onScroll);
-  }, []);
+  }, [kick]);
+  const step = (dir: 'left' | 'right') => {
+    const target = active + (dir === 'right' ? 1 : -1);
+    tiltedFor.current = target;
+    kick(dir);
+    goTo(target);
+  };
   const goTo = useCallback((index: number) => {
     const el = trackRef.current;
     if (!el) return;
@@ -187,15 +203,17 @@ export default function Home({
         <div className="machine-panel">
           <span className="machine-stick" aria-hidden="true">
             <i className="machine-stick-base" />
-            <i className="machine-stick-shaft" />
-            <i className="machine-stick-ball" />
+            <span key={tilt?.n ?? 0} className={tilt ? `machine-stick-lever is-${tilt.dir}` : 'machine-stick-lever'}>
+              <i className="machine-stick-shaft" />
+              <i className="machine-stick-ball" />
+            </span>
           </span>
           {GAMES.length > 1 && (
             <span className="machine-nav">
-              <button type="button" className="ab-icon-btn" aria-label="이전 게임" disabled={active <= 0} onClick={() => goTo(active - 1)}>
+              <button type="button" className="ab-icon-btn" aria-label="이전 게임" disabled={active <= 0} onClick={() => step('left')}>
                 <ChevronLeft size={22} />
               </button>
-              <button type="button" className="ab-icon-btn" aria-label="다음 게임" disabled={active >= GAMES.length - 1} onClick={() => goTo(active + 1)}>
+              <button type="button" className="ab-icon-btn" aria-label="다음 게임" disabled={active >= GAMES.length - 1} onClick={() => step('right')}>
                 <ChevronRight size={22} />
               </button>
             </span>
