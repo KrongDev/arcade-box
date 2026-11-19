@@ -167,7 +167,11 @@ export default function Shop({
             : '준비 중';
   const adButtonDisabled = adRewardsLeft <= 0 || (ad.status !== 'ready' && ad.status !== 'failed');
 
-  const inTab = (item: ShopItem) => (tab === 'paid' ? item.price.type === 'paid' : item.price.type !== 'paid');
+  // 콘솔에 인앱 상품을 등록하기 전(상품 코드가 없음)에는 유료 탭을 숨기고 코인 아이템만 보여 준다.
+  // 살 수 없는 "판매 준비 중" 버튼을 늘어놓지 않으려는 것이다. 개발 서버는 mock 상품으로 그대로 보인다.
+  const paidReady = CATALOG.some((i) => i.game === game && i.price.type === 'paid' && skuOf(i) !== null);
+  const shownTab: Tab = paidReady ? tab : 'coin';
+  const inTab = (item: ShopItem) => (shownTab === 'paid' ? item.price.type === 'paid' : item.price.type !== 'paid');
 
   return (
     <main className="shop ab-page" style={{ paddingTop: insets.top + NAV_BAR_OFFSET, paddingBottom: insets.bottom + 24, ...currencyVars(game) }}>
@@ -229,28 +233,30 @@ export default function Shop({
         </section>
       )}
 
-      <div className="shop-tabs" role="tablist" aria-label="아이템 종류">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'coin'}
-          className={tab === 'coin' ? 'shop-tab is-active' : 'shop-tab'}
-          onClick={() => setTab('coin')}
-        >
-          코인 아이템
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'paid'}
-          className={tab === 'paid' ? 'shop-tab is-active' : 'shop-tab'}
-          onClick={() => setTab('paid')}
-        >
-          유료 아이템
-        </button>
-      </div>
+      {paidReady && (
+        <div className="shop-tabs" role="tablist" aria-label="아이템 종류">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={shownTab === 'coin'}
+            className={shownTab === 'coin' ? 'shop-tab is-active' : 'shop-tab'}
+            onClick={() => setTab('coin')}
+          >
+            코인 아이템
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={shownTab === 'paid'}
+            className={shownTab === 'paid' ? 'shop-tab is-active' : 'shop-tab'}
+            onClick={() => setTab('paid')}
+          >
+            유료 아이템
+          </button>
+        </div>
+      )}
 
-      {tab === 'paid' && (
+      {shownTab === 'paid' && (
         <p className="shop-notice">
           산 유료 아이템은 토스 구매 내역에 남아서, 기기를 바꾸거나 앱을 다시 설치해도 다시 받을 수 있어요.
         </p>

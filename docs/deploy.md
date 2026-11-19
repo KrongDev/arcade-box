@@ -20,7 +20,7 @@ npm run dev                                                             # http:/
 |---|---|
 | `AIT_API_KEY` | 앱인토스 콘솔 → 워크스페이스 → 왼쪽 메뉴 '키'에서 발급한 API 키 |
 | `VITE_API_BASE` | 운영 게임 서버 주소 (https만) |
-| `VITE_REWARDED_AD_GROUP_ID` | (선택) 콘솔에서 발급한 보상형 광고 그룹 ID. 없으면 테스트 광고 ID로 빌드해요 |
+| `VITE_REWARDED_AD_GROUP_ID` | 콘솔에서 발급한 보상형 광고 그룹 ID. `ads=real`로 배포할 때만 들어가요 |
 
 `VITE_`로 시작하는 값은 빌드된 앱 안에 그대로 들어가요. 앱을 받은 사람은 볼 수 있는 값이라 진짜 비밀은 아니지만, 저장소에 남기지 않으려고 secret으로 둬요.
 
@@ -58,8 +58,24 @@ openssl rand -hex 32 | gh secret set POSTGRES_PASSWORD
 | 워크플로 | 언제 | 하는 일 |
 |---|---|---|
 | `CI` | push·PR마다 | 미니앱 lint·타입 검사·빌드, 서버 타입 검사·테스트. secret을 쓰지 않아요 |
-| `미니앱 배포` | 직접 실행 (Actions → Run workflow, main만) | secret으로 릴리즈 빌드를 만들어 `ait deploy`로 콘솔에 올려요. 올린 뒤 테스트·검수 요청은 콘솔에서 해요 |
+| `미니앱 배포` | 직접 실행 (Actions → Run workflow, main만) | secret으로 릴리즈 빌드를 만들어 `ait deploy`로 콘솔에 올려요. 올린 뒤 테스트·검수 요청은 콘솔에서 해요. 광고는 `ads`로 골라요(아래) |
 | `서버 배포` | 직접 실행 (main만) | 서버 이미지를 GHCR에 올리고, SSH로 서버에 `.env`와 인증서를 쓴 뒤 `docker compose`로 다시 띄워요 |
+
+#### 미니앱 배포의 광고(`ads`)
+
+광고 문서에 "개발 단계에서는 반드시 테스트용 광고 ID를 사용해요. 실제 광고 ID로 테스트하면 정책 위반으로 간주해 불이익을 받을 수 있어요"라고 돼 있어요. 그래서 배포를 두 갈래로 나눴어요.
+
+| `ads` | 광고 ID | 언제 |
+|---|---|---|
+| `test` (기본) | 테스트 광고 ID(`ait-ad-test-rewarded-id`) | 폰에서 테스트할 번들 |
+| `real` | `VITE_REWARDED_AD_GROUP_ID` | 검수에 낼 번들만. 이 번들로는 광고를 테스트하지 않아요 |
+
+콘솔 버전 내역의 메모 앞에 `[테스트 광고]`·`[실제 광고]`가 붙어서 어느 번들인지 구분돼요. 검수 요청은 `[실제 광고]` 번들로 해요.
+
+```bash
+gh workflow run deploy-miniapp.yml --ref main -f ads=test -f memo="폰 테스트"
+gh workflow run deploy-miniapp.yml --ref main -f ads=real -f memo="검수용"
+```
 
 ## GCP 무료 VM에 띄우기
 
