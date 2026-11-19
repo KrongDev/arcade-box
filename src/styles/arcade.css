@@ -268,7 +268,7 @@
   color: var(--color-text-strong);
 }
 
-/* 고르기 탭 — 플라스틱 버튼, 고른 것은 파란 불이 켜진다 */
+/* 고르기 탭 — 플라스틱 버튼, 고른 것은 하늘색 불이 켜진다 */
 .ab-tabs {
   display: flex;
   flex-wrap: wrap;
@@ -299,7 +299,7 @@
   box-shadow:
     0 3px 0 var(--brand-primary-dark),
     0 0 14px 3px var(--led-glow);
-  color: var(--color-text-inverse);
+  color: var(--color-text-strong);
 }
 
 @media (prefers-reduced-motion: reduce) {

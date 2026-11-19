@@ -17,7 +17,7 @@
   box-shadow: 0 4px 0 var(--line-strong);
 }
 
-/* 묶음 이름 앞 파란 불 하나 */
+/* 묶음 이름 앞 하늘색 불 하나 */
 .settings-group-title {
   display: flex;
   align-items: center;
@@ -87,7 +87,7 @@
   color: var(--color-text-hint);
 }
 
-/* 스위치 — 꺼지면 검은 홈, 켜지면 파란 불이 들어온다 */
+/* 스위치 — 꺼지면 검은 홈, 켜지면 하늘색 불이 들어온다 */
 .settings-switch {
   position: relative;
   flex-shrink: 0;

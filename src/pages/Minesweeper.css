@@ -621,7 +621,7 @@ button.ms-level:active {
   box-shadow:
     0 3px 0 var(--brand-primary-dark),
     0 0 14px 3px var(--led-glow);
-  color: var(--color-text-inverse);
+  color: var(--color-text-strong);
 }
 
 /* 결과 창이 판을 너무 가리지 않게 — 끝난 판을 살짝 비쳐 보이게 */
@@ -765,7 +765,7 @@ button.ms-level:active {
   background: var(--brand-primary-soft);
   box-shadow:
     inset 4px 4px 0 #ffffff,
-    inset -4px -4px 0 #b7c3ff;
+    inset -4px -4px 0 #9fdcf5;
   font-size: 20px;
 }
 

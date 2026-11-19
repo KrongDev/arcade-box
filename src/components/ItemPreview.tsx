@@ -190,9 +190,9 @@ function drawTile(l: TileLook, shield: boolean): Raster {
   }
   // 지뢰 보호 발판: 오른쪽 아래에 작은 방패
   if (shield) {
-    r.rect(14, 19, 5, 4, '#3a56ff');
-    r.rect(15, 23, 3, 1, '#3a56ff');
-    r.put(16, 24, '#2338c4');
+    r.rect(14, 19, 5, 4, '#22b8f0');
+    r.rect(15, 23, 3, 1, '#22b8f0');
+    r.put(16, 24, '#0a6f99');
     r.put(15, 21, '#ffffff');
     r.put(16, 22, '#ffffff');
     r.put(17, 21, '#ffffff');

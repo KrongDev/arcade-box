@@ -29,7 +29,7 @@ body::after {
   z-index: -1;
   height: 200px;
   pointer-events: none;
-  background: radial-gradient(ellipse at 50% 100%, rgba(58, 86, 255, 0.5) 0%, rgba(58, 86, 255, 0.16) 45%, rgba(58, 86, 255, 0) 72%);
+  background: radial-gradient(ellipse at 50% 100%, rgba(34, 184, 240, 0.45) 0%, rgba(34, 184, 240, 0.15) 45%, rgba(34, 184, 240, 0) 72%);
 }
 
 * {
