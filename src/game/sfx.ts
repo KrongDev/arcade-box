@@ -29,20 +29,25 @@ export type Sfx =
 
 let enabled = true;
 let suspended = false;
+
+/** iOS는 오디오 장치를 못 잡으면 resume()을 InvalidStateError로 거절한다. 효과음 하나 못 내는 일이라 조용히 넘긴다 */
+function quiet(p: Promise<void> | undefined): void {
+  p?.catch(() => undefined);
+}
 let ctx: AudioContext | null = null;
 
 /** 광고·결제처럼 다른 화면이 소리를 내는 동안 효과음을 멈춘다 */
 export function setSfxSuspended(on: boolean): void {
   suspended = on;
   if (!ctx) return;
-  if (on) void ctx.suspend();
-  else if (enabled && !document.hidden) void ctx.resume();
+  if (on) quiet(ctx.suspend());
+  else if (enabled && !document.hidden) quiet(ctx.resume());
 }
 const lastPlayed = new Map<Sfx, number>();
 
 export function setSoundEnabled(on: boolean): void {
   enabled = on;
-  if (!on) void ctx?.suspend();
+  if (!on) quiet(ctx?.suspend());
 }
 
 function audio(): AudioContext | null {
@@ -59,8 +64,8 @@ function audio(): AudioContext | null {
 if (typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', () => {
     if (!ctx) return;
-    if (document.hidden) void ctx.suspend();
-    else if (enabled && !suspended) void ctx.resume();
+    if (document.hidden) quiet(ctx.suspend());
+    else if (enabled && !suspended) quiet(ctx.resume());
   });
 }
 
@@ -104,7 +109,7 @@ export function playSfx(name: Sfx): void {
 
   const ac = audio();
   if (!ac) return;
-  if (ac.state === 'suspended') void ac.resume();
+  if (ac.state === 'suspended') quiet(ac.resume());
   const t = ac.currentTime;
   switch (name) {
     case 'launch':
