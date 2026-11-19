@@ -3,9 +3,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { ArcadeIcon } from '../components/ArcadeIcon';
 import { ChevronRight } from '../components/icons';
 import { SUPPORT_EMAIL } from '../game/appInfo';
-import { haptic } from '../game/haptic';
+import { haptic, setHapticEnabled } from '../game/haptic';
 import { itemForSku } from '../game/iap';
 import { useSave } from '../game/save-context';
+import { playSfx, setSoundEnabled } from '../game/sfx';
 import { NAV_BAR_OFFSET, useSafeArea } from '../game/useSafeArea';
 import '../styles/arcade.css';
 import './Settings.css';
@@ -54,7 +55,14 @@ function SettingsMain({ onExit, onOpenPurchases }: { onExit: () => void; onOpenP
           label="효과음"
           description="공이 튀거나 칸을 열 때 소리를 내요"
           checked={save.settings.sound}
-          onChange={(sound) => updateSettings({ sound })}
+          onChange={(sound) => {
+            updateSettings({ sound });
+            // 저장값은 다음 렌더에 반영되니, 켤 때 바로 들려주려면 먼저 켠다
+            if (sound) {
+              setSoundEnabled(true);
+              playSfx('coin');
+            }
+          }}
         />
         <ToggleRow
           label="진동"
@@ -62,7 +70,10 @@ function SettingsMain({ onExit, onOpenPurchases }: { onExit: () => void; onOpenP
           checked={save.settings.haptic}
           onChange={(on) => {
             updateSettings({ haptic: on });
-            if (on) haptic('tap', 0);
+            if (on) {
+              setHapticEnabled(true);
+              haptic('tap', 0);
+            }
           }}
         />
       </section>
