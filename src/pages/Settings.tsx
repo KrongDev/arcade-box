@@ -9,6 +9,7 @@ import { useSave } from '../game/save-context';
 import { playSfx, setSoundEnabled } from '../game/sfx';
 import { NAV_BAR_OFFSET, useSafeArea } from '../game/useSafeArea';
 import '../styles/arcade.css';
+import { HapticCheck } from './HapticCheck';
 import './Settings.css';
 
 function useBackEvent(handler: () => void) {
@@ -81,6 +82,7 @@ function SettingsMain({ onExit, onOpenPurchases }: { onExit: () => void; onOpenP
             }
           }}
         />
+        <HapticCheck />
       </section>
 
       <section className="settings-group" aria-labelledby="settings-purchase">
