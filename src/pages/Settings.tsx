@@ -71,7 +71,7 @@ function SettingsMain({ onExit, onOpenPurchases }: { onExit: () => void; onOpenP
         />
         <ToggleRow
           label="진동"
-          description="게임 중에 짧은 진동으로 알려 줘요. 토스 앱 설정에서도 진동이 켜져 있어야 해요"
+          description="게임 중에 짧은 진동으로 알려 줘요. 토스 앱과 휴대폰 설정에서도 진동이 켜져 있어야 해요"
           checked={save.settings.haptic}
           onChange={(on) => {
             updateSettings({ haptic: on });
