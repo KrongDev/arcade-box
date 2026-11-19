@@ -3,8 +3,7 @@
   flex-direction: column;
 }
 
-.settings > .ab-plate {
-  align-self: flex-start;
+.settings > .ab-head {
   margin-bottom: var(--space-5);
 }
 

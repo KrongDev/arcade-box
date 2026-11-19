@@ -1,7 +1,7 @@
 import { IAP, graniteEvent } from '@apps-in-toss/web-framework';
 import { useCallback, useEffect, useState } from 'react';
 import { ArcadeIcon } from '../components/ArcadeIcon';
-import { ChevronRight } from '../components/icons';
+import { ChevronLeft, ChevronRight } from '../components/icons';
 import { SUPPORT_EMAIL } from '../game/appInfo';
 import { haptic, setHapticEnabled } from '../game/haptic';
 import { itemForSku } from '../game/iap';
@@ -43,9 +43,14 @@ function SettingsMain({ onExit, onOpenPurchases }: { onExit: () => void; onOpenP
 
   return (
     <main className="settings ab-page" style={{ paddingTop: insets.top + NAV_BAR_OFFSET, paddingBottom: insets.bottom + 24 }}>
-      <h1 className="ab-plate">
-        <span className="ab-stripe ab-stripe--pink">설정</span>
-      </h1>
+      <div className="ab-head">
+        <button type="button" className="ab-icon-btn" aria-label="홈으로" onClick={onExit}>
+          <ChevronLeft size={22} />
+        </button>
+        <h1 className="ab-plate">
+          <span className="ab-stripe ab-stripe--pink">설정</span>
+        </h1>
+      </div>
 
       <section className="settings-group" aria-labelledby="settings-sound">
         <h2 id="settings-sound" className="settings-group-title">
@@ -72,7 +77,7 @@ function SettingsMain({ onExit, onOpenPurchases }: { onExit: () => void; onOpenP
             updateSettings({ haptic: on });
             if (on) {
               setHapticEnabled(true);
-              haptic('tap', 0);
+              haptic('basicMedium', 0);
             }
           }}
         />
@@ -229,7 +234,14 @@ function PurchaseHistory({ onBack }: { onBack: () => void }) {
 
   return (
     <main className="settings ab-page" style={{ paddingTop: insets.top + NAV_BAR_OFFSET, paddingBottom: insets.bottom + 24 }}>
-      <h1 className="settings-title">구매 내역</h1>
+      <div className="ab-head">
+        <button type="button" className="ab-icon-btn" aria-label="설정으로" onClick={onBack}>
+          <ChevronLeft size={22} />
+        </button>
+        <h1 className="ab-plate">
+          <span className="ab-stripe ab-stripe--pink">구매 내역</span>
+        </h1>
+      </div>
 
       {state.kind === 'loading' && <p className="settings-empty">불러오는 중이에요</p>}
 
