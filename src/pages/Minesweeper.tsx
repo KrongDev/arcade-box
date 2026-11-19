@@ -1,8 +1,9 @@
 import { graniteEvent } from '@apps-in-toss/web-framework';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { ArcadeIcon } from '../components/ArcadeIcon';
+import { ArcadeIcon, GameIcon } from '../components/ArcadeIcon';
 import { Coin, Lock, Pause } from '../components/gameIcons';
-import { abilityLines } from '../game/catalog';
+import { SLOT_NAMES, abilityLines } from '../game/catalog';
+import { currencyVars } from '../game/currency';
 import { CURRENCY } from '../game/currency';
 import { mapLook, minesweeperGear, tileLook } from '../game/equipped';
 import { haptic } from '../game/haptic';
@@ -82,12 +83,17 @@ function DifficultySelect({ onExit, onStart }: { onExit: () => void; onStart: (i
           <span className="ab-stripe">지뢰찾기</span>
         </h1>
         <p className="ms-select-subtitle">숫자를 보고 지뢰를 피해 모든 칸을 열어요</p>
-        <p className="ab-chip ms-wallet">
-          <Coin game="minesweeper" /> 지뢰찾기 코인 <strong>{(save.coins.minesweeper ?? 0).toLocaleString()}</strong>
-        </p>
-        <ul className="ms-gear" aria-label="장착한 아이템">
+        <section className="ms-coin ab-card" aria-label="지뢰찾기 코인" style={currencyVars('minesweeper')}>
+          <GameIcon id="minesweeper" size={16} />
+          <span className="ms-coin-name">지뢰찾기 코인</span>
+          <span className="ab-lcd ms-coin-lcd">
+            <Coin game="minesweeper" size={16} /> {(save.coins.minesweeper ?? 0).toLocaleString()}
+          </span>
+        </section>
+        <ul className="ms-gear ab-card" aria-label="장착한 아이템">
           {gearRows.map(({ item, lines }) => (
             <li key={item.id} className="ms-gear-row">
+              <span className="ms-gear-slot">{SLOT_NAMES[item.slot]}</span>
               <span className="ms-gear-name">{item.name}</span>
               <span className="ms-gear-ability">{lines.length > 0 ? lines.join(' · ') : '능력 없음'}</span>
             </li>
@@ -125,13 +131,17 @@ function DifficultySelect({ onExit, onStart }: { onExit: () => void; onStart: (i
                 <span className="ms-level-body">
                   <span className="ms-level-name">{d.name}</span>
                   <span className="ms-level-spec">{spec}</span>
-                  <span className="ms-level-meta">
-                    {bestScore !== undefined
-                      ? `최고 ${bestScore.toLocaleString()}점${bestTime !== undefined ? ` · 최단 ${formatTime(bestTime)}` : ''}`
-                      : '아직 기록이 없어요'}
-                  </span>
+                  {bestScore !== undefined ? (
+                    <span className="ms-level-meta is-record">
+                      최고 {bestScore.toLocaleString()}점{bestTime !== undefined ? ` · ${formatTime(bestTime)}` : ''}
+                    </span>
+                  ) : (
+                    <span className="ms-level-meta">아직 기록이 없어요</span>
+                  )}
                 </span>
-                <span className="ms-level-cta">시작</span>
+                <span className="ms-level-cta" aria-hidden="true">
+                  시작
+                </span>
               </button>
             </li>
           );
@@ -139,9 +149,7 @@ function DifficultySelect({ onExit, onStart }: { onExit: () => void; onStart: (i
       </ul>
 
       <section className="ms-howto" aria-label="하는 방법">
-        <h2 className="ms-howto-title">
-          하는 방법
-        </h2>
+        <h2 className="ms-howto-title">하는 방법</h2>
         <ul className="ms-howto-list">
           <li>칸을 누르면 열리고, 길게 누르면 깃발을 꽂아요.</li>
           <li>숫자는 주변 8칸에 있는 지뢰 수예요. 첫 칸은 항상 안전해요.</li>
@@ -159,25 +167,34 @@ function DifficultySelect({ onExit, onStart }: { onExit: () => void; onStart: (i
 }
 
 /** 난이도 아이콘 — 판 크기만큼 칸이 늘어나는 작은 격자 */
+/** 난이도 그림: 작은 검은 화면 속 픽셀 판(칸 수가 난이도마다 다르다). 칸 색은 난이도 색(--level) */
 function LevelIcon({ level }: { level: DifficultyId }) {
   const n = level === 'easy' ? 3 : level === 'normal' ? 4 : 5;
-  const gap = 2;
-  const size = (40 - gap * (n - 1)) / n;
-  const mine = n * n - 2;
+  const cell = 7;
+  const span = n * (cell + 1) - 1;
+  const open = new Set([1, n + 1, n + 2]);
+  const flag = n * n - 2;
   return (
     <span className="ms-level-icon" aria-hidden="true">
-      <svg viewBox="0 0 40 40" width="40" height="40">
-        {Array.from({ length: n * n }, (_, i) => (
-          <rect
-            key={i}
-            x={(i % n) * (size + gap)}
-            y={Math.floor(i / n) * (size + gap)}
-            width={size}
-            height={size}
-            rx={Math.min(3, size / 3)}
-            fill={i === mine ? 'currentColor' : i % 3 === 0 ? '#ffffff' : 'rgba(255,255,255,0.55)'}
-          />
-        ))}
+      <svg viewBox={`-2 -2 ${span + 4} ${span + 4}`} width="44" height="44" shapeRendering="crispEdges">
+        {Array.from({ length: n * n }, (_, i) => {
+          const x = (i % n) * (cell + 1);
+          const y = Math.floor(i / n) * (cell + 1);
+          if (open.has(i)) return <rect key={i} x={x} y={y} width={cell} height={cell} fill="#e8f6f1" />;
+          return (
+            <g key={i}>
+              <rect x={x} y={y} width={cell} height={cell} fill="var(--level-dark)" />
+              <rect x={x} y={y} width={cell - 1} height={cell - 1} fill="var(--level-light)" />
+              <rect x={x + 1} y={y + 1} width={cell - 2} height={cell - 2} fill="var(--level)" />
+              {i === flag && (
+                <>
+                  <rect x={x + 2} y={y + 1} width="1" height="5" fill="#1c1d22" />
+                  <rect x={x + 3} y={y + 1} width="3" height="2" fill="#ff4d5a" />
+                </>
+              )}
+            </g>
+          );
+        })}
       </svg>
     </span>
   );

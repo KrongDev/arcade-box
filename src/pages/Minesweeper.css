@@ -15,10 +15,31 @@
   color: var(--color-text-subtle);
 }
 
-.ms-wallet {
-  margin: var(--space-4) 0 0;
+.ms-select-header .ab-plate {
+  margin-bottom: var(--space-1);
 }
 
+/* 지뢰찾기 코인 — 플라스틱 판 위 액정(민트 숫자) */
+.ms-coin {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding: 6px 6px 6px var(--space-3);
+}
+
+.ms-coin-name {
+  font-size: var(--font-size-body-small);
+  color: var(--color-text-subtle);
+}
+
+.ms-coin-lcd {
+  margin-left: auto;
+  min-width: 96px;
+  justify-content: flex-end;
+}
+
+/* 난이도 — 오락기 스테이지 고르기 판: 작은 화면 · 이름 · 동그란 시작 버튼 */
 .ms-levels {
   display: flex;
   flex-direction: column;
@@ -29,19 +50,18 @@
 }
 
 .ms-level {
-  --level: var(--brand-primary);
-  --level-dark: var(--brand-primary-dark);
-  --level-soft: var(--brand-primary-soft);
   display: flex;
   align-items: center;
   gap: var(--space-3);
   width: 100%;
   min-height: 96px;
-  padding: var(--space-4);
-  border: 2px solid var(--level-soft);
-  border-radius: 22px;
+  padding: var(--space-3) var(--space-4) var(--space-3) var(--space-3);
+  border: 0;
+  border-radius: 16px;
   background: var(--color-bg);
-  box-shadow: 0 5px 0 var(--level-soft);
+  box-shadow:
+    inset 6px 0 0 var(--level),
+    0 4px 0 var(--line-strong);
   color: inherit;
   font: inherit;
   text-align: left;
@@ -52,8 +72,10 @@ button.ms-level {
 }
 
 button.ms-level:active {
-  transform: scale(0.98);
-  transition: transform 0.1s ease;
+  transform: translateY(3px);
+  box-shadow:
+    inset 6px 0 0 var(--level),
+    0 1px 0 var(--line-strong);
 }
 
 .ms-level-body {
@@ -65,9 +87,13 @@ button.ms-level:active {
 }
 
 .ms-level-name {
-  font-size: var(--font-size-title);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-pixel);
+  font-size: 22px;
   font-weight: 700;
-  color: var(--color-text-strong);
+  color: var(--level);
 }
 
 .ms-level-spec {
@@ -78,47 +104,67 @@ button.ms-level:active {
 .ms-level-meta {
   align-self: flex-start;
   margin-top: var(--space-1);
-  padding: 2px var(--space-2);
-  border-radius: 8px;
-  background: var(--level-soft);
   font-size: var(--font-size-caption);
-  font-weight: 600;
-  color: var(--color-text-default);
-}
-
-.ms-level.is-locked .ms-level-name,
-.ms-level.is-locked .ms-level-spec {
   color: var(--color-text-hint);
 }
 
+/* 최고 기록 — 작은 액정 */
+.ms-level-meta.is-record {
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--bezel);
+  box-shadow: inset 0 2px 0 #000000;
+  font-family: var(--font-pixel);
+  font-weight: 700;
+  color: #ffe14d;
+}
+
+/* 시작 — 난이도 색 동그란 오락기 버튼 */
 .ms-level-cta {
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  min-height: 44px;
-  padding: 0 var(--space-4);
-  border-radius: 14px;
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
   background: var(--level);
-  box-shadow: 0 4px 0 var(--level-dark);
+  box-shadow:
+    0 0 0 3px var(--line-strong),
+    0 5px 0 3px #a9aebb,
+    0 0 16px 4px var(--level-glow);
   color: var(--color-text-inverse);
+  font-family: var(--font-pixel);
   font-size: var(--font-size-body-small);
   font-weight: 700;
 }
 
+/* 하는 방법 — 플라스틱 판 */
 .ms-howto {
   margin-top: var(--space-6);
   padding: var(--space-4);
-  border: 2px solid var(--line);
-  border-radius: 22px;
+  border-radius: 16px;
   background: var(--color-bg);
-  box-shadow: 0 5px 0 var(--line);
+  box-shadow: 0 4px 0 var(--line-strong);
 }
 
 .ms-howto-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   margin: 0 0 var(--space-2);
+  font-family: var(--font-pixel);
   font-size: var(--font-size-body);
   font-weight: 700;
   color: var(--color-text-strong);
+}
+
+.ms-howto-title::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  background: var(--brand-primary);
+  box-shadow: 0 0 6px 2px var(--led-glow);
 }
 
 .ms-howto-list {
@@ -594,19 +640,22 @@ button.ms-level:active {
 .ms-level.is-easy {
   --level: #0b7d5a;
   --level-dark: #075c42;
-  --level-soft: #d3f5ea;
+  --level-light: #4fb894;
+  --level-glow: rgba(11, 125, 90, 0.35);
 }
 
 .ms-level.is-normal {
   --level: #b35400;
   --level-dark: #8a3f00;
-  --level-soft: #ffe8cc;
+  --level-light: #e08a3c;
+  --level-glow: rgba(179, 84, 0, 0.35);
 }
 
 .ms-level.is-hard {
   --level: #d02a55;
   --level-dark: #a01a3e;
-  --level-soft: #ffdce5;
+  --level-light: #f06a8c;
+  --level-glow: rgba(208, 42, 85, 0.35);
 }
 
 button.ms-level {
@@ -618,37 +667,44 @@ button.ms-level:active {
   box-shadow: 0 2px 0 var(--level-soft);
 }
 
+/* 난이도 그림 — 작은 검은 화면 */
 .ms-level-icon {
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 56px;
-  height: 56px;
-  border-radius: 16px;
-  background: var(--level);
-  box-shadow: 0 3px 0 var(--level-dark);
-  color: var(--color-text-strong);
+  width: 60px;
+  height: 60px;
+  border-radius: 10px;
+  background: var(--bezel);
+  box-shadow: 0 3px 0 #b9bcc5;
 }
 
+/* 잠긴 난이도 — 불 꺼진 판 */
 .ms-level.is-locked {
-  border-color: var(--line);
+  --level: #8d909c;
+  --level-dark: #6b6e7b;
+  --level-light: #b2b5bf;
   background: var(--color-bg-canvas);
-  box-shadow: 0 5px 0 var(--line);
+  box-shadow:
+    inset 6px 0 0 var(--line-strong),
+    0 4px 0 var(--line-strong);
 }
 
-.ms-level.is-locked .ms-level-icon {
-  background: var(--line-strong);
-  box-shadow: 0 3px 0 var(--line-strong);
+.ms-level.is-locked .ms-level-name {
+  color: var(--color-text-subtle);
+}
+
+.ms-level.is-locked .ms-level-spec {
+  color: var(--color-text-hint);
 }
 
 /* 난이도 선택 — 장착한 발판·맵 */
 .ms-gear {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
   margin: var(--space-3) 0 0;
-  padding: 0;
+  padding: var(--space-1) var(--space-3);
   list-style: none;
 }
 
@@ -657,10 +713,19 @@ button.ms-level:active {
   flex-wrap: wrap;
   align-items: baseline;
   gap: var(--space-1) var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  border-radius: 14px;
-  background: var(--brand-primary-soft);
+  padding: var(--space-2) 0;
   font-size: var(--font-size-caption);
+}
+
+.ms-gear-row + .ms-gear-row {
+  border-top: 2px solid var(--color-bg-canvas);
+}
+
+.ms-gear-slot {
+  min-width: 32px;
+  font-family: var(--font-pixel);
+  font-weight: 700;
+  color: var(--color-text-hint);
 }
 
 .ms-gear-name {
@@ -669,7 +734,7 @@ button.ms-level:active {
 }
 
 .ms-gear-ability {
-  color: var(--color-text-subtle);
+  color: var(--brand-primary-dark);
 }
 
 /* 플레이 — 남은 지뢰 보호 */
