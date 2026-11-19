@@ -2,6 +2,7 @@ import { graniteEvent } from '@apps-in-toss/web-framework';
 import { useEffect, useRef, useState } from 'react';
 import { ArcadeIcon, GameIcon } from '../components/ArcadeIcon';
 import { ItemPreview } from '../components/ItemPreview';
+import { ChevronLeft } from '../components/icons';
 import { CATALOG, SLOT_NAMES, TIER_NAMES, abilityLines, effectLine, slotsOf, tierOf, type ShopItem } from '../game/catalog';
 import { isEquipped, isOwned } from '../game/equipped';
 import { haptic } from '../game/haptic';
@@ -171,9 +172,14 @@ export default function Shop({
   return (
     <main className="shop ab-page" style={{ paddingTop: insets.top + NAV_BAR_OFFSET, paddingBottom: insets.bottom + 24, ...currencyVars(game) }}>
       <header className="shop-header">
-        <h1 className="ab-plate">
-          <span className="ab-stripe">상점</span>
-        </h1>
+        <div className="ab-head">
+          <button type="button" className="ab-icon-btn" aria-label="홈으로" onClick={onExit}>
+            <ChevronLeft size={22} />
+          </button>
+          <h1 className="ab-plate">
+            <span className="ab-stripe">상점</span>
+          </h1>
+        </div>
         <p className="shop-subtitle">게임을 고르면 그 게임 코인과 아이템이 보여요</p>
       </header>
 

@@ -1,6 +1,7 @@
 import { graniteEvent } from '@apps-in-toss/web-framework';
 import { useCallback, useEffect, useState } from 'react';
 import { ArcadeIcon } from '../components/ArcadeIcon';
+import { ChevronLeft } from '../components/icons';
 import type { GameId } from '../game/registry';
 import { API_BASE, api, type LeaderboardData } from '../game/api';
 import { useSave } from '../game/save-context';
@@ -67,9 +68,14 @@ export default function Leaderboard({ game, onExit }: { game: GameId; onExit: ()
   return (
     <main className="board ab-page" style={{ paddingTop: insets.top + NAV_BAR_OFFSET, paddingBottom: insets.bottom + 24 }}>
       <header className="board-header">
-        <h1 className="ab-plate">
-          <span className="ab-stripe">순위표</span>
-        </h1>
+        <div className="ab-head">
+          <button type="button" className="ab-icon-btn" aria-label="홈으로" onClick={onExit}>
+            <ChevronLeft size={22} />
+          </button>
+          <h1 className="ab-plate">
+            <span className="ab-stripe">순위표</span>
+          </h1>
+        </div>
         <p className="board-subtitle">
           {board === 'pinball'
             ? '순위는 익명 이름으로 보여요'

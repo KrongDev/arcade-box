@@ -432,6 +432,18 @@
   line-height: 1.5;
 }
 
+/* 종료 확인 창 — 화면 가운데 */
+.exit-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5);
+  background: var(--dim);
+}
+
 /* 출석 코인 선택 시트 */
 .sheet-overlay {
   position: fixed;

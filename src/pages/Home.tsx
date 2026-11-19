@@ -1,3 +1,4 @@
+import { closeView, graniteEvent } from '@apps-in-toss/web-framework';
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { ArcadeIcon, GameIcon } from '../components/ArcadeIcon';
 import { GameArt } from '../components/GameArt';
@@ -12,6 +13,7 @@ import { useSave } from '../game/save-context';
 import { NAV_BAR_OFFSET, useSafeArea } from '../game/useSafeArea';
 import { DIFFICULTIES, stageKey } from '../minesweeper/board';
 import '../styles/arcade.css';
+import '../styles/game-dialog.css';
 import './Home.css';
 
 export default function Home({
@@ -34,6 +36,30 @@ export default function Home({
   const insets = useSafeArea();
   const [chooserOpen, setChooserOpen] = useState(false);
   const [claimedMessage, setClaimedMessage] = useState<string | null>(null);
+  const [exitOpen, setExitOpen] = useState(false);
+
+  // 홈에서 뒤로가기: 열린 창이 있으면 닫고, 없으면 종료할지 묻는다(바로 꺼지지 않게)
+  useEffect(() => {
+    try {
+      return graniteEvent.addEventListener('backEvent', {
+        onEvent: () => {
+          if (chooserOpen) setChooserOpen(false);
+          else setExitOpen((open) => !open);
+        },
+        onError: () => undefined,
+      });
+    } catch {
+      return undefined;
+    }
+  }, [chooserOpen]);
+  const exitApp = () => {
+    setExitOpen(false);
+    try {
+      void closeView().catch(() => undefined);
+    } catch {
+      // 지원하지 않는 환경
+    }
+  };
 
   const unlockedGames = GAMES.filter((g) => save.unlocked.includes(g.id));
   const active = Math.max(0, GAMES.findIndex((g) => g.id === game));
@@ -274,6 +300,31 @@ export default function Home({
           ? '코인과 기록은 서버에 저장돼서 기기를 바꿔도 이어져요.'
           : '코인과 기록은 이 기기에 먼저 저장되고, 서버에 연결되면 함께 저장돼요.'}
       </p>
+
+      {exitOpen && (
+        <div className="exit-overlay" onClick={() => setExitOpen(false)}>
+          <section
+            className="game-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="exit-title"
+            onClick={(ev) => ev.stopPropagation()}
+          >
+            <h2 id="exit-title" className="dialog-title">
+              아케이드박스를 종료할까요?
+            </h2>
+            <p className="dialog-body">모은 코인과 기록은 저장돼 있어요.</p>
+            <div className="dialog-actions">
+              <button type="button" className="btn btn-primary" onClick={() => setExitOpen(false)}>
+                계속하기
+              </button>
+              <button type="button" className="btn btn-secondary" onClick={exitApp}>
+                종료하기
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
       {chooserOpen && (
         <div className="sheet-overlay" onClick={() => setChooserOpen(false)}>
