@@ -96,7 +96,11 @@ export const SLOT_NAMES: Record<Slot, string> = { table: '판', ball: '공', til
 
 const FREE: Price = { type: 'free' };
 const coin = (amount: number): Price => ({ type: 'coin', amount });
-/** iapSku는 콘솔에 인앱결제 상품을 등록한 뒤 채운다 */
+/**
+ * krw는 사용자가 내는 판매가(부가세 포함)다. 콘솔에는 공급가(= 판매가 ÷ 1.1)를 넣고, 판매가는 콘솔이 계산한다.
+ * 화면은 콘솔에서 불러온 표시 가격을 먼저 쓰고, 못 불러오면 이 값을 보여 준다(docs/iap-products.md).
+ * iapSku는 콘솔에 인앱결제 상품을 등록한 뒤 받은 상품 코드로 채운다.
+ */
 const paid = (krw: number): Price => ({ type: 'paid', krw, iapSku: null });
 
 export const CATALOG: ShopItem[] = [
@@ -189,7 +193,7 @@ export const CATALOG: ShopItem[] = [
     game: 'pinball',
     slot: 'table',
     name: '네온 시티 판',
-    price: paid(3000),
+    price: paid(3300),
     ability: { coinSpawn: 0.2 },
     effect: { table: 'neon' },
     look: {
@@ -211,7 +215,7 @@ export const CATALOG: ShopItem[] = [
     game: 'pinball',
     slot: 'table',
     name: '은하수 판',
-    price: paid(5000),
+    price: paid(5500),
     ability: { coinSpawn: 0.3 },
     effect: { table: 'stars' },
     look: {
@@ -254,7 +258,7 @@ export const CATALOG: ShopItem[] = [
     game: 'pinball',
     slot: 'ball',
     name: '루비 공',
-    price: paid(1000),
+    price: paid(1100),
     ability: { coinValue: 0.15 },
     effect: { trail: 'sparkle' },
     look: { ballLight: '#ffd6dc', ballDark: '#c2185b' },
@@ -264,7 +268,7 @@ export const CATALOG: ShopItem[] = [
     game: 'pinball',
     slot: 'ball',
     name: '불꽃 공',
-    price: paid(2500),
+    price: paid(2200),
     ability: { coinValue: 0.2 },
     effect: { trail: 'fire', hit: 'fire' },
     look: { ballLight: '#fff3bf', ballDark: '#e8590c' },
@@ -274,7 +278,7 @@ export const CATALOG: ShopItem[] = [
     game: 'pinball',
     slot: 'ball',
     name: '번개 공',
-    price: paid(3900),
+    price: paid(4400),
     ability: { coinValue: 0.3 },
     effect: { trail: 'lightning', hit: 'boom' },
     look: { ballLight: '#e7f5ff', ballDark: '#1c7ed6' },
@@ -321,7 +325,7 @@ export const CATALOG: ShopItem[] = [
     game: 'minesweeper',
     slot: 'tile',
     name: '한밤 발판',
-    price: paid(3000),
+    price: paid(3300),
     ability: { coinValue: 0.2, shield: 1 },
     effect: { open: 'sparkle' },
     look: { closed: '#3a4157', closedEdge: '#262c3d', open: '#f6f7fb', openEdge: '#dfe3ec', pattern: 'stars' },
@@ -331,7 +335,7 @@ export const CATALOG: ShopItem[] = [
     game: 'minesweeper',
     slot: 'tile',
     name: '황금 발판',
-    price: paid(4900),
+    price: paid(5500),
     ability: { coinValue: 0.4, shield: 1 },
     effect: { open: 'gold' },
     look: { closed: '#f2c94c', closedEdge: '#d4a017', open: '#fffbea', openEdge: '#f5e6b3', pattern: 'diamond' },
@@ -369,7 +373,7 @@ export const CATALOG: ShopItem[] = [
     game: 'minesweeper',
     slot: 'map',
     name: '황금 사원 맵',
-    price: paid(3900),
+    price: paid(4400),
     ability: { extraCoins: [4, 7, 10] },
     effect: { coinGlow: true },
     look: { bg: 'linear-gradient(180deg, #fff4d1 0%, #ffe08a 100%)', ink: '#3d2a00', inkSub: '#7a5a14', motif: 'temple' },
