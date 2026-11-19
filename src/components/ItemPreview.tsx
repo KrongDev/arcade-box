@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { mixHex } from '../game/color';
 import { ArcadeIcon } from './ArcadeIcon';
 import type { ShopItem, TileLook } from '../game/catalog';
 
@@ -105,21 +106,31 @@ export function ItemPreview({ item }: { item: ShopItem }) {
         {tiles.map((open, i) => {
           const x = 9 + (i % 3) * 21;
           const y = 19 + Math.floor(i / 3) * 21;
-          return (
+          // 게임 칸과 같은 픽셀 계단 모서리: 닫힌 칸은 왼쪽 위 밝게·오른쪽 아래 어둡게
+          return open ? (
             <g key={i}>
-              <rect x={x} y={y} width="20" height="20" rx="4" fill={open ? l.open : l.closed} stroke={open ? l.openEdge : l.closedEdge} strokeWidth="1" />
-              {!open && l.pattern !== 'none' && <rect x={x} y={y} width="20" height="20" rx="4" fill={`url(#${gid})`} />}
+              <rect x={x} y={y} width="20" height="20" fill={l.openEdge} />
+              <rect x={x + 1} y={y + 1} width="18" height="18" fill={l.open} />
+            </g>
+          ) : (
+            <g key={i}>
+              <rect x={x} y={y} width="20" height="20" fill={l.closedEdge} />
+              <rect x={x} y={y} width="18" height="18" fill={mixHex(l.closed, '#ffffff', 0.45)} />
+              <rect x={x + 2} y={y + 2} width="16" height="16" fill={l.closed} />
+              {l.pattern !== 'none' && <rect x={x + 2} y={y + 2} width="16" height="16" fill={`url(#${gid})`} />}
             </g>
           );
         })}
-        <text x="40" y="33.5" textAnchor="middle" fontSize="11" fontWeight="700" fill="#3b5bdb" fontFamily="-apple-system, system-ui, sans-serif">
+        <text x="40" y="33.5" textAnchor="middle" fontSize="11" fontWeight="700" fill="#3b5bdb" fontFamily="Galmuri11, -apple-system, system-ui, sans-serif">
           1
         </text>
-        <text x="19" y="54.5" textAnchor="middle" fontSize="11" fontWeight="700" fill="#2b8a3e" fontFamily="-apple-system, system-ui, sans-serif">
+        <text x="19" y="54.5" textAnchor="middle" fontSize="11" fontWeight="700" fill="#2b8a3e" fontFamily="Galmuri11, -apple-system, system-ui, sans-serif">
           2
         </text>
         {item.ability?.shield ? (
-          <path d="M61 85 l7 3 q-1 7 -7 10 q-6 -3 -7 -10 Z" fill="#3a56ff" stroke="#ffffff" strokeWidth="1.2" />
+          <g transform="translate(54 78)">
+            <ArcadeIcon name="shield" size={16} />
+          </g>
         ) : null}
       </svg>
     );
@@ -148,7 +159,7 @@ function TilePatternDefs({ id, look }: { id: string; look: TileLook }) {
     case 'dots':
       return (
         <pattern id={id} width="6" height="6" patternUnits="userSpaceOnUse">
-          <circle cx="3" cy="3" r="1.1" fill={ink} />
+          <rect x="2" y="2" width="2" height="2" fill={ink} />
         </pattern>
       );
     case 'check':
@@ -161,8 +172,8 @@ function TilePatternDefs({ id, look }: { id: string; look: TileLook }) {
     case 'stars':
       return (
         <pattern id={id} width="10" height="10" patternUnits="userSpaceOnUse">
-          <circle cx="2.5" cy="3" r="0.9" fill="#ffe066" />
-          <circle cx="7.5" cy="7.5" r="0.6" fill="#ffffff" />
+          <rect x="2" y="2" width="2" height="2" fill="#ffe066" />
+          <rect x="7" y="7" width="1" height="1" fill="#ffffff" />
         </pattern>
       );
     case 'diamond':
@@ -174,7 +185,7 @@ function TilePatternDefs({ id, look }: { id: string; look: TileLook }) {
     case 'leaf':
       return (
         <pattern id={id} width="9" height="9" patternUnits="userSpaceOnUse">
-          <ellipse cx="4.5" cy="4.5" rx="2.6" ry="1.2" transform="rotate(-35 4.5 4.5)" fill={ink} />
+          <rect x="2" y="4" width="4" height="1.5" fill={ink} />
         </pattern>
       );
     default:
@@ -182,13 +193,3 @@ function TilePatternDefs({ id, look }: { id: string; look: TileLook }) {
   }
 }
 
-/** 두 색 섞기(#rrggbb) — 공 면 색을 게임 렌더러와 같은 비율로 만든다 */
-function mixHex(a: string, b: string, t: number): string {
-  const pa = parseInt(a.slice(1), 16);
-  const pb = parseInt(b.slice(1), 16);
-  const ch = (shift: number) =>
-    Math.round(((pa >> shift) & 0xff) + (((pb >> shift) & 0xff) - ((pa >> shift) & 0xff)) * t)
-      .toString(16)
-      .padStart(2, '0');
-  return `#${ch(16)}${ch(8)}${ch(0)}`;
-}

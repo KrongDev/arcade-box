@@ -1,5 +1,6 @@
 import type { Effect } from '../game/catalog';
 import type { Ball, PinballEvent } from './engine';
+import { P, PIXEL_FONT, type Pix } from './pixel';
 import type { TableTheme } from './render';
 
 /**
@@ -243,108 +244,93 @@ export class PinballFx {
     return { x: (Math.random() - 0.5) * this.shake, y: (Math.random() - 0.5) * this.shake };
   }
 
-  /** 판 바탕 위, 장치 아래에 그리는 것: 은하수 판의 별과 별똥별 */
-  drawBackground(ctx: CanvasRenderingContext2D): void {
+  /** 판 바탕 위, 장치 아래에 그리는 것: 은하수 판의 별과 별똥별(한 칸짜리 점) */
+  drawBackground(pix: Pix): void {
     if (this.skin.table !== 'stars') return;
     for (const st of this.stars) {
       const a = this.reduced ? 0.6 : 0.35 + 0.45 * (0.5 + 0.5 * Math.sin(this.clock * 2 + st.ph));
-      ctx.fillStyle = `rgba(255, 255, 255, ${a})`;
-      ctx.beginPath();
-      ctx.arc(st.x, st.y, st.r, 0, Math.PI * 2);
-      ctx.fill();
+      const size = st.r > 1.3 ? 2 : 1;
+      pix.cells(st.x / P, st.y / P, size, size, `rgba(255, 255, 255, ${a})`);
     }
     if (this.shooting) {
       const s = this.shooting;
-      const g = ctx.createLinearGradient(s.x - 60, s.y - 35, s.x, s.y);
-      g.addColorStop(0, 'rgba(255, 255, 255, 0)');
-      g.addColorStop(1, `rgba(255, 255, 255, ${Math.min(1, s.life * 1.5)})`);
-      ctx.strokeStyle = g;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(s.x - 60, s.y - 35);
-      ctx.lineTo(s.x, s.y);
-      ctx.stroke();
+      const life = Math.min(1, s.life * 1.5);
+      for (let i = 0; i < 14; i++) {
+        const k = i / 14;
+        pix.cells((s.x - 60 * (1 - k)) / P, (s.y - 35 * (1 - k)) / P, 1, 1, `rgba(255, 255, 255, ${life * k})`);
+      }
     }
   }
 
   /** 공 아래에 그리는 것: 꼬리 */
-  drawUnder(ctx: CanvasRenderingContext2D, theme: TableTheme, radius: number): void {
+  drawUnder(pix: Pix, theme: TableTheme, radius: number): void {
     if (this.skin.trail === 'lightning') {
       for (const trail of this.trails.values()) {
         if (trail.length < 3) continue;
-        ctx.save();
-        ctx.strokeStyle = '#a5d8ff';
-        ctx.shadowColor = '#4dabf7';
-        ctx.shadowBlur = 12;
-        ctx.lineWidth = 2.5;
-        ctx.lineJoin = 'round';
-        ctx.beginPath();
-        trail.forEach((p, i) => {
+        const zig = trail.map((p, i) => {
           const j = i === trail.length - 1 ? 0 : (Math.random() - 0.5) * 9;
-          if (i === 0) ctx.moveTo(p.x + j, p.y - j);
-          else ctx.lineTo(p.x + j, p.y - j);
+          return { x: p.x + j, y: p.y - j };
         });
-        ctx.stroke();
-        ctx.restore();
+        pix.polyline(zig.map((p) => ({ x: p.x + P, y: p.y + P })), 1, '#1c7ed6');
+        pix.polyline(zig, 1, '#a5d8ff');
       }
       return;
     }
     for (const trail of this.trails.values()) {
       for (let i = 0; i < trail.length - 1; i++) {
         const a = (i + 1) / trail.length;
-        ctx.fillStyle = withAlpha(theme.ballLight, a * 0.28);
-        ctx.beginPath();
-        ctx.arc(trail[i].x, trail[i].y, radius * (0.45 + a * 0.45), 0, Math.PI * 2);
-        ctx.fill();
+        pix.disc(trail[i].x, trail[i].y, radius * (0.45 + a * 0.45), withAlpha(theme.ballLight, a * 0.28));
       }
     }
   }
 
-  /** 맨 위에 그리는 것: 파편·팝업·화면 번쩍임·큰 글씨 */
-  drawOver(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+  /** 맨 위에 그리는 것(낮은 해상도): 파편 알갱이·고리, 화면 번쩍임 */
+  drawOver(pix: Pix): void {
+    const ctx = pix.ctx;
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     for (const p of this.particles) {
       const a = Math.max(0, p.life / p.max);
       if (p.kind === 'flame') {
         const color = a > 0.66 ? '#ffe066' : a > 0.33 ? '#ff922b' : '#f03e3e';
-        ctx.fillStyle = withAlpha(color, Math.min(1, a * 1.4));
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size * (0.4 + a * 0.6), 0, Math.PI * 2);
-        ctx.fill();
+        const size = Math.max(1, Math.round((p.size * (0.4 + a * 0.6)) / P));
+        pix.cells(p.x / P - size / 2, p.y / P - size / 2, size, size, withAlpha(color, Math.min(1, a * 1.4)));
         continue;
       }
       if (p.kind === 'ring') {
-        const r = p.size * (1 - a) + 4;
-        ctx.strokeStyle = withAlpha(p.color, a * 0.9);
-        ctx.lineWidth = 3 * a + 1;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-        ctx.stroke();
+        pix.ring(p.x, p.y, p.size * (1 - a) + 4, 1, withAlpha(p.color, a * 0.9));
+      } else if (p.kind === 'star') {
+        // 십자 모양 반짝이
+        const cx = p.x / P;
+        const cy = p.y / P;
+        const c = withAlpha(p.color, a);
+        pix.cells(cx, cy - 1, 1, 3, c);
+        pix.cells(cx - 1, cy, 3, 1, c);
       } else {
-        ctx.fillStyle = withAlpha(p.color, a);
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size * (0.5 + a * 0.5), 0, Math.PI * 2);
-        ctx.fill();
+        const size = Math.max(1, Math.round((p.size * (0.5 + a * 0.5)) / P));
+        pix.cells(p.x / P, p.y / P, size, size, withAlpha(p.color, a));
       }
     }
     ctx.restore();
 
+    if (this.flash > 0 && !this.reduced) {
+      ctx.fillStyle = withAlpha(this.flashColor, this.flash * 0.22);
+      ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    }
+  }
+
+  /** 글자(원래 해상도, 픽셀 글꼴): 점수 팝업과 큰 알림 */
+  drawText(ctx: CanvasRenderingContext2D, width: number, height: number): void {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     for (const p of this.popups) {
       const a = Math.min(1, p.life / p.max / 0.5);
-      ctx.font = `700 ${p.size}px -apple-system, system-ui, sans-serif`;
-      ctx.lineWidth = 4;
-      ctx.strokeStyle = `rgba(0, 0, 0, ${0.55 * a})`;
-      ctx.strokeText(p.text, p.x, p.y);
+      ctx.font = `700 ${p.size}px ${PIXEL_FONT}`;
+      const y = Math.round(p.y / P) * P;
+      ctx.fillStyle = `rgba(0, 0, 0, ${0.7 * a})`;
+      ctx.fillText(p.text, p.x + 2, y + 2);
       ctx.fillStyle = withAlpha(p.color, a);
-      ctx.fillText(p.text, p.x, p.y);
-    }
-
-    if (this.flash > 0 && !this.reduced) {
-      ctx.fillStyle = withAlpha(this.flashColor, this.flash * 0.22);
-      ctx.fillRect(0, 0, width, height);
+      ctx.fillText(p.text, p.x, y);
     }
 
     if (this.banner) {
@@ -352,27 +338,31 @@ export class PinballFx {
       const age = b.max - b.life;
       const appear = this.reduced ? 1 : Math.min(1, age / 0.18);
       const a = Math.min(1, b.life / 0.35);
-      const scale = this.reduced ? 1 : 0.7 + 0.3 * easeOutBack(appear);
+      // 픽셀답게 부드럽게 커지지 않고 두 단계로 튀어나온다
+      const scale = this.reduced || appear >= 1 ? 1 : appear > 0.5 ? 1.12 : 0.8;
       const cy = height * 0.4; // 아래쪽 발사 안내 문구와 겹치지 않게
+      const h = b.sub ? 90 : 66;
       ctx.save();
       ctx.translate(width / 2, cy);
       ctx.scale(scale, scale);
       ctx.globalAlpha = a;
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-      roundRect(ctx, -150, -40, 300, b.sub ? 86 : 64, 20);
-      ctx.fill();
-      ctx.font = '700 34px -apple-system, system-ui, sans-serif';
-      ctx.lineWidth = 6;
-      ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
-      ctx.strokeText(b.text, 0, -10);
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
-      ctx.fillText(b.text, 0, -7);
+      // 검은 판 + 판 색 테두리(네모난 모서리)
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.72)';
+      ctx.fillRect(-156, -42, 312, h);
+      ctx.fillStyle = b.color;
+      ctx.fillRect(-156, -42, 312, 3);
+      ctx.fillRect(-156, -42 + h - 3, 312, 3);
+      ctx.fillRect(-156, -42, 3, h);
+      ctx.fillRect(153, -42, 3, h);
+      ctx.font = `700 33px ${PIXEL_FONT}`;
+      ctx.fillStyle = '#8e1f22';
+      ctx.fillText(b.text, 3, -7);
       ctx.fillStyle = b.color;
       ctx.fillText(b.text, 0, -10);
       if (b.sub) {
-        ctx.font = '700 17px -apple-system, system-ui, sans-serif';
+        ctx.font = `700 16px ${PIXEL_FONT}`;
         ctx.fillStyle = '#ffffff';
-        ctx.fillText(b.sub, 0, 26);
+        ctx.fillText(b.sub, 0, 28);
       }
       ctx.restore();
     }
@@ -443,17 +433,6 @@ export class PinballFx {
     this.flash = 1;
     this.flashColor = color;
   }
-}
-
-function easeOutBack(t: number): number {
-  const c1 = 1.70158;
-  const c3 = c1 + 1;
-  return 1 + c3 * (t - 1) ** 3 + c1 * (t - 1) ** 2;
-}
-
-function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
-  ctx.beginPath();
-  ctx.roundRect(x, y, w, h, r);
 }
 
 /** '#rrggbb' → 'rgba(r, g, b, a)' */

@@ -1,5 +1,5 @@
 .pinball {
-  --pb-bg: #12142a;
+  --pb-bg: var(--bezel);
   --pb-surface: rgba(255, 255, 255, 0.1);
   --pb-text: #f2f4f6;
   --pb-muted: #b9bdd6;
@@ -28,6 +28,7 @@
   padding: 0 var(--space-4) var(--space-3);
 }
 
+/* 일시정지 — 흰 오락기 버튼 */
 .hud-pause {
   display: flex;
   align-items: center;
@@ -36,10 +37,13 @@
   height: 44px;
   padding: 0;
   border: 0;
-  border-radius: 14px;
-  background: var(--pb-surface);
-  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.35), 0 0 0 2px rgba(165, 148, 255, 0.35) inset;
-  color: var(--pb-text);
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow:
+    0 0 0 3px #4a4d5a,
+    0 4px 0 3px #2a2b31,
+    0 0 16px 4px var(--led-glow);
+  color: var(--color-text-strong);
   cursor: pointer;
 }
 
@@ -51,15 +55,20 @@
 }
 
 .hud-label {
+  font-family: var(--font-pixel);
   font-size: var(--font-size-caption);
   color: var(--pb-muted);
 }
 
+/* 점수 — 노란 픽셀 숫자 */
 .hud-score-value {
+  font-family: var(--font-pixel);
   font-size: var(--font-size-display);
-  font-weight: var(--font-weight-display);
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 1.2;
+  color: #ffe14d;
+  text-shadow: 3px 3px 0 #8e1f22;
 }
 
 .hud-side {
@@ -77,7 +86,6 @@
 .hud-ball {
   width: 10px;
   height: 10px;
-  border-radius: 50%;
   border: 2px solid var(--pb-muted);
 }
 
@@ -87,8 +95,9 @@
 }
 
 .hud-coins {
+  font-family: var(--font-pixel);
   font-size: var(--font-size-body-small);
-  font-weight: 600;
+  font-weight: 700;
   color: var(--pb-coin);
   font-variant-numeric: tabular-nums;
 }
@@ -107,9 +116,10 @@
 
 .pinball-canvas {
   display: block;
-  border-radius: 16px;
+  border-radius: 4px;
 }
 
+/* 발사 안내 — 네모난 검은 판에 노란 테두리 */
 .pinball-hint {
   position: absolute;
   left: 50%;
@@ -117,16 +127,18 @@
   transform: translateX(-50%);
   width: min(300px, calc(100% - 48px));
   padding: var(--space-3) var(--space-4);
-  border-radius: 14px;
-  background: rgba(18, 20, 42, 0.88);
+  border: 3px solid #ffe14d;
+  background: rgba(10, 11, 16, 0.9);
   text-align: center;
   pointer-events: none;
 }
 
 .pinball-hint-title {
   margin: 0;
+  font-family: var(--font-pixel);
   font-size: var(--font-size-body);
-  font-weight: 600;
+  font-weight: 700;
+  color: #ffe14d;
 }
 
 .pinball-hint-desc {
@@ -145,7 +157,7 @@
 
 .hud-tag {
   padding: 1px 6px;
-  border-radius: 999px;
+  font-family: var(--font-pixel);
   font-size: var(--font-size-caption);
   font-weight: 700;
   line-height: 1.4;
@@ -163,7 +175,10 @@
 
 .hud-pause:active {
   transform: translateY(2px);
-  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35), 0 0 0 2px rgba(165, 148, 255, 0.35) inset;
+  box-shadow:
+    0 0 0 3px #4a4d5a,
+    0 2px 0 3px #2a2b31,
+    0 0 8px 2px var(--led-glow);
 }
 
 .pinball-hint-gear {
