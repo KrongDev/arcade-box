@@ -48,6 +48,7 @@ npm run typecheck
 | PUT | `/v1/me/settings` | `{ sound?, haptic? }` |
 | GET | `/v1/leaderboards/:board` | `pinball`, `minesweeper.easy|normal|hard` 순위 |
 | GET | `/privacy`, `/terms` | 개인정보처리방침·이용약관 페이지 (원본 `docs/*.md` → `npm run legal`로 만든 `src/legal/*.html`) |
+| GET | `/test` | 구글 플레이 비공개 테스트 테스터 모집 페이지(그룹 가입 → 테스터 참여 → 설치). 원본 `src/pages/` |
 
 인증이 필요한 경로는 `Authorization: Bearer <token>`.
 

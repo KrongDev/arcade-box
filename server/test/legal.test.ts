@@ -66,6 +66,26 @@ describe('약관 페이지 경로', () => {
     }
   });
 
+  it('테스터 모집 페이지(/test)는 그룹 가입·테스터 참여·설치 링크와 공유 미리보기 이미지를 준다', async () => {
+    for (const path of ['/test', '/test/']) {
+      const res = await fetch(base + path);
+      assert.equal(res.status, 200);
+      const html = await res.text();
+      assert.match(html, /<title>테스터 모집 · 아케이드박스<\/title>/);
+      assert.match(html, /https:\/\/groups\.google\.com\/g\/arcadebox-testers/);
+      assert.match(html, /https:\/\/play\.google\.com\/apps\/testing\/com\.geonbox\.arcadebox/);
+      assert.match(html, /https:\/\/play\.google\.com\/store\/apps\/details\?id=com\.geonbox\.arcadebox/);
+      assert.match(html, /og:image" content="https:\/\/arcade-api\.geonbox\.com\/test\/og\.png"/);
+    }
+    for (const path of ['/test/icon.png', '/test/og.png']) {
+      const res = await fetch(base + path);
+      assert.equal(res.status, 200);
+      assert.equal(res.headers.get('content-type'), 'image/png');
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      assert.deepEqual([...bytes.slice(1, 4)], [0x50, 0x4e, 0x47]); // 'PNG'
+    }
+  });
+
   it('HEAD도 받고, 없는 경로는 그대로 404', async () => {
     const head = await fetch(base + '/privacy', { method: 'HEAD' });
     assert.equal(head.status, 200);
