@@ -1,4 +1,7 @@
 import { platform } from '../platform';
+import type { LeaderboardData, RunReport, ServerSnapshot } from './server-types.ts';
+
+export type { LeaderboardData, RunReport, ScoreGameId, ServerSnapshot } from './server-types.ts';
 
 /**
  * 게임 서버 클라이언트. 서버 주소(VITE_API_BASE)가 없으면 서버를 쓰지 않고 기기 저장만으로 동작한다.
@@ -9,29 +12,6 @@ import { platform } from '../platform';
 export const API_BASE: string | null = platform.serverAuthCode
   ? ((import.meta.env.VITE_API_BASE as string | undefined) ?? '').replace(/\/+$/, '') || null
   : null;
-
-export interface ServerSnapshot {
-  coins: Record<string, number>;
-  best: Record<string, number>;
-  bestTime: Record<string, number>;
-  bestScore?: Record<string, number>;
-  cleared: string[];
-  unlocked: string[];
-  owned: string[];
-  equipped: Record<string, string>;
-  settings: { sound: boolean; haptic: boolean };
-  attendanceClaimedToday: boolean;
-  adRewardsLeft: number;
-  imported: boolean;
-  serverDate: string;
-}
-
-export interface LeaderboardData {
-  board: string;
-  order: 'higher' | 'lower';
-  entries: { rank: number; player: string; value: number; me: boolean }[];
-  me: { rank: number; value: number } | null;
-}
 
 export class ApiError extends Error {
   status: number;
@@ -99,6 +79,11 @@ async function rawFetch(method: string, path: string, body?: unknown, withAuth =
   return data;
 }
 
+/** 이 기기에 저장한 세션 토큰을 지운다 (내 기록 지우기 뒤). 다음 요청 때 새로 로그인한다 */
+export function clearSession(): Promise<void> {
+  return saveToken(null);
+}
+
 /** 일회용 인증 코드로 로그인한다. 동시에 여러 번 불러도 한 번만 로그인한다 */
 export function login(): Promise<void> {
   if (!loginPromise) {
@@ -135,27 +120,10 @@ async function authed<T>(method: string, path: string, body?: unknown): Promise<
   }
 }
 
-/** 한 판 점수로 순위를 매기는 게임 */
-export type ScoreGameId = 'pinball' | 'breakout';
-
-export type RunReport =
-  /** 점수 게임(순위표가 하나): 게임 ID가 곧 순위표 ID다 */
-  | { board: ScoreGameId; score: number; coins: number }
-  | {
-      board: string;
-      won: boolean;
-      seconds: number;
-      /** 연 칸 수, 맞은 깃발, 틀린 깃발 — 점수는 서버가 이 값으로 계산한다 */
-      opened: number;
-      correctFlags: number;
-      wrongFlags: number;
-      /** 지뢰 보호를 쓴 횟수 — 쓰면 서버가 점수를 깎는다 */
-      shields?: number;
-      coins: number;
-    };
-
 export const api = {
   me: () => authed<ServerSnapshot>('GET', '/v1/me'),
+  /** 서버에 있는 내 기록(코인·기록·아이템·순위표·세션)을 모두 지운다 */
+  deleteMe: () => authed<{ deleted: boolean }>('DELETE', '/v1/me'),
   importSave: (save: unknown) => authed<ServerSnapshot>('POST', '/v1/me/import', { save }),
   attendance: (gameId: string) => authed<ServerSnapshot>('POST', '/v1/me/attendance', { gameId }),
   adReward: (gameId: string) => authed<ServerSnapshot>('POST', '/v1/me/ad-reward', { gameId }),

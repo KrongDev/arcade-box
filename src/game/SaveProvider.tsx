@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { platform } from '../platform';
-import { API_BASE, ApiError, api as serverApi, initApi, type RunReport, type ServerSnapshot } from './api';
+import { API_BASE, ApiError, api as serverApi, clearSession, initApi, type RunReport, type ServerSnapshot } from './api';
 import { AD_REWARDS_PER_DAY, AD_REWARD_COINS, ATTENDANCE_COINS, GAMES, type GameId } from './registry';
 import { setHapticEnabled } from './haptic';
 import { newlyUnlocked } from './progression';
-import { loadSave, persistSave, resolveUserKey, todayKey, type SaveData, type Settings } from './save';
+import { eraseLocalSave, loadSave, persistSave, resolveUserKey, todayKey, type SaveData, type Settings } from './save';
 import { setSoundEnabled } from './sfx';
 import { getItem, slotKey } from './catalog';
 import { isOwned } from './equipped';
@@ -53,6 +53,9 @@ export function SaveProvider({ children }: { children: ReactNode }) {
   const [serverStatus, setServerStatus] = useState<SyncStatus>('off');
   const latest = useRef<SaveData | null>(null);
   const syncRef = useRef<SyncEngine | null>(null);
+  const queueKeyRef = useRef<string | null>(null);
+  /** 내 기록을 지우는 중이면 기기에 다시 저장하지 않는다 (지운 데이터가 되살아나지 않게) */
+  const erasingRef = useRef(false);
   const enqueue = useCallback((op: SyncOp) => syncRef.current?.enqueue(op), []);
 
   useEffect(() => {
@@ -77,6 +80,7 @@ export function SaveProvider({ children }: { children: ReactNode }) {
       // 서버 주소가 있으면 뒤에서 로그인하고 동기화한다. 실패해도 기기 저장만으로 계속한다
       if (!API_BASE) return;
       const queueKey = `arcade-box.queue.${loaded.userKey ?? 'anon'}`;
+      queueKeyRef.current = queueKey;
       void initApi(loaded.userKey).then(() => {
         if (!alive) return;
         const engine = new SyncEngine({
@@ -88,7 +92,7 @@ export function SaveProvider({ children }: { children: ReactNode }) {
           localSave: () => latest.current,
           onSnapshot: (snap) => {
             const cur = latest.current;
-            if (!cur) return;
+            if (!cur || erasingRef.current) return;
             const next = applySnapshot(cur, snap);
             latest.current = next;
             setSave(next);
@@ -116,6 +120,7 @@ export function SaveProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const commit = useCallback((next: SaveData) => {
+    if (erasingRef.current) return;
     latest.current = next;
     setSave(next);
     persistSave(next);
@@ -296,6 +301,33 @@ export function SaveProvider({ children }: { children: ReactNode }) {
     [commit, enqueue],
   );
 
+  /**
+   * 내 기록 지우기. 서버 기록을 먼저 지우고, 성공하면 기기 저장 데이터·동기화 큐·세션을 지운다.
+   * 서버를 못 지웠으면 기기도 그대로 둔다 — 기기만 지우면 다음 연결 때 서버 기록이 다시 내려온다.
+   * 성공하면 true. 화면은 앱을 다시 불러와 처음 상태로 시작한다.
+   */
+  const eraseRecords = useCallback(async (): Promise<boolean> => {
+    const cur = latest.current;
+    if (!cur || erasingRef.current) return false;
+    erasingRef.current = true;
+    const engine = syncRef.current;
+    // 지우는 사이에 밀린 변경이 서버로 다시 올라가지 않게 동기화부터 멈춘다
+    await engine?.stop();
+    if (API_BASE) {
+      try {
+        await serverApi.deleteMe();
+      } catch {
+        erasingRef.current = false;
+        engine?.resume();
+        return false;
+      }
+    }
+    await eraseLocalSave(cur.userKey);
+    if (queueKeyRef.current) await platform.storage.removeItem(queueKeyRef.current);
+    if (API_BASE) await clearSession();
+    return true;
+  }, []);
+
   /** 한 판 결과를 서버에 보낸다 (기기 반영은 addCoins·recordScore·recordClear가 이미 했다) */
   const submitRun = useCallback((report: RunReport) => enqueue({ kind: 'run', report }), [enqueue]);
 
@@ -318,6 +350,7 @@ export function SaveProvider({ children }: { children: ReactNode }) {
             canClaimAttendance: save.lastAttendance !== todayKey(),
             claimAttendance,
             submitRun,
+            eraseRecords,
             serverStatus,
           }
         : null,
@@ -334,6 +367,7 @@ export function SaveProvider({ children }: { children: ReactNode }) {
       updateSettings,
       claimAttendance,
       submitRun,
+      eraseRecords,
       serverStatus,
     ],
   );

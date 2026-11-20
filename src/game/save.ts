@@ -57,6 +57,12 @@ function saveKeyFor(userKey: string | null): string {
   return userKey ? `${LEGACY_KEY}.${userKey}` : LEGACY_KEY;
 }
 
+/** 이 사용자의 기기 저장 데이터를 지운다 (내 기록 지우기). 식별키 전 데이터도 함께 지운다 */
+export async function eraseLocalSave(userKey: string | null): Promise<void> {
+  await removeRaw(saveKeyFor(userKey));
+  await removeRaw(LEGACY_KEY);
+}
+
 export function createDefaultSave(): SaveData {
   return {
     version: 1,

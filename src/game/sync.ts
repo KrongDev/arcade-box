@@ -1,4 +1,4 @@
-import type { RunReport, ServerSnapshot } from './api';
+import type { RunReport, ServerSnapshot } from './server-types.ts';
 
 /**
  * 서버 동기화 큐.
@@ -51,6 +51,10 @@ export class SyncEngine {
   private busy = false;
   private failures = 0;
   private retryScheduled = false;
+  /** 멈춤(내 기록 지우기 중): 보내지도, 서버 상태로 덮어쓰지도 않는다 */
+  private stopped = false;
+  /** 지금 돌고 있는 연결·전송 작업 — stop()이 이것이 끝나기를 기다린다 */
+  private running: Promise<void> = Promise.resolve();
   private deps: SyncDeps;
   status: SyncStatus = 'off';
 
@@ -79,20 +83,39 @@ export class SyncEngine {
     void this.kick();
   }
 
+  /**
+   * 동기화를 멈춘다. 보내는 중인 요청이 끝날 때까지 기다린 뒤 돌아온다.
+   * 서버 기록을 지우기 전에 불러, 지우는 사이에 옛 변경이 서버로 다시 올라가지 않게 한다.
+   */
+  async stop(): Promise<void> {
+    this.stopped = true;
+    await this.running;
+  }
+
+  /** 멈춘 동기화를 다시 시작한다 (지우기에 실패했을 때) */
+  resume(): void {
+    this.stopped = false;
+    void this.kick();
+  }
+
   get pending(): number {
     return this.queue.length;
   }
 
   /** 지금 보낼 수 있으면 보낸다 (앱이 다시 보일 때 등) */
   async kick(): Promise<void> {
-    if (this.busy) return;
+    if (this.busy || this.stopped) return;
     this.busy = true;
-    try {
-      if (!this.connected) await this.connect();
-      if (this.connected) await this.drain();
-    } finally {
-      this.busy = false;
-    }
+    const run = (async () => {
+      try {
+        if (!this.connected) await this.connect();
+        if (this.connected && !this.stopped) await this.drain();
+      } finally {
+        this.busy = false;
+      }
+    })();
+    this.running = run.catch(() => undefined);
+    await run;
   }
 
   private setStatus(status: SyncStatus) {
@@ -131,7 +154,7 @@ export class SyncEngine {
       this.connected = true;
       this.failures = 0;
       this.setStatus('online');
-      if (this.queue.length === 0) this.deps.onSnapshot(snap);
+      if (this.queue.length === 0 && !this.stopped) this.deps.onSnapshot(snap);
     } catch (err) {
       // 서버에 닿지 못했거나 로그인이 안 되면 기기 저장만으로 계속하고 나중에 다시 시도한다
       if (!this.deps.isRetryable(err)) console.warn('[sync] connect failed:', (err as Error).message);
@@ -143,7 +166,7 @@ export class SyncEngine {
   private async drain(): Promise<void> {
     let last: ServerSnapshot | null = null;
     let refresh = false;
-    while (this.queue.length > 0) {
+    while (this.queue.length > 0 && !this.stopped) {
       const op = this.queue[0];
       try {
         last = await this.send(op);
@@ -160,11 +183,12 @@ export class SyncEngine {
       this.queue.shift();
       await this.deps.saveQueue(this.queue);
     }
+    if (this.stopped) return;
     this.failures = 0;
     this.setStatus('online');
     try {
       const snap = refresh ? await this.deps.api.me() : last;
-      if (snap && this.queue.length === 0) this.deps.onSnapshot(snap);
+      if (snap && this.queue.length === 0 && !this.stopped) this.deps.onSnapshot(snap);
     } catch (err) {
       if (this.deps.isRetryable(err)) this.retryLater();
     }

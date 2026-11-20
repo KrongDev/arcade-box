@@ -45,6 +45,11 @@ export interface SaveApi {
   claimAttendance: (gameId: GameId) => void;
   /** 한 판 결과를 서버에 보낸다 (서버를 안 쓰면 아무것도 하지 않는다) */
   submitRun: (report: RunReport) => void;
+  /**
+   * 내 기록 지우기 — 서버(있으면)와 기기의 코인·기록·아이템을 모두 지운다. 성공하면 true.
+   * 유료 아이템은 토스 구매 내역으로 다시 받는다.
+   */
+  eraseRecords: () => Promise<boolean>;
   /** 서버 연결 상태. 서버 주소가 없으면 'off' */
   serverStatus: SyncStatus;
 }

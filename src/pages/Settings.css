@@ -206,3 +206,48 @@
 .settings-group .settings-row:last-child {
   border-bottom: 0;
 }
+
+/* 내 기록 지우기 */
+.settings-row.is-danger .settings-row-label {
+  color: var(--color-danger);
+}
+
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5);
+  background: var(--dim);
+}
+
+.settings-erase-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.settings-erase-body p {
+  margin: 0;
+}
+
+.settings-erase-warn {
+  font-weight: 700;
+  color: var(--color-text-default);
+}
+
+.settings-erase-error {
+  margin-top: var(--space-3);
+}
+
+.settings-erase-button {
+  color: var(--color-danger);
+}
+
+.settings-erase-button:disabled,
+.game-dialog .btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
