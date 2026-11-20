@@ -41,8 +41,12 @@ android {
             if (keystorePropsFile.exists()) {
                 signingConfig signingConfigs.release
             }
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            // R8로 쓰지 않는 코드·리소스를 빼고 최적화한다 (구글 플레이 'DEX 코드 최적화').
+            // Capacitor·플러그인 클래스는 Capacitor가 함께 주는 보호 규칙(consumer proguard)이 지킨다.
+            // 난독화 매핑 파일은 AAB 안에 함께 들어가 구글 플레이가 비정상 종료 기록을 풀 때 쓴다.
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 }
