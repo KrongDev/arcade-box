@@ -21,20 +21,20 @@ export function renderInline(text: string): string {
   let out = text.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, label: string, href: string) => {
     const target = LINK_MAP[href] ?? href;
     links.push(`<a href="${escapeHtml(target)}">${escapeHtml(label)}</a>`);
-    return `\u0000${links.length - 1}\u0000`;
+    return `\uE000${links.length - 1}\uE000`;
   });
   out = out.replace(/https?:\/\/[^\s<>|)]+/g, (url) => {
     links.push(`<a href="${escapeHtml(url)}">${escapeHtml(url)}</a>`);
-    return `\u0000${links.length - 1}\u0000`;
+    return `\uE000${links.length - 1}\uE000`;
   });
   out = out.replace(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, (email) => {
     links.push(`<a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>`);
-    return `\u0000${links.length - 1}\u0000`;
+    return `\uE000${links.length - 1}\uE000`;
   });
   out = escapeHtml(out)
     .replace(/&lt;br&gt;/g, '<br>')
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  return out.replace(/\u0000(\d+)\u0000/g, (_, i: string) => links[Number(i)]);
+  return out.replace(/\uE000(\d+)\uE000/g, (_, i: string) => links[Number(i)]);
 }
 
 function splitRow(line: string): string[] {
