@@ -23,6 +23,8 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+      # 안드로이드 앱의 웹 빌드 (Gradle 빌드는 docs/android.md대로 로컬에서)
+      - run: npx vite build --mode android
 
   server:
     name: 서버 (타입 검사·테스트)
