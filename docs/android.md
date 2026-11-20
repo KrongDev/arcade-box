@@ -64,7 +64,7 @@ ANDROID_VERSION_CODE=1 ./gradlew bundleRelease
 2. **개발자 이름 확인**: 앱인토스 콘솔은 스토어의 등록자명(구글 플레이 개발자 이름)과 사업자명이 다르면 반려해요. **앱인토스 워크스페이스와 같은 명의**여야 해요.
 3. **스토어 등록정보** (아래 문구 사용)
 4. **앱 콘텐츠**
-   - 개인정보처리방침: `https://github.com/KrongDev/arcade-box/blob/main/docs/privacy-policy.md`
+   - 개인정보처리방침: `https://github.com/KrongDev/arcade-box/blob/main/docs/privacy-policy.md` (이용약관이 필요하면 `docs/terms.md`)
    - 광고: 없음
    - 앱 액세스: 모든 기능을 제한 없이 쓸 수 있음
    - 콘텐츠 등급(IARC 설문): 아래 답변 참고

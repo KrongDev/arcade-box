@@ -178,4 +178,4 @@ npm test                               # 클라이언트 규칙 테스트
 cd server && npm install && npm test   # 서버 테스트
 ```
 
-배포 방법과 필요한 secret은 [docs/deploy.md](docs/deploy.md)에, 안드로이드 앱 빌드와 구글 플레이 출시는 [docs/android.md](docs/android.md)에 정리해 뒀어요.
+배포 방법과 필요한 secret은 [docs/deploy.md](docs/deploy.md)에, 안드로이드 앱 빌드와 구글 플레이 출시는 [docs/android.md](docs/android.md)에 정리해 뒀어요. [개인정보처리방침](docs/privacy-policy.md)과 [이용약관](docs/terms.md)은 토스 미니앱과 안드로이드 앱에 함께 써요.
