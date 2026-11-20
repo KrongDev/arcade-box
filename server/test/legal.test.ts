@@ -91,6 +91,19 @@ describe('약관 페이지 경로', () => {
     }
   });
 
+  it('탭 아이콘(파비콘)을 주고, 모든 공개 페이지가 그 아이콘을 가리킨다', async () => {
+    for (const path of ['/favicon.ico', '/favicon-32.png', '/favicon-64.png', '/apple-touch-icon.png']) {
+      const res = await fetch(base + path);
+      assert.equal(res.status, 200, path);
+      assert.equal(res.headers.get('content-type'), 'image/png');
+    }
+    for (const path of ['/test', '/privacy', '/terms']) {
+      const html = await (await fetch(base + path)).text();
+      assert.match(html, /<link rel="icon" type="image\/png" sizes="32x32" href="\/favicon-32\.png">/, path);
+      assert.match(html, /<link rel="apple-touch-icon" href="\/apple-touch-icon\.png">/, path);
+    }
+  });
+
   it('HEAD도 받고, 없는 경로는 그대로 404', async () => {
     const head = await fetch(base + '/privacy', { method: 'HEAD' });
     assert.equal(head.status, 200);

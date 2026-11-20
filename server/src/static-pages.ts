@@ -11,8 +11,12 @@ export interface StaticAsset {
 
 const HTML = 'text/html; charset=utf-8';
 
-/** 구글 플레이 비공개 테스트 테스터 모집 페이지 (src/pages/) */
+/** 브라우저 탭 아이콘(파비콘)과 테스터 모집 페이지 (src/pages/) */
 const TESTER_FILES = [
+  // 탭 아이콘: 30칸 픽셀 로고를 정수 배율로 그려 작은 크기에서도 또렷하다. /favicon.ico는 브라우저가 따로 찾는 기본 주소
+  { paths: ['/favicon.ico', '/favicon-32.png'], file: 'favicon-32.png', type: 'image/png', maxAge: 604800 },
+  { paths: ['/favicon-64.png'], file: 'favicon-64.png', type: 'image/png', maxAge: 604800 },
+  { paths: ['/apple-touch-icon.png'], file: 'apple-touch-icon.png', type: 'image/png', maxAge: 604800 },
   { paths: ['/test', '/test/'], file: 'tester.html', type: HTML, maxAge: 600 },
   { paths: ['/test/icon.png'], file: 'icon.png', type: 'image/png', maxAge: 86400 },
   { paths: ['/test/og.png'], file: 'og.png', type: 'image/png', maxAge: 86400 },
