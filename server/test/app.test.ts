@@ -449,3 +449,46 @@ describe('깬 단계 가져오기와 잠금 다시 계산', () => {
     assert.ok(state.unlocked.includes('breakout'));
   });
 });
+
+describe('내 기록 지우기', () => {
+  it('DELETE /v1/me는 상태·순위표·세션을 모두 지우고, 다시 로그인하면 빈 상태로 시작한다', async () => {
+    const pat = await login('code-pat-00001', 'anon-pat');
+    assert.equal((await call('POST', '/v1/me/attendance', { token: pat, body: { gameId: 'pinball' } })).status, 200);
+    assert.equal((await call('POST', '/v1/me/runs', { token: pat, body: { board: 'pinball', score: 31000, coins: 45 } })).status, 200);
+    const before = await call('GET', '/v1/leaderboards/pinball', { token: pat });
+    assert.ok(before.body.me);
+    const patId = store.users.get('anon-pat')!;
+
+    const del = await call('DELETE', '/v1/me', { token: pat });
+    assert.equal(del.status, 200);
+    assert.deepEqual(del.body, { deleted: true });
+
+    // 지운 세션으로는 더 쓸 수 없다
+    assert.equal((await call('GET', '/v1/me', { token: pat })).status, 401);
+    // 사용자, 상태, 순위표 기록, 판 기록, 세션이 모두 사라진다
+    assert.equal([...store.users.values()].includes(patId), false);
+    assert.equal(store.states.has(patId), false);
+    assert.equal(store.records.get('pinball')?.has(patId) ?? false, false);
+    assert.equal(store.runs.some((r) => r.userId === patId), false);
+    assert.equal([...store.sessions.values()].some((x) => x.userId === patId), false);
+
+    // 같은 식별키로 다시 들어오면 새 사용자로 빈 상태에서 시작한다(가져오기 전)
+    const again = await login('code-pat-00002', 'anon-pat');
+    const me = await call('GET', '/v1/me', { token: again });
+    assert.equal(me.status, 200);
+    assert.deepEqual(me.body.coins, {});
+    assert.deepEqual(me.body.unlocked, ['pinball']);
+    assert.equal(me.body.imported, false);
+    assert.equal((await call('GET', '/v1/leaderboards/pinball', { token: again })).body.me, null);
+  });
+
+  it('로그인하지 않으면 지울 수 없다', async () => {
+    assert.equal((await call('DELETE', '/v1/me')).status, 401);
+  });
+
+  it('미니앱 origin의 DELETE 사전 요청(preflight)을 허용한다', async () => {
+    const r = await call('OPTIONS', '/v1/me');
+    assert.equal(r.status, 204);
+    assert.match(r.headers.get('access-control-allow-methods') ?? '', /DELETE/);
+  });
+});

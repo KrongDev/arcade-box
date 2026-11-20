@@ -58,5 +58,13 @@ export class MemoryStore implements Store {
     return this.ranked(board, order).find((r) => r.userId === userId) ?? null;
   }
 
+  async deleteUser(userId: string): Promise<void> {
+    for (const [anonKey, id] of this.users) if (id === userId) this.users.delete(anonKey);
+    for (const [hash, s] of this.sessions) if (s.userId === userId) this.sessions.delete(hash);
+    this.states.delete(userId);
+    for (const board of this.records.values()) board.delete(userId);
+    this.runs = this.runs.filter((r) => r.userId !== userId);
+  }
+
   async close(): Promise<void> {}
 }

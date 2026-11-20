@@ -38,6 +38,7 @@ npm run typecheck
 |---|---|---|
 | POST | `/v1/auth/exchange` | `{ code }` → `{ token, expiresAt }` |
 | GET | `/v1/me` | 진행 상태 스냅샷 |
+| DELETE | `/v1/me` | 내 기록 지우기: 사용자·세션·상태·순위표 기록·판 기록을 모두 지움. 같은 식별키로 다시 들어오면 새 사용자 |
 | POST | `/v1/me/import` | `{ save }` 기기 v1 데이터 1회 가져오기(값마다 상한) |
 | POST | `/v1/me/attendance` | `{ gameId }` 출석 50코인, 한국 시간 하루 1회 |
 | POST | `/v1/me/ad-reward` | `{ gameId }` 광고 보상 50코인, 하루 3회 |

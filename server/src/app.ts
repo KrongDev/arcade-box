@@ -80,7 +80,7 @@ export function createApp(deps: AppDeps) {
     res.setHeader('access-control-allow-origin', origin);
     res.setHeader('vary', 'origin');
     res.setHeader('access-control-allow-headers', 'authorization, content-type');
-    res.setHeader('access-control-allow-methods', 'GET, POST, PUT, OPTIONS');
+    res.setHeader('access-control-allow-methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.setHeader('access-control-max-age', '600');
     return true;
   }
@@ -143,6 +143,13 @@ export function createApp(deps: AppDeps) {
       const userId = await requireUser(req);
       const state = await deps.store.readState(userId);
       return send(res, 200, snapshot(state, kstDate(now())));
+    }
+
+    // 내 기록 지우기: 이 사용자의 서버 데이터를 모두 지운다. 같은 식별키로 다시 들어오면 새 사용자로 시작한다
+    if (path === '/v1/me' && method === 'DELETE') {
+      const userId = await requireUser(req);
+      await deps.store.deleteUser(userId);
+      return send(res, 200, { deleted: true });
     }
 
     if (path === '/v1/me/import' && method === 'POST') {

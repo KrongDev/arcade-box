@@ -143,6 +143,11 @@ export class PgStore implements Store {
     return row ? { userId, value: Number(row.value), rank: Number(row.better) + 1 } : null;
   }
 
+  async deleteUser(userId: string): Promise<void> {
+    // sessions·user_state·records·runs는 ON DELETE CASCADE로 함께 지워진다
+    await this.pool.query('DELETE FROM users WHERE id = $1', [userId]);
+  }
+
   async close(): Promise<void> {
     await this.pool.end();
   }

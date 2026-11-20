@@ -39,5 +39,7 @@ export interface Store {
   mutate<T>(userId: string, fn: (state: UserState) => Mutation<T>): Promise<T>;
   top(board: string, order: 'higher' | 'lower', limit: number): Promise<LeaderboardRow[]>;
   rankOf(board: string, order: 'higher' | 'lower', userId: string): Promise<LeaderboardRow | null>;
+  /** 사용자와 그 사용자의 세션·상태·순위표 기록·판 기록을 모두 지운다 (내 기록 지우기) */
+  deleteUser(userId: string): Promise<void>;
   close(): Promise<void>;
 }
