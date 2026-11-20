@@ -138,8 +138,12 @@ async function authed<T>(method: string, path: string, body?: unknown): Promise<
   }
 }
 
+/** 한 판 점수로 순위를 매기는 게임 */
+export type ScoreGameId = 'pinball' | 'breakout';
+
 export type RunReport =
-  | { board: 'pinball'; score: number; coins: number }
+  /** 점수 게임(순위표가 하나): 게임 ID가 곧 순위표 ID다 */
+  | { board: ScoreGameId; score: number; coins: number }
   | {
       board: string;
       won: boolean;

@@ -17,6 +17,8 @@ export interface ClearResult {
   best: number;
   /** 이 단계를 처음 깼는지 */
   firstClear: boolean;
+  /** 이번 클리어로 새로 열린 게임 */
+  newlyUnlocked: GameId[];
 }
 
 export type BuyResult = 'ok' | 'owned' | 'insufficient' | 'unavailable';

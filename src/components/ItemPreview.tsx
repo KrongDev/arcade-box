@@ -1,6 +1,6 @@
 import { mixHex } from '../game/color';
 import { CURRENCY } from '../game/currency';
-import type { BallLook, Effect, MapLook, PinballTableLook, ShopItem, TileLook } from '../game/catalog';
+import type { BallLook, BrickSetLook, Effect, MapLook, PaddleLook, PinballTableLook, ShopItem, TileLook } from '../game/catalog';
 import { iconGrid } from './arcadeIconData';
 import { Raster } from './pixelRaster';
 
@@ -38,6 +38,10 @@ function draw(item: ShopItem): Raster {
       return drawTile(item.look, !!item.ability?.shield);
     case 'map':
       return drawMap(item.look, item.ability?.extraCoins?.[0] ?? 0, !!item.effect?.coinGlow);
+    case 'paddle':
+      return drawPaddle(item.look, !!item.ability?.coinValue);
+    case 'bricks':
+      return drawBricks(item.look, item.ability?.coinSpawn ?? 0);
   }
 }
 
@@ -263,5 +267,78 @@ function drawMap(l: MapLook, extra: number, glow: boolean): Raster {
       r.put(x + 1, y + 1, coin.light);
     }
   }
+  return r;
+}
+
+/** 벽돌깨기 판 바탕: 점 무늬 */
+function brickField(page: string, dot: string): Raster {
+  const r = new Raster(W, H, page);
+  for (let y = 2; y < H; y += 4) for (let x = y % 8 === 2 ? 2 : 4; x < W; x += 4) r.put(x, y, dot);
+  return r;
+}
+
+/** 벽돌 하나: 면 + 윗줄 빛 + 아랫줄 그림자 */
+function brick(r: Raster, x: number, y: number, w: number, color: string): void {
+  r.rect(x, y, w, 2, color);
+  r.rect(x, y, w, 1, mixHex(color, '#ffffff', 0.45));
+  r.rect(x, y + 2, w, 1, mixHex(color, '#000000', 0.4));
+}
+
+/** 벽돌깨기 패들: 큰 패들 하나와 그 위로 튀는 공. 코인 능력이 있으면 동전 하나 */
+function drawPaddle(l: PaddleLook, coinBonus: boolean): Raster {
+  const r = brickField('#14122a', '#2b2850');
+  // 위에 남은 벽돌 한 줄 (기본 색)
+  for (const [x, c] of [
+    [1, '#ff5c86'],
+    [7, '#ffd93d'],
+    [13, '#22b8f0'],
+  ] as const)
+    brick(r, x, 3, 6, c);
+  // 공과 날아온 길
+  r.put(7, 10, mixHex(l.ballLight, '#14122a', 0.6));
+  r.put(8, 12, mixHex(l.ballLight, '#14122a', 0.4));
+  r.disc(10, 15, 2.2, l.ballDark);
+  r.rect(9, 14, 2, 1, l.ballLight);
+  if (coinBonus) {
+    const coin = CURRENCY.breakout;
+    r.rect(15, 12, 3, 3, coin.side);
+    r.rect(15, 12, 2, 2, coin.face);
+    r.put(15, 12, coin.light);
+  }
+  // 패들: 윗면 빛 · 몸통 · 아래 그림자
+  r.rect(3, 19, 14, 1, l.light);
+  r.rect(3, 20, 14, 2, l.body);
+  r.rect(3, 22, 14, 1, l.shade);
+  r.put(2, 20, l.body);
+  r.put(17, 20, l.body);
+  r.put(2, 21, l.shade);
+  r.put(17, 21, l.shade);
+  return r;
+}
+
+/** 벽돌깨기 벽돌: 줄마다 다른 색 벽돌 여섯 줄. 동전 벽돌 능력이 있으면 동전 벽돌이 더 보인다 */
+function drawBricks(l: BrickSetLook, coinSpawn: number): Raster {
+  const r = brickField(l.page, l.dot);
+  r.rect(0, 0, W, 1, l.frame);
+  r.rect(0, 0, 1, H, l.frame);
+  r.rect(W - 1, 0, 1, H, l.frame);
+  const coin = CURRENCY.breakout;
+  const coins = coinSpawn >= 0.2 ? [[0, 1], [2, 2], [4, 0]] : coinSpawn > 0 ? [[1, 1], [3, 2]] : [[2, 1]];
+  for (let row = 0; row < 6; row++) {
+    const offset = row % 2 === 0 ? 1 : 3;
+    for (let col = 0; col < 3; col++) {
+      const x = offset + col * 6;
+      if (x + 5 > W - 1) continue;
+      const y = 3 + row * 3;
+      const tough = row === 0;
+      brick(r, x, y, 5, tough ? l.tough : l.rows[row]);
+      if (coins.some(([cr, cc]) => cr === row && cc === col)) {
+        r.rect(x + 2, y, 2, 2, coin.face);
+        r.put(x + 3, y + 1, coin.side);
+      }
+    }
+  }
+  // 바닥 쪽 공 하나
+  r.disc(10, 22, 1.6, '#ffffff');
   return r;
 }

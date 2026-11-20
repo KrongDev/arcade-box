@@ -2,21 +2,12 @@ import { graniteEvent } from '@apps-in-toss/web-framework';
 import { useCallback, useEffect, useState } from 'react';
 import { ArcadeIcon } from '../components/ArcadeIcon';
 import { ChevronLeft } from '../components/icons';
-import type { GameId } from '../game/registry';
+import { GAMES, getGame, type GameId } from '../game/registry';
 import { API_BASE, api, type LeaderboardData } from '../game/api';
 import { useSave } from '../game/save-context';
 import { NAV_BAR_OFFSET, useSafeArea } from '../game/useSafeArea';
 import '../styles/arcade.css';
 import './Leaderboard.css';
-
-const BOARDS = [
-  { id: 'pinball', label: '핀볼' },
-  { id: 'minesweeper.easy', label: '지뢰찾기 초급' },
-  { id: 'minesweeper.normal', label: '지뢰찾기 중급' },
-  { id: 'minesweeper.hard', label: '지뢰찾기 고급' },
-] as const;
-
-type BoardId = (typeof BOARDS)[number]['id'];
 
 type State = { kind: 'loading' } | { kind: 'ready'; data: LeaderboardData } | { kind: 'error' };
 
@@ -29,9 +20,11 @@ function formatValue(value: number): string {
 export default function Leaderboard({ game, onExit }: { game: GameId; onExit: () => void }) {
   const insets = useSafeArea();
   const { save } = useSave();
-  const boards = BOARDS.filter((b) => b.id === 'pinball' || save.unlocked.includes('minesweeper'));
+  // 열린 게임의 순위표만 보여 준다
+  const boards = GAMES.filter((g) => save.unlocked.includes(g.id)).flatMap((g) => g.boards);
   // 홈에서 고른 게임의 순위표부터 보여 준다
-  const [board, setBoard] = useState<BoardId>(() => boards.find((b) => b.id.startsWith(game))?.id ?? 'pinball');
+  const [board, setBoard] = useState<string>(() => getGame(game).boards.find((b) => boards.includes(b))?.id ?? boards[0].id);
+  const scoreNote = GAMES.find((g) => g.boards.some((b) => b.id === board))?.scoreNote;
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [reload, setReload] = useState(0);
 
@@ -55,7 +48,7 @@ export default function Leaderboard({ game, onExit }: { game: GameId; onExit: ()
     };
   }, [board, reload]);
 
-  const choose = useCallback((id: BoardId) => {
+  const choose = useCallback((id: string) => {
     setState({ kind: 'loading' });
     setBoard(id);
   }, []);
@@ -76,11 +69,7 @@ export default function Leaderboard({ game, onExit }: { game: GameId; onExit: ()
             <span className="ab-stripe">순위표</span>
           </h1>
         </div>
-        <p className="board-subtitle">
-          {board === 'pinball'
-            ? '순위는 익명 이름으로 보여요'
-            : '연 칸·맞힌 깃발·클리어·빠른 시간으로 매긴 점수예요. 순위는 익명 이름으로 보여요'}
-        </p>
+        <p className="board-subtitle">{scoreNote ? `${scoreNote}. 순위는 익명 이름으로 보여요` : '순위는 익명 이름으로 보여요'}</p>
       </header>
 
       <div className="ab-tabs board-tabs" role="tablist" aria-label="순위표 종류">

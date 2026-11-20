@@ -1,4 +1,4 @@
-import type { GameId } from './registry';
+import type { GameId } from './registry.ts';
 
 /**
  * 아이템 카탈로그 — 모든 아이템은 고유 ID를 가진다. v1은 앱 번들에 들어 있고,
@@ -49,10 +49,29 @@ export interface MapLook {
   motif: 'pine' | 'palm' | 'temple' | null;
 }
 
+/** 벽돌깨기 패들 — 몸통·윗면 빛·아래 그림자, 그리고 공 색 */
+export interface PaddleLook {
+  body: string;
+  light: string;
+  shade: string;
+  ballLight: string;
+  ballDark: string;
+}
+
+/** 벽돌깨기 벽돌 — 판 바탕·점 무늬·테두리, 줄마다 바뀌는 벽돌 색(위에서부터 6가지), 단단한 벽돌 색 */
+export interface BrickSetLook {
+  page: string;
+  field: string;
+  dot: string;
+  frame: string;
+  rows: readonly [string, string, string, string, string, string];
+  tough: string;
+}
+
 export interface Ability {
-  /** 핀볼 판: 판 위에 동전이 나오는 빈도 +비율 */
+  /** 핀볼 판: 판 위에 동전이 나오는 빈도 +비율 · 벽돌깨기 벽돌: 동전 벽돌 수 +비율 */
   coinSpawn?: number;
-  /** 핀볼 공·지뢰찾기 발판: 동전 하나에서 받는 코인 +비율 */
+  /** 핀볼 공·지뢰찾기 발판·벽돌깨기 패들: 동전 하나에서 받는 코인 +비율 */
   coinValue?: number;
   /** 지뢰찾기 발판: 지뢰를 밟아도 한 번 막아 준다 */
   shield?: number;
@@ -88,11 +107,13 @@ export type ShopItem =
   | (ItemBase & { slot: 'table'; look: PinballTableLook })
   | (ItemBase & { slot: 'ball'; look: BallLook })
   | (ItemBase & { slot: 'tile'; look: TileLook })
-  | (ItemBase & { slot: 'map'; look: MapLook });
+  | (ItemBase & { slot: 'map'; look: MapLook })
+  | (ItemBase & { slot: 'paddle'; look: PaddleLook })
+  | (ItemBase & { slot: 'bricks'; look: BrickSetLook });
 
 export type Slot = ShopItem['slot'];
 
-export const SLOT_NAMES: Record<Slot, string> = { table: '판', ball: '공', tile: '발판', map: '맵' };
+export const SLOT_NAMES: Record<Slot, string> = { table: '판', ball: '공', tile: '발판', map: '맵', paddle: '패들', bricks: '벽돌' };
 
 const FREE: Price = { type: 'free' };
 const coin = (amount: number): Price => ({ type: 'coin', amount });
@@ -378,6 +399,83 @@ export const CATALOG: ShopItem[] = [
     effect: { coinGlow: true },
     look: { bg: 'linear-gradient(180deg, #fff4d1 0%, #ffe08a 100%)', ink: '#3d2a00', inkSub: '#7a5a14', motif: 'temple' },
   },
+
+  // ── 벽돌깨기 — 패들: 동전 하나에서 받는 코인이 늘어요 ──
+  {
+    id: 'breakout.paddle.basic',
+    game: 'breakout',
+    slot: 'paddle',
+    name: '기본 패들',
+    price: FREE,
+    look: { body: '#e9ecf2', light: '#ffffff', shade: '#8f97ab', ballLight: '#ffffff', ballDark: '#9aa3b8' },
+  },
+  {
+    id: 'breakout.paddle.mint',
+    game: 'breakout',
+    slot: 'paddle',
+    name: '민트 패들',
+    price: coin(1000),
+    ability: { coinValue: 0.05 },
+    look: { body: '#3ccfa4', light: '#a8f0dc', shade: '#14896a', ballLight: '#ffffff', ballDark: '#7fd8c0' },
+  },
+  {
+    id: 'breakout.paddle.flame',
+    game: 'breakout',
+    slot: 'paddle',
+    name: '불꽃 패들',
+    price: coin(2500),
+    ability: { coinValue: 0.1 },
+    look: { body: '#ff7a3d', light: '#ffc29a', shade: '#b8461a', ballLight: '#fff4d6', ballDark: '#ffb36b' },
+  },
+
+  // ── 벽돌깨기 — 벽돌: 동전 벽돌이 더 많이 나와요 ──
+  {
+    id: 'breakout.bricks.basic',
+    game: 'breakout',
+    slot: 'bricks',
+    name: '기본 벽돌',
+    price: FREE,
+    look: {
+      page: '#14122a',
+      field: '#1d1b3a',
+      dot: '#2b2850',
+      frame: '#a594ff',
+      rows: ['#ff5c86', '#ff9f43', '#ffd93d', '#3ccf7a', '#22b8f0', '#a594ff'],
+      tough: '#8f97ab',
+    },
+  },
+  {
+    id: 'breakout.bricks.pastel',
+    game: 'breakout',
+    slot: 'bricks',
+    name: '파스텔 벽돌',
+    price: coin(1500),
+    ability: { coinSpawn: 0.1 },
+    look: {
+      page: '#1f1630',
+      field: '#2c2042',
+      dot: '#3a2c56',
+      frame: '#ffc6ff',
+      rows: ['#ffb3c7', '#ffd6a5', '#fdffb6', '#caffbf', '#9bf6ff', '#bdb2ff'],
+      tough: '#d6dbe6',
+    },
+  },
+  {
+    id: 'breakout.bricks.gem',
+    game: 'breakout',
+    slot: 'bricks',
+    name: '보석 벽돌',
+    price: coin(3000),
+    ability: { coinSpawn: 0.2 },
+    look: {
+      page: '#0b1220',
+      field: '#111b30',
+      dot: '#1c2a46',
+      frame: '#c8f1ff',
+      rows: ['#e0245e', '#ffb000', '#16c47f', '#2f6bff', '#9b5de5', '#c8f1ff'],
+      tough: '#5b6b8c',
+    },
+  },
 ];
 
 export function getItem(id: string): ShopItem | undefined {
@@ -416,7 +514,7 @@ export function abilityLines(item: ShopItem): string[] {
   const a = item.ability;
   if (!a) return [];
   const out: string[] = [];
-  if (a.coinSpawn) out.push(`판 위 동전 ${pct(a.coinSpawn)} 더 자주`);
+  if (a.coinSpawn) out.push(item.game === 'breakout' ? `동전 벽돌 ${pct(a.coinSpawn)} 더 많이` : `판 위 동전 ${pct(a.coinSpawn)} 더 자주`);
   if (a.coinValue) out.push(`동전 코인 +${pct(a.coinValue)}`);
   if (a.shield) out.push(`지뢰 보호 ${a.shield}번`);
   if (a.extraCoins) out.push(`숨은 동전 +${a.extraCoins.join('·')}개`);

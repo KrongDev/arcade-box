@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { API_BASE, ApiError, api as serverApi, initApi, type RunReport, type ServerSnapshot } from './api';
 import { AD_REWARDS_PER_DAY, AD_REWARD_COINS, ATTENDANCE_COINS, GAMES, type GameId } from './registry';
 import { setHapticEnabled } from './haptic';
+import { newlyUnlocked } from './progression';
 import { loadSave, persistSave, resolveUserKey, todayKey, type SaveData, type Settings } from './save';
 import { setSoundEnabled } from './sfx';
 import { getItem, slotKey } from './catalog';
@@ -138,19 +139,10 @@ export function SaveProvider({ children }: { children: ReactNode }) {
       if (!cur) return { isBest: false, best: score, newlyUnlocked: [] };
       const prevBest = cur.best[gameId] ?? 0;
       const best = Math.max(prevBest, score);
-      const newlyUnlocked = GAMES.filter(
-        (g) =>
-          g.unlock !== null &&
-          g.unlock.gameId === gameId &&
-          best >= g.unlock.score &&
-          !cur.unlocked.includes(g.id),
-      ).map((g) => g.id);
-      commit({
-        ...cur,
-        best: { ...cur.best, [gameId]: best },
-        unlocked: [...cur.unlocked, ...newlyUnlocked],
-      });
-      return { isBest: score > prevBest && score > 0, best, newlyUnlocked };
+      const next = { ...cur, best: { ...cur.best, [gameId]: best } };
+      const opened = newlyUnlocked(next);
+      commit({ ...next, unlocked: [...cur.unlocked, ...opened] });
+      return { isBest: score > prevBest && score > 0, best, newlyUnlocked: opened };
     },
     [commit],
   );
@@ -158,16 +150,18 @@ export function SaveProvider({ children }: { children: ReactNode }) {
   const recordClear = useCallback(
     (stageKey: string, seconds: number): ClearResult => {
       const cur = latest.current;
-      if (!cur) return { isBest: false, best: seconds, firstClear: false };
+      if (!cur) return { isBest: false, best: seconds, firstClear: false, newlyUnlocked: [] };
       const prev = cur.bestTime[stageKey];
       const best = prev === undefined ? seconds : Math.min(prev, seconds);
       const firstClear = !cur.cleared.includes(stageKey);
-      commit({
+      const next = {
         ...cur,
         cleared: firstClear ? [...cur.cleared, stageKey] : cur.cleared,
         bestTime: { ...cur.bestTime, [stageKey]: best },
-      });
-      return { isBest: prev === undefined || seconds < prev, best, firstClear };
+      };
+      const opened = newlyUnlocked(next);
+      commit({ ...next, unlocked: [...cur.unlocked, ...opened] });
+      return { isBest: prev === undefined || seconds < prev, best, firstClear, newlyUnlocked: opened };
     },
     [commit],
   );

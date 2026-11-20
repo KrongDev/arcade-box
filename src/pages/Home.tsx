@@ -7,11 +7,12 @@ import { ChevronLeft, ChevronRight, Close } from '../components/icons';
 import { API_BASE } from '../game/api';
 import { currencyVars } from '../game/currency';
 import { haptic } from '../game/haptic';
-import { ATTENDANCE_COINS, GAMES, getGame, type GameDef, type GameId } from '../game/registry';
+import { objectParticle } from '../game/korean';
+import { bestRecord, unlockProgress } from '../game/progression';
+import { ATTENDANCE_COINS, GAMES, boardLabel, getGame, type GameDef, type GameId, type UnlockRule } from '../game/registry';
 import type { SaveData } from '../game/save';
 import { useSave } from '../game/save-context';
 import { NAV_BAR_OFFSET, useSafeArea } from '../game/useSafeArea';
-import { DIFFICULTIES, stageKey } from '../minesweeper/board';
 import '../styles/arcade.css';
 import '../styles/game-dialog.css';
 import './Home.css';
@@ -171,7 +172,7 @@ export default function Home({
     else if (claimTargets.length > 1) setChooserOpen(true);
   };
 
-  const best = currentUnlocked ? bestScore(current, save) : null;
+  const best = currentUnlocked ? bestRecord(current, save) : null;
   // 상점은 지금 게임으로 열린다. 아직 잠겼거나 준비 중이면 열린 첫 게임 상점으로 간다(Shop과 같은 규칙)
   const shopGame = currentUnlocked && current.playable ? current : (claimTargets[0] ?? current);
   const canPlay = currentUnlocked && current.playable;
@@ -377,8 +378,7 @@ function GameScreen({ game, save }: { game: GameDef; save: SaveData }) {
     );
   }
   const rule = game.unlock;
-  const sourceBest = rule ? (save.best[rule.gameId] ?? 0) : 0;
-  const progress = rule ? Math.min(1, sourceBest / rule.score) : 0;
+  const progress = rule ? unlockProgress(rule, save) : null;
   return (
     <>
       <span className="machine-art-dim">
@@ -388,17 +388,19 @@ function GameScreen({ game, save }: { game: GameDef; save: SaveData }) {
         <h2 className="machine-name">
           <span className="ab-stripe ab-stripe--pink">{game.name}</span>
         </h2>
-        {rule && (
+        {rule && progress && (
           <>
-            <p className="machine-desc">
-              {getGame(rule.gameId).name} {rule.score.toLocaleString()}점을 넘기면 열려요
-            </p>
-            <span className="machine-progress" aria-hidden="true">
-              <span style={{ width: `${progress * 100}%` }} />
-            </span>
-            <p className="machine-desc ab-pixel">
-              {sourceBest.toLocaleString()} / {rule.score.toLocaleString()}
-            </p>
+            <p className="machine-desc">{unlockHint(rule)}</p>
+            {rule.kind === 'score' && (
+              <>
+                <span className="machine-progress" aria-hidden="true">
+                  <span style={{ width: `${(progress.current / progress.target) * 100}%` }} />
+                </span>
+                <p className="machine-desc ab-pixel">
+                  {progress.current.toLocaleString()} / {progress.target.toLocaleString()}
+                </p>
+              </>
+            )}
           </>
         )}
       </div>
@@ -406,15 +408,9 @@ function GameScreen({ game, save }: { game: GameDef; save: SaveData }) {
   );
 }
 
-/** 오락기 화면 위 최고 기록 — 점수 게임은 최고 점수, 지뢰찾기는 가장 어려운 단계의 최고 점수 */
-function bestScore(game: GameDef, save: SaveData): number | null {
-  if (game.id === 'minesweeper') {
-    for (const d of [...DIFFICULTIES].reverse()) {
-      const score = save.bestScore[stageKey(d.id)];
-      if (score !== undefined && score > 0) return score;
-    }
-    return null;
-  }
-  const best = save.best[game.id] ?? 0;
-  return best > 0 ? best : null;
+/** 잠긴 게임이 열리는 조건 한 줄 */
+function unlockHint(rule: UnlockRule): string {
+  if (rule.kind === 'score') return `${getGame(rule.gameId).name} ${rule.score.toLocaleString()}점을 넘기면 열려요`;
+  const stage = boardLabel(rule.stage);
+  return `${stage}${objectParticle(stage)} 깨면 열려요`;
 }

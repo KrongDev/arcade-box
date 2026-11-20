@@ -1,0 +1,6 @@
+/* 벽돌깨기 — 화면 틀·HUD·무대는 styles/action-game.css(공용)를 쓰고, 여기에는 벽돌깨기만의 표시만 둔다 */
+
+/* 점수 위 스테이지 표시 */
+.hud-tag-stage {
+  background: var(--ag-text);
+}

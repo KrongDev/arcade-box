@@ -7,6 +7,8 @@ import { currencyVars } from '../game/currency';
 import { CURRENCY } from '../game/currency';
 import { mapLook, minesweeperGear, tileLook } from '../game/equipped';
 import { haptic } from '../game/haptic';
+import { subjectParticle } from '../game/korean';
+import { getGame } from '../game/registry';
 import { playSfx } from '../game/sfx';
 import { shareWithLink } from '../game/share';
 import { useSave } from '../game/save-context';
@@ -212,7 +214,8 @@ interface Result {
   isBestScore: boolean;
   coins: number;
   bonus: number;
-  unlockedName: string | null;
+  /** 이번 판으로 새로 열린 것 (다음 난이도·새 게임) */
+  unlocks: string[];
 }
 
 function MinesweeperPlay({
@@ -329,7 +332,13 @@ function MinesweeperPlay({
         isBestScore: best.isBest,
         coins: coinsRef.current,
         bonus: diff.clearBonus,
-        unlockedName: r.firstClear && next ? next.name : null,
+        unlocks: [
+          ...(r.firstClear && next ? [`${next.name}${subjectParticle(next.name)} 열렸어요`] : []),
+          ...r.newlyUnlocked.map((id) => {
+            const name = getGame(id).name;
+            return `새 게임 ${name}${subjectParticle(name)} 열렸어요`;
+          }),
+        ],
       });
       setPhase('won');
       // 마지막 칸들이 번지며 열리는 걸 다 본 뒤 결과를 띄운다
@@ -346,7 +355,7 @@ function MinesweeperPlay({
         isBestScore: best.isBest,
         coins: coinsRef.current,
         bonus: 0,
-        unlockedName: null,
+        unlocks: [],
       });
       setPhase('lost');
       setShaking(true);
@@ -728,11 +737,11 @@ function MinesweeperPlay({
                 </dd>
               </div>
             </dl>
-            {result.unlockedName && (
-              <p className="result-unlock">
-                <ArcadeIcon name="unlock" size={16} /> {result.unlockedName}이 열렸어요
+            {result.unlocks.map((text) => (
+              <p key={text} className="result-unlock">
+                <ArcadeIcon name="unlock" size={16} /> {text}
               </p>
-            )}
+            ))}
             <div className="dialog-actions">
               <button type="button" className="btn btn-primary" onClick={onRetry}>
                 다시 하기

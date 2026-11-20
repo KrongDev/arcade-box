@@ -19,6 +19,7 @@ export interface CurrencyColor {
 export const CURRENCY: Record<GameId, CurrencyColor> = {
   pinball: { face: '#ffd93d', light: '#fff3a8', side: '#c98a00', lcd: '#ffd93d', ink: '#8f5a00', soft: '#fff3d6', edge: '#f5c96a' },
   minesweeper: { face: '#3ccfa4', light: '#a8f0dc', side: '#14896a', lcd: '#5fe0bc', ink: '#0b6e50', soft: '#dcf6ec', edge: '#9fe3cc' },
+  breakout: { face: '#ff8a5c', light: '#ffd0bb', side: '#c4502a', lcd: '#ff9d75', ink: '#a33c16', soft: '#ffe8de', edge: '#ffb898' },
 };
 
 /** 화면 CSS가 쓰는 코인 색 변수(--cur-*) */

@@ -3,16 +3,23 @@
  * 코인·보상·잠금 해제는 서버가 정본이다. 클라이언트 값을 바꾸면 여기도 함께 바꾼다.
  */
 
-export type GameId = 'pinball' | 'minesweeper';
-export const GAME_IDS: GameId[] = ['pinball', 'minesweeper'];
+export type GameId = 'pinball' | 'minesweeper' | 'breakout';
+export const GAME_IDS: GameId[] = ['pinball', 'minesweeper', 'breakout'];
 
 export const ATTENDANCE_COINS = 50;
 export const AD_REWARD_COINS = 50;
 export const AD_REWARDS_PER_DAY = 3;
 
-/** 게임 잠금 해제 — 이 게임 최고 점수가 score 이상이면 열린다 */
-const UNLOCK_RULES: Partial<Record<GameId, { gameId: GameId; score: number }>> = {
-  minesweeper: { gameId: 'pinball', score: 30000 },
+/** 게임 잠금 해제 조건 — 클라이언트(src/game/registry.ts GAMES의 unlock)와 같다 */
+export type UnlockRule =
+  /** 다른 게임 최고 점수가 score 이상이면 열린다 */
+  | { kind: 'score'; gameId: GameId; score: number }
+  /** 이 단계(순위표 ID)를 한 번이라도 깨면 열린다 */
+  | { kind: 'clear'; stage: string };
+
+export const UNLOCK_RULES: Partial<Record<GameId, UnlockRule>> = {
+  minesweeper: { kind: 'score', gameId: 'pinball', score: 30000 },
+  breakout: { kind: 'clear', stage: 'minesweeper.hard' },
 };
 
 /** 리더보드(=기록 단위). higher: 점수가 클수록 / lower: 시간이 짧을수록 좋다 */
@@ -73,6 +80,8 @@ export interface BoardDef {
 export const BOARDS: BoardDef[] = [
   // 핀볼: 클라이언트 MAX_COINS_PER_RUN과 같다 (판·공 능력 포함)
   { id: 'pinball', gameId: 'pinball', order: 'higher', maxCoinsPerRun: 400, requires: null },
+  // 벽돌깨기: 클라이언트 MAX_COINS_PER_RUN(src/breakout/rules.ts)과 같다 (패들·벽돌 능력 포함)
+  { id: 'breakout', gameId: 'breakout', order: 'higher', maxCoinsPerRun: 400, requires: null },
   // 지뢰찾기: (동전 수 + 맵 최대 보너스) × 5 × (1 + 발판 최대 보너스) + 클리어 보너스 (클라이언트 DIFFICULTIES와 같음)
   // 지뢰찾기도 점수(높을수록 1등)로 순위를 매긴다. 판 크기: 초급 8×10·10, 중급 12×18·36, 고급 16×26·80
   { id: 'minesweeper.easy', gameId: 'minesweeper', order: 'higher', maxCoinsPerRun: msCoinCap(3, MAP_EXTRA_COINS_MAX.easy, 20), requires: null, minesweeper: { safe: 70, mines: 10, par: 180 } },
@@ -81,7 +90,8 @@ export const BOARDS: BoardDef[] = [
 ];
 
 /** 비정상 기록을 거르는 느슨한 상한 */
-const MAX_PINBALL_SCORE = 5_000_000;
+/** 점수 게임(핀볼·벽돌깨기) 한 판 점수 상한 — 클라이언트 MAX_SCORE와 같다 */
+export const MAX_SCORE = 5_000_000;
 const MIN_CLEAR_SECONDS = 1;
 const MAX_SECONDS = 24 * 60 * 60;
 /** 판 기록 사이 최소 간격 (자동화된 반복 제출 방지) */
@@ -122,6 +132,12 @@ export const ITEMS: ServerItem[] = [
   { id: 'minesweeper.map.forest', gameId: 'minesweeper', slot: 'map', price: { type: 'coin', amount: 2000 } },
   { id: 'minesweeper.map.island', gameId: 'minesweeper', slot: 'map', price: { type: 'coin', amount: 4000 } },
   { id: 'minesweeper.map.temple', gameId: 'minesweeper', slot: 'map', price: { type: 'paid' } },
+  { id: 'breakout.paddle.basic', gameId: 'breakout', slot: 'paddle', price: { type: 'free' } },
+  { id: 'breakout.paddle.mint', gameId: 'breakout', slot: 'paddle', price: { type: 'coin', amount: 1000 } },
+  { id: 'breakout.paddle.flame', gameId: 'breakout', slot: 'paddle', price: { type: 'coin', amount: 2500 } },
+  { id: 'breakout.bricks.basic', gameId: 'breakout', slot: 'bricks', price: { type: 'free' } },
+  { id: 'breakout.bricks.pastel', gameId: 'breakout', slot: 'bricks', price: { type: 'coin', amount: 1500 } },
+  { id: 'breakout.bricks.gem', gameId: 'breakout', slot: 'bricks', price: { type: 'coin', amount: 3000 } },
 ];
 
 export function getItem(id: string): ServerItem | undefined {
@@ -169,13 +185,16 @@ export function normalizeState(raw: unknown): UserState {
   const base = createState();
   if (!raw || typeof raw !== 'object') return base;
   const s = raw as Partial<UserState>;
-  return {
+  const state: UserState = {
     ...base,
     ...s,
     settings: { ...base.settings, ...s.settings },
     adRewards: { ...base.adRewards, ...s.adRewards },
     unlocked: Array.from(new Set([...base.unlocked, ...(s.unlocked ?? [])])),
   };
+  // 잠금 조건이 새로 생긴 게임(예: 벽돌깨기)은 이미 조건을 채운 사용자에게 바로 연다
+  applyUnlocks(state);
+  return state;
 }
 
 /** 서버 기준 오늘 날짜 (한국 시간, YYYY-MM-DD) */
@@ -209,8 +228,9 @@ function addCoins(state: UserState, gameId: GameId, amount: number) {
 
 function applyUnlocks(state: UserState): GameId[] {
   const opened: GameId[] = [];
-  for (const [id, rule] of Object.entries(UNLOCK_RULES) as [GameId, { gameId: GameId; score: number }][]) {
-    if (!state.unlocked.includes(id) && (state.best[rule.gameId] ?? 0) >= rule.score) {
+  for (const [id, rule] of Object.entries(UNLOCK_RULES) as [GameId, UnlockRule][]) {
+    const met = rule.kind === 'score' ? (state.best[rule.gameId] ?? 0) >= rule.score : state.cleared.includes(rule.stage);
+    if (!state.unlocked.includes(id) && met) {
       state.unlocked.push(id);
       opened.push(id);
     }
@@ -338,7 +358,7 @@ export function applyRun(state: UserState, input: RunInput, nowMs: number): RunO
     recordValue = score > 0 ? score : null;
   } else if (board.order === 'higher') {
     const score = num(input.score);
-    if (score === null || score < 0 || !Number.isInteger(score) || score > MAX_PINBALL_SCORE) {
+    if (score === null || score < 0 || !Number.isInteger(score) || score > MAX_SCORE) {
       throw new RuleError(400, 'invalid_score', '점수 값이 올바르지 않아요');
     }
     const prev = state.best[board.gameId] ?? 0;
@@ -426,19 +446,25 @@ export function importLocalSave(state: UserState, raw: unknown, nowIso: string):
   const coins = (s.coins ?? {}) as Record<string, unknown>;
   for (const g of GAME_IDS) addCoins(state, g, clampInt(coins[g], IMPORT_COIN_CAP));
 
+  // 점수 게임(순위표가 하나)의 최고 점수
   const best = (s.best ?? {}) as Record<string, unknown>;
-  const pinballBest = clampInt(best.pinball, MAX_PINBALL_SCORE);
-  if (pinballBest > (state.best.pinball ?? 0)) state.best.pinball = pinballBest;
+  for (const b of BOARDS) {
+    if (b.minesweeper || b.order !== 'higher') continue;
+    const v = clampInt(best[b.gameId], MAX_SCORE);
+    if (v > (state.best[b.gameId] ?? 0)) state.best[b.gameId] = v;
+  }
 
   const bestTime = (s.bestTime ?? {}) as Record<string, unknown>;
   const cleared = Array.isArray(s.cleared) ? s.cleared : [];
-  for (const b of BOARDS.filter((x) => x.order === 'lower')) {
+  // 깰 수 있는 단계(지뢰찾기·시간 기록): 최단 시간과 깬 단계. 앞 단계를 깬 경우만 받는다 (BOARDS는 쉬운 단계부터)
+  for (const b of BOARDS.filter((x) => x.order === 'lower' || x.minesweeper)) {
     const t = num(bestTime[b.id]);
     if (t !== null && t >= MIN_CLEAR_SECONDS && t <= MAX_SECONDS) {
       const prev = state.bestTime[b.id];
       if (prev === undefined || t < prev) state.bestTime[b.id] = Math.round(t * 10) / 10;
     }
-    if (cleared.includes(b.id) && !state.cleared.includes(b.id)) state.cleared.push(b.id);
+    const reachable = !b.requires || state.cleared.includes(b.requires);
+    if (cleared.includes(b.id) && reachable && !state.cleared.includes(b.id)) state.cleared.push(b.id);
   }
 
   const bestScore = (s.bestScore ?? {}) as Record<string, unknown>;

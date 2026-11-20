@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   client:
-    name: 미니앱 (lint·타입 검사·빌드)
+    name: 미니앱 (lint·테스트·타입 검사·빌드)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -21,6 +21,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint
+      - run: npm test
       - run: npm run build
 
   server:

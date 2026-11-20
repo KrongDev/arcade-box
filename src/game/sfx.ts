@@ -25,7 +25,12 @@ export type Sfx =
   | 'flag'
   | 'boom'
   | 'win'
-  | 'buy';
+  | 'buy'
+  | 'paddle'
+  | 'brick'
+  | 'brickTough'
+  | 'powerUp'
+  | 'stageClear';
 
 let enabled = true;
 let suspended = false;
@@ -99,7 +104,7 @@ function noise(ac: AudioContext, at: number, dur: number, gain: number) {
   src.start(at);
 }
 
-const MIN_GAP: Partial<Record<Sfx, number>> = { blast: 90, bumper: 45, open: 40, flip: 30, sling: 40, target: 30, rollover: 40 };
+const MIN_GAP: Partial<Record<Sfx, number>> = { blast: 90, bumper: 45, open: 40, flip: 30, sling: 40, target: 30, rollover: 40, paddle: 40, brick: 35, brickTough: 35 };
 
 export function playSfx(name: Sfx): void {
   if (!enabled || suspended || (typeof document !== 'undefined' && document.hidden)) return;
@@ -194,6 +199,28 @@ export function playSfx(name: Sfx): void {
     case 'buy':
       tone(ac, t, 784, 0.1, 'triangle', 0.07);
       tone(ac, t + 0.09, 1175, 0.2, 'triangle', 0.07);
+      break;
+    case 'paddle':
+      // 패들: 낮고 둥근 '통'
+      tone(ac, t, 260, 0.07, 'square', 0.04, 200);
+      tone(ac, t, 130, 0.09, 'sine', 0.1, 90);
+      break;
+    case 'brick': {
+      // 벽돌: 높낮이가 조금씩 다른 짧은 '딱'
+      const f = 660 + Math.random() * 330;
+      tone(ac, t, f, 0.06, 'square', 0.045, f * 1.25);
+      noise(ac, t, 0.035, 0.07);
+      break;
+    }
+    case 'brickTough':
+      tone(ac, t, 330, 0.08, 'square', 0.05, 280);
+      noise(ac, t, 0.06, 0.12);
+      break;
+    case 'powerUp':
+      [523, 784, 1047, 1568].forEach((f, i) => tone(ac, t + i * 0.05, f, 0.12, 'triangle', 0.07));
+      break;
+    case 'stageClear':
+      [523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) => tone(ac, t + i * 0.08, f, 0.2, 'square', 0.045));
       break;
   }
 }

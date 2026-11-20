@@ -2,6 +2,7 @@ import { Screen } from '@apps-in-toss/web-framework';
 import { useEffect, useState } from 'react';
 import { SaveProvider } from './game/SaveProvider';
 import type { GameId } from './game/registry';
+import Breakout from './pages/Breakout';
 import Home from './pages/Home';
 import Leaderboard from './pages/Leaderboard';
 import Minesweeper from './pages/Minesweeper';
@@ -31,6 +32,7 @@ function App() {
     <SaveProvider>
       {screen === 'pinball' && <Pinball onExit={goHome} />}
       {screen === 'minesweeper' && <Minesweeper onExit={goHome} />}
+      {screen === 'breakout' && <Breakout onExit={goHome} />}
       {screen === 'shop' && <Shop game={game} onGameChange={setGame} onExit={goHome} />}
       {screen === 'settings' && <Settings onExit={goHome} />}
       {screen === 'leaderboard' && <Leaderboard game={game} onExit={goHome} />}

@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import {
+  BOARDS,
   RuleError,
   applyRun,
   buyItem,
@@ -152,7 +153,11 @@ export function createApp(deps: AppDeps) {
         importLocalSave(state, body.save, iso);
         const today = kstDate(now());
         const records = [];
-        if (state.best.pinball) records.push({ board: 'pinball', value: state.best.pinball });
+        // 점수 게임(순위표가 하나)은 게임 ID가 곧 순위표 ID다
+        for (const b of BOARDS) {
+          const value = state.best[b.gameId];
+          if (!b.minesweeper && b.order === 'higher' && value) records.push({ board: b.id, value });
+        }
         for (const [board, value] of Object.entries(state.bestScore)) if (value > 0) records.push({ board, value });
         return { state, records, result: snapshot(state, today) };
       });

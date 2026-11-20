@@ -7,6 +7,7 @@
  * 장식이라 기본은 aria-hidden이다. 뜻을 전해야 하면 label을 넘긴다.
  */
 import { memo } from 'react';
+import type { GameId } from '../game/registry';
 import { pathsFor, type ArcadeIconName, type CoinTint } from './arcadeIconData';
 
 export type { ArcadeIconName, CoinTint } from './arcadeIconData';
@@ -44,7 +45,9 @@ export const ArcadeIcon = memo(function ArcadeIcon({
   );
 });
 
+const GAME_ICONS: Record<GameId, ArcadeIconName> = { pinball: 'pinball', minesweeper: 'bomb', breakout: 'bricks' };
+
 /** 게임별 아이콘 (코인 표시·탭·시트) */
-export function GameIcon({ id, size = 16 }: { id: string; size?: number }) {
-  return <ArcadeIcon name={id === 'minesweeper' ? 'bomb' : 'pinball'} size={size} />;
+export function GameIcon({ id, size = 16 }: { id: GameId; size?: number }) {
+  return <ArcadeIcon name={GAME_ICONS[id]} size={size} />;
 }

@@ -1,9 +1,13 @@
-.pinball {
-  --pb-bg: var(--bezel);
-  --pb-surface: rgba(255, 255, 255, 0.1);
-  --pb-text: #f2f4f6;
-  --pb-muted: #b9bdd6;
-  --pb-coin: #ffc53d;
+/*
+ * 캔버스 액션 게임 화면 공용(핀볼·벽돌깨기) — 화면 틀, 상단 HUD(일시정지·점수·남은 공·코인), 게임 무대, 시작 안내.
+ * --ag-coin은 게임 코인 색이다. 게임 화면이 자기 코인 색으로 바꿔 쓴다.
+ */
+.action-game {
+  --ag-bg: var(--bezel);
+  --ag-surface: rgba(255, 255, 255, 0.1);
+  --ag-text: #f2f4f6;
+  --ag-muted: #b9bdd6;
+  --ag-coin: #ffc53d;
 
   position: fixed;
   inset: 0;
@@ -12,15 +16,15 @@
   flex-direction: column;
   max-width: 480px;
   margin: 0 auto;
-  background: var(--pb-bg);
-  color: var(--pb-text);
+  background: var(--ag-bg);
+  color: var(--ag-text);
   overflow: hidden;
   user-select: none;
   -webkit-user-select: none;
 }
 
 /* 상단 HUD */
-.pinball-hud {
+.action-hud {
   display: grid;
   grid-template-columns: 44px 1fr auto;
   align-items: center;
@@ -57,7 +61,7 @@
 .hud-label {
   font-family: var(--font-pixel);
   font-size: var(--font-size-caption);
-  color: var(--pb-muted);
+  color: var(--ag-muted);
 }
 
 /* 점수 — 노란 픽셀 숫자 */
@@ -86,24 +90,24 @@
 .hud-ball {
   width: 10px;
   height: 10px;
-  border: 2px solid var(--pb-muted);
+  border: 2px solid var(--ag-muted);
 }
 
 .hud-ball.is-on {
-  background: var(--pb-text);
-  border-color: var(--pb-text);
+  background: var(--ag-text);
+  border-color: var(--ag-text);
 }
 
 .hud-coins {
   font-family: var(--font-pixel);
   font-size: var(--font-size-body-small);
   font-weight: 700;
-  color: var(--pb-coin);
+  color: var(--ag-coin);
   font-variant-numeric: tabular-nums;
 }
 
-/* 테이블 */
-.pinball-stage {
+/* 게임 무대 */
+.action-stage {
   position: relative;
   flex: 1;
   min-height: 0;
@@ -114,13 +118,13 @@
   touch-action: none;
 }
 
-.pinball-canvas {
+.action-canvas {
   display: block;
   border-radius: 4px;
 }
 
-/* 발사 안내 — 네모난 검은 판에 노란 테두리 */
-.pinball-hint {
+/* 시작 안내 — 네모난 검은 판에 노란 테두리 */
+.action-hint {
   position: absolute;
   left: 50%;
   bottom: 22%;
@@ -133,7 +137,7 @@
   pointer-events: none;
 }
 
-.pinball-hint-title {
+.action-hint-title {
   margin: 0;
   font-family: var(--font-pixel);
   font-size: var(--font-size-body);
@@ -141,14 +145,14 @@
   color: #ffe14d;
 }
 
-.pinball-hint-desc {
+.action-hint-desc {
   margin: var(--space-1) 0 0;
   font-size: var(--font-size-body-small);
-  color: var(--pb-muted);
+  color: var(--ag-muted);
 }
 
 
-/* 점수 옆 배율·멀티볼 표시 */
+/* 점수 옆 배율·멀티볼 같은 표시 */
 .hud-label {
   display: inline-flex;
   align-items: center;
@@ -165,7 +169,7 @@
 }
 
 .hud-tag-mult {
-  background: var(--pb-coin);
+  background: var(--ag-coin);
 }
 
 .hud-tag-multi {
@@ -181,9 +185,9 @@
     0 0 8px 2px var(--led-glow);
 }
 
-.pinball-hint-gear {
+.action-hint-gear {
   margin: var(--space-2) 0 0;
   font-size: var(--font-size-caption);
   font-weight: 600;
-  color: var(--pb-coin);
+  color: var(--ag-coin);
 }

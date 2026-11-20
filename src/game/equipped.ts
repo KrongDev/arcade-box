@@ -1,10 +1,13 @@
+import type { BreakoutGear } from '../breakout/engine';
 import {
   defaultItem,
   getItem,
   slotKey,
   type BallLook,
+  type BrickSetLook,
   type Effect,
   type MapLook,
+  type PaddleLook,
   type PinballTableLook,
   type ShopItem,
   type Slot,
@@ -83,5 +86,21 @@ export function minesweeperGear(save: SaveData): MinesweeperGear {
     shield: tile.ability?.shield ?? 0,
     extraCoins: map.ability?.extraCoins ?? [0, 0, 0],
     effect: { ...tile.effect, ...map.effect },
+  };
+}
+
+/** 벽돌깨기에 장착한 패들·벽돌 모양 */
+export function breakoutLooks(save: SaveData): { paddle: PaddleLook; bricks: BrickSetLook } {
+  return {
+    paddle: equippedItem(save, 'breakout', 'paddle').look as PaddleLook,
+    bricks: equippedItem(save, 'breakout', 'bricks').look as BrickSetLook,
+  };
+}
+
+/** 벽돌깨기에 장착한 패들·벽돌의 능력 */
+export function breakoutGear(save: SaveData): BreakoutGear {
+  return {
+    coinSpawn: equippedItem(save, 'breakout', 'bricks').ability?.coinSpawn ?? 0,
+    coinValue: equippedItem(save, 'breakout', 'paddle').ability?.coinValue ?? 0,
   };
 }

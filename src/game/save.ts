@@ -1,4 +1,5 @@
 import { Storage, User } from '@apps-in-toss/web-framework';
+import { newlyUnlocked } from './progression';
 import { GAMES, type GameId } from './registry';
 
 /**
@@ -147,7 +148,7 @@ export async function loadSave(userKey: string | null): Promise<SaveData> {
   if (!raw) return base;
   try {
     const parsed = JSON.parse(raw) as Partial<SaveData>;
-    return {
+    const loaded: SaveData = {
       version: 1,
       coins: { ...parsed.coins },
       best: { ...parsed.best },
@@ -163,6 +164,8 @@ export async function loadSave(userKey: string | null): Promise<SaveData> {
       adRewards: { ...base.adRewards, ...parsed.adRewards },
       userKey,
     };
+    // 잠금 조건이 새로 생긴 게임(예: 벽돌깨기)은 이미 조건을 채운 저장 데이터면 바로 연다
+    return { ...loaded, unlocked: [...loaded.unlocked, ...newlyUnlocked(loaded)] };
   } catch {
     return base;
   }

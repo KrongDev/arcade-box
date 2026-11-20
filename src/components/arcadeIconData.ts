@@ -9,6 +9,7 @@ export type ArcadeIconName =
   | 'trophy'
   | 'coin'
   | 'pinball'
+  | 'bricks'
   | 'bomb'
   | 'flag'
   | 'shield'
@@ -148,6 +149,24 @@ const MAPS: Record<Exclude<ArcadeIconName, 'medal1' | 'medal2' | 'medal3'>, stri
     '......ssss......',
     '................',
     '................',
+  ],
+  bricks: [
+    '................',
+    '..........SS....',
+    '.........SWSS...',
+    '.........SSSs...',
+    '..........ss....',
+    '................',
+    '.RRRRRR.RRRRRRR.',
+    '.RRRRRR.RRRRRRR.',
+    '.rrrrrr.rrrrrrr.',
+    '................',
+    '.BBB.BBBBBB.BBB.',
+    '.BBB.BBBBBB.BBB.',
+    '.CCC.CCCCCC.CCC.',
+    '................',
+    '....SSSSSSSS....',
+    '....ssssssss....',
   ],
   bomb: [
     '...........YO...',

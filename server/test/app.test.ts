@@ -4,7 +4,7 @@ import type { AddressInfo } from 'node:net';
 import { after, before, describe, it } from 'node:test';
 import { createApp } from '../src/app.ts';
 import { MINIAPP_ORIGINS } from '../src/config.ts';
-import { kstDate } from '../src/domain.ts';
+import { kstDate, normalizeState } from '../src/domain.ts';
 import { TossPartnerClient, interpretExchange, type ExchangeResult, type PartnerApi } from '../src/partner.ts';
 import { MemoryStore } from '../src/store-memory.ts';
 
@@ -367,5 +367,85 @@ describe('기기 데이터 가져오기', () => {
     assert.equal(r.body.bestScore['minesweeper.hard'], 336 * 10 + 80 * 20 + 336 * 10 + 900 * 10, '불가능한 점수는 상한으로');
     const lb = await call('GET', '/v1/leaderboards/minesweeper.easy', { token });
     assert.ok(lb.body.entries.some((e: { me: boolean; value: number }) => e.me && e.value === 2600));
+  });
+});
+
+describe('벽돌깨기', () => {
+  /** 지뢰찾기 단계를 깬 기록 (안전한 칸을 다 열고 지뢰에 깃발을 다 꽂음) */
+  const clearRun = (board: string, safe: number, mines: number) => ({ board, won: true, seconds: 60, opened: safe, correctFlags: mines, wrongFlags: 0, coins: 0 });
+
+  it('지뢰찾기 고급을 깨야 열리고, 열리면 점수가 벽돌깨기 순위표에 오른다', async () => {
+    const kim = await login('code-kim-00001', 'anon-kim');
+    advance(5000);
+    await call('POST', '/v1/me/runs', { token: kim, body: { board: 'pinball', score: 30000, coins: 0 } });
+    advance(5000);
+    assert.equal((await call('POST', '/v1/me/runs', { token: kim, body: { board: 'breakout', score: 100, coins: 0 } })).status, 403);
+    advance(5000);
+    await call('POST', '/v1/me/runs', { token: kim, body: clearRun('minesweeper.easy', 70, 10) });
+    advance(5000);
+    const normal = await call('POST', '/v1/me/runs', { token: kim, body: clearRun('minesweeper.normal', 180, 36) });
+    assert.deepEqual(normal.body.run.newlyUnlocked, []);
+    advance(5000);
+    const hard = await call('POST', '/v1/me/runs', { token: kim, body: clearRun('minesweeper.hard', 336, 80) });
+    assert.equal(hard.status, 200);
+    assert.deepEqual(hard.body.run.newlyUnlocked, ['breakout']);
+    assert.ok(hard.body.unlocked.includes('breakout'));
+
+    advance(5000);
+    const run = await call('POST', '/v1/me/runs', { token: kim, body: { board: 'breakout', score: 12340, coins: 35 } });
+    assert.equal(run.status, 200);
+    assert.equal(run.body.run.isBest, true);
+    assert.equal(run.body.coins.breakout, 35);
+    assert.equal(run.body.best.breakout, 12340);
+    const lb = await call('GET', '/v1/leaderboards/breakout', { token: kim });
+    assert.equal(lb.body.order, 'higher');
+    assert.equal(lb.body.me.rank, 1);
+
+    advance(5000);
+    assert.equal((await call('POST', '/v1/me/runs', { token: kim, body: { board: 'breakout', score: 100, coins: 401 } })).status, 400);
+    advance(5000);
+    assert.equal((await call('POST', '/v1/me/runs', { token: kim, body: { board: 'breakout', score: 5_000_001, coins: 0 } })).status, 400);
+  });
+
+  it('벽돌깨기 코인으로 패들·벽돌을 사서 장착한다 (유료 아이템은 없다)', async () => {
+    const lee = await login('code-lee-00001', 'anon-lee');
+    await call('POST', '/v1/me/import', { token: lee, body: { save: { coins: { breakout: 3000 } } } });
+    const buy = await call('POST', '/v1/me/items/breakout.paddle.mint/buy', { token: lee });
+    assert.equal(buy.status, 200);
+    assert.equal(buy.body.coins.breakout, 2000);
+    assert.equal(buy.body.equipped['breakout.paddle'], 'breakout.paddle.mint');
+    assert.equal((await call('POST', '/v1/me/items/breakout.bricks.gem/buy', { token: lee })).status, 409);
+  });
+
+  it('기기 데이터를 가져올 때 벽돌깨기 최고 점수도 상한을 두고 가져온다', async () => {
+    const moe = await login('code-moe-00001', 'anon-moe');
+    const r = await call('POST', '/v1/me/import', { token: moe, body: { save: { best: { pinball: 100, breakout: 99_999_999 } } } });
+    assert.equal(r.status, 200);
+    assert.equal(r.body.best.breakout, 5_000_000);
+  });
+});
+
+describe('깬 단계 가져오기와 잠금 다시 계산', () => {
+  it('기기에서 지뢰찾기 고급까지 깼으면 가져올 때 깬 단계와 벽돌깨기 잠금 해제도 가져온다', async () => {
+    const nat = await login('code-nat-00001', 'anon-nat');
+    const r = await call('POST', '/v1/me/import', {
+      token: nat,
+      body: { save: { best: { pinball: 31000 }, cleared: ['minesweeper.easy', 'minesweeper.normal', 'minesweeper.hard'] } },
+    });
+    assert.equal(r.status, 200);
+    assert.deepEqual(r.body.cleared, ['minesweeper.easy', 'minesweeper.normal', 'minesweeper.hard']);
+    assert.ok(r.body.unlocked.includes('breakout'));
+  });
+
+  it('앞 단계를 건너뛴 깬 기록은 가져오지 않는다', async () => {
+    const oli = await login('code-oli-00001', 'anon-oli');
+    const r = await call('POST', '/v1/me/import', { token: oli, body: { save: { best: { pinball: 31000 }, cleared: ['minesweeper.easy', 'minesweeper.hard'] } } });
+    assert.deepEqual(r.body.cleared, ['minesweeper.easy']);
+    assert.equal(r.body.unlocked.includes('breakout'), false);
+  });
+
+  it('저장된 상태를 불러올 때 새로 생긴 잠금 조건을 다시 계산한다', () => {
+    const state = normalizeState({ unlocked: ['pinball', 'minesweeper'], cleared: ['minesweeper.easy', 'minesweeper.normal', 'minesweeper.hard'], best: { pinball: 30000 } });
+    assert.ok(state.unlocked.includes('breakout'));
   });
 });
