@@ -1,5 +1,5 @@
-import { graniteEvent } from '@apps-in-toss/web-framework';
 import { useEffect, type RefObject } from 'react';
+import { platform } from '../platform';
 
 /**
  * 게임 화면 공통 조작 — 뒤로가기와 앱 전환.
@@ -17,11 +17,7 @@ export function useGameControls(
       else if (phaseRef.current === 'paused') quit();
       else exit();
     };
-    try {
-      return graniteEvent.addEventListener('backEvent', { onEvent: onBack, onError: () => undefined });
-    } catch {
-      return undefined;
-    }
+    return platform.onBack(onBack);
   }, [phaseRef, pause, quit, exit]);
 
   useEffect(() => {

@@ -1,5 +1,5 @@
-import { loadFullScreenAd, showFullScreenAd } from '@apps-in-toss/web-framework';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { platform } from '../platform';
 import { setSfxSuspended } from './sfx';
 
 /**
@@ -15,9 +15,12 @@ export type RewardedAdStatus = 'unsupported' | 'loading' | 'ready' | 'showing' |
 
 export type ShowResult = 'rewarded' | 'closed-early' | 'failed';
 
+/** 이 플랫폼에 보상형 광고가 있는지 — 없으면 광고 칸을 숨긴다 */
+export const adsAvailable = platform.ads !== null;
+
 function isSupported(): boolean {
   try {
-    return loadFullScreenAd.isSupported() && showFullScreenAd.isSupported();
+    return platform.ads?.isSupported() ?? false;
   } catch {
     return false;
   }
@@ -35,16 +38,16 @@ export function useRewardedAd(adGroupId: string = REWARDED_AD_GROUP_ID) {
   const alive = useRef(true);
 
   const load = useCallback(() => {
-    if (!supported) return;
+    const ads = platform.ads;
+    if (!supported || !ads) return;
     unregisterLoad.current?.();
     setStatus('loading');
     try {
-      unregisterLoad.current = loadFullScreenAd({
-        options: { adGroupId },
-        onEvent: (event) => {
-          if (alive.current && event.type === 'loaded') setStatus('ready');
+      unregisterLoad.current = ads.load(adGroupId, {
+        loaded: () => {
+          if (alive.current) setStatus('ready');
         },
-        onError: () => {
+        failed: () => {
           if (alive.current) setStatus('failed');
         },
       });
@@ -74,7 +77,8 @@ export function useRewardedAd(adGroupId: string = REWARDED_AD_GROUP_ID) {
   /** 광고를 보여 준다. 끝까지 보면 onReward가 한 번 불린다 */
   const show = useCallback(
     (onReward: () => void, onDone: (result: ShowResult) => void) => {
-      if (status !== 'ready') return;
+      const ads = platform.ads;
+      if (status !== 'ready' || !ads) return;
       setStatus('showing');
       setSfxSuspended(true);
       let rewarded = false;
@@ -92,21 +96,16 @@ export function useRewardedAd(adGroupId: string = REWARDED_AD_GROUP_ID) {
         if (alive.current) load();
       };
       try {
-        unregisterShow.current = showFullScreenAd({
-          options: { adGroupId },
-          onEvent: (event) => {
-            if (event.type === 'userEarnedReward' && !rewarded) {
-              rewarded = true;
-              onReward();
-              // 일부 앱 버전은 dismissed를 보내지 않아서, 보상 뒤에는 오래 기다리지 않는다
-              fallback = window.setTimeout(() => finish('rewarded'), 20000);
-            } else if (event.type === 'dismissed') {
-              finish(rewarded ? 'rewarded' : 'closed-early');
-            } else if (event.type === 'failedToShow') {
-              finish('failed');
-            }
+        unregisterShow.current = ads.show(adGroupId, {
+          rewarded: () => {
+            if (rewarded) return;
+            rewarded = true;
+            onReward();
+            // 일부 앱 버전은 dismissed를 보내지 않아서, 보상 뒤에는 오래 기다리지 않는다
+            fallback = window.setTimeout(() => finish('rewarded'), 20000);
           },
-          onError: () => finish(rewarded ? 'rewarded' : 'failed'),
+          dismissed: () => finish(rewarded ? 'rewarded' : 'closed-early'),
+          failed: () => finish(rewarded ? 'rewarded' : 'failed'),
         });
       } catch {
         finish('failed');

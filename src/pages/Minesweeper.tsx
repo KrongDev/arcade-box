@@ -1,4 +1,3 @@
-import { graniteEvent } from '@apps-in-toss/web-framework';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { ArcadeIcon, GameIcon } from '../components/ArcadeIcon';
 import { Coin, Lock, Pause } from '../components/gameIcons';
@@ -10,8 +9,9 @@ import { haptic } from '../game/haptic';
 import { subjectParticle } from '../game/korean';
 import { getGame } from '../game/registry';
 import { playSfx } from '../game/sfx';
-import { shareWithLink } from '../game/share';
+import { canShare, shareWithLink } from '../game/share';
 import { useSave } from '../game/save-context';
+import { platform } from '../platform';
 import { NAV_BAR_OFFSET, useSafeArea } from '../game/useSafeArea';
 import {
   COIN_VALUE,
@@ -44,11 +44,7 @@ const CELL = 44;
 
 function useBackEvent(handler: () => void) {
   useEffect(() => {
-    try {
-      return graniteEvent.addEventListener('backEvent', { onEvent: handler, onError: () => undefined });
-    } catch {
-      return undefined;
-    }
+    return platform.onBack(handler);
   }, [handler]);
 }
 
@@ -747,7 +743,7 @@ function MinesweeperPlay({
                 다시 하기
               </button>
               {shareError && <p className="dialog-error">공유하지 못했어요. 잠시 뒤 다시 시도해 주세요.</p>}
-              {result.score.total > 0 && (
+              {canShare && result.score.total > 0 && (
                 <button
                   type="button"
                   className="btn btn-secondary"

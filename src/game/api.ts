@@ -1,11 +1,14 @@
-import { Storage, User } from '@apps-in-toss/web-framework';
+import { platform } from '../platform';
 
 /**
  * 게임 서버 클라이언트. 서버 주소(VITE_API_BASE)가 없으면 서버를 쓰지 않고 기기 저장만으로 동작한다.
  * 로그인: User.createAnonymousKeyAuthCode()로 받은 일회용 코드를 서버에 보내면, 서버가 파트너 API로
  * 교환해 세션 토큰을 준다. 식별키 자체는 서버로 보내지 않는다.
  */
-export const API_BASE: string | null = ((import.meta.env.VITE_API_BASE as string | undefined) ?? '').replace(/\/+$/, '') || null;
+/** 게임 서버 주소. 서버에 로그인할 수 없는 플랫폼(안드로이드 첫 버전)이면 null — 기기에만 저장한다 */
+export const API_BASE: string | null = platform.serverAuthCode
+  ? ((import.meta.env.VITE_API_BASE as string | undefined) ?? '').replace(/\/+$/, '') || null
+  : null;
 
 export interface ServerSnapshot {
   coins: Record<string, number>;
@@ -52,22 +55,15 @@ let loginPromise: Promise<void> | null = null;
 /** 사용자(기기 저장 데이터)가 정해지면 부른다 — 토큰을 사용자별로 따로 둔다 */
 export async function initApi(userKey: string | null): Promise<void> {
   tokenKey = `arcade-box.session.${userKey ?? 'anon'}`;
-  try {
-    token = await Storage.getItem(tokenKey);
-  } catch {
-    token = null;
-  }
+  token = await platform.storage.getItem(tokenKey);
 }
 
 async function saveToken(value: string | null) {
   token = value;
   if (!tokenKey) return;
-  try {
-    if (value) await Storage.setItem(tokenKey, value);
-    else await Storage.removeItem(tokenKey);
-  } catch {
-    // 토큰을 못 저장하면 다음 실행 때 다시 로그인한다
-  }
+  // 토큰을 못 저장하면 다음 실행 때 다시 로그인한다
+  if (value) await platform.storage.setItem(tokenKey, value);
+  else await platform.storage.removeItem(tokenKey);
 }
 
 async function rawFetch(method: string, path: string, body?: unknown, withAuth = true): Promise<unknown> {
@@ -109,7 +105,8 @@ export function login(): Promise<void> {
     loginPromise = (async () => {
       let code: string;
       try {
-        code = (await User.createAnonymousKeyAuthCode()).code;
+        if (!platform.serverAuthCode) throw new Error('no_server_auth');
+        code = await platform.serverAuthCode();
       } catch {
         throw new ApiError(0, 'auth_code_unavailable', '토스 앱에서 로그인 코드를 받지 못했어요');
       }

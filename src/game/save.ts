@@ -1,4 +1,4 @@
-import { Storage, User } from '@apps-in-toss/web-framework';
+import { platform } from '../platform';
 import { newlyUnlocked } from './progression';
 import { GAMES, type GameId } from './registry';
 
@@ -76,57 +76,17 @@ export function createDefaultSave(): SaveData {
   };
 }
 
-async function readRaw(key: string): Promise<string | null> {
-  try {
-    return await Storage.getItem(key);
-  } catch {
-    try {
-      return window.localStorage.getItem(key);
-    } catch {
-      return null;
-    }
-  }
-}
-
-async function writeRaw(key: string, value: string): Promise<void> {
-  try {
-    await Storage.setItem(key, value);
-  } catch {
-    try {
-      window.localStorage.setItem(key, value);
-    } catch {
-      // 저장 실패는 플레이를 막지 않는다
-    }
-  }
-}
-
-async function removeRaw(key: string): Promise<void> {
-  try {
-    await Storage.removeItem(key);
-  } catch {
-    try {
-      window.localStorage.removeItem(key);
-    } catch {
-      // 무시
-    }
-  }
-}
+/** 기기 저장소 (플랫폼 저장소가 실패를 삼킨다 — 저장 실패는 플레이를 막지 않는다) */
+const readRaw = (key: string): Promise<string | null> => platform.storage.getItem(key);
+const writeRaw = (key: string, value: string): Promise<void> => platform.storage.setItem(key, value);
+const removeRaw = (key: string): Promise<void> => platform.storage.removeItem(key);
 
 /**
  * 게임용 사용자 식별키를 받는다. 받지 못하면(구버전 앱·일시 오류) 마지막으로 확인한 값을 쓰고,
  * 그것도 없으면 null. 게임 시작을 오래 막지 않도록 3초까지만 기다린다.
  */
 export async function resolveUserKey(): Promise<string | null> {
-  let fetched: string | null = null;
-  try {
-    if (User.getAnonymousKey.isSupported()) {
-      const timeout = new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 3000));
-      const result = await Promise.race([User.getAnonymousKey(), timeout]);
-      if (result && result.type === 'HASH' && result.hash) fetched = result.hash;
-    }
-  } catch {
-    fetched = null;
-  }
+  const fetched = await platform.userKey();
   if (fetched) {
     void writeRaw(LAST_USER_KEY, fetched);
     return fetched;

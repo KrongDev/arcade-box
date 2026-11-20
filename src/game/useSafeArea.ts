@@ -1,39 +1,17 @@
-import { SafeAreaInsets } from '@apps-in-toss/web-framework';
 import { useEffect, useState } from 'react';
+import { platform, type Insets } from '../platform';
 
-export interface Insets {
-  top: number;
-  bottom: number;
-  left: number;
-  right: number;
-}
-
-const ZERO: Insets = { top: 0, bottom: 0, left: 0, right: 0 };
+export type { Insets } from '../platform';
 
 /**
- * 게임 앱은 내비게이션 바를 투명 배경으로 쓰므로 콘텐츠가 바 아래까지 올라온다.
- * 바의 더보기·닫기 버튼과 겹치지 않도록 상단 안전 여백에 이만큼 더 띄운다.
+ * 화면 위쪽에 플랫폼이 그리는 것(토스 게임 내비게이션 바)과 겹치지 않도록 상단 안전 여백에 더 띄울 높이.
+ * 토스 미니앱은 내비게이션 바 높이, 안드로이드 앱은 상태 바 아래 숨 쉴 틈만큼이다.
  */
-export const NAV_BAR_OFFSET = 52;
+export const NAV_BAR_OFFSET = platform.navBarOffset;
 
-function readInsets(): Insets {
-  try {
-    return SafeAreaInsets.get() ?? ZERO;
-  } catch {
-    return ZERO;
-  }
-}
-
+/** 화면 가장자리 안전 여백 (노치·상태 바·홈 표시줄) */
 export function useSafeArea(): Insets {
-  const [insets, setInsets] = useState<Insets>(readInsets);
-
-  useEffect(() => {
-    try {
-      return SafeAreaInsets.subscribe({ onEvent: setInsets });
-    } catch {
-      return undefined;
-    }
-  }, []);
-
+  const [insets, setInsets] = useState<Insets>(platform.safeArea.get);
+  useEffect(() => platform.safeArea.subscribe(setInsets), []);
   return insets;
 }

@@ -1,7 +1,7 @@
-import { Screen } from '@apps-in-toss/web-framework';
 import { useEffect, useState } from 'react';
 import { SaveProvider } from './game/SaveProvider';
 import type { GameId } from './game/registry';
+import { platform } from './platform';
 import Breakout from './pages/Breakout';
 import Home from './pages/Home';
 import Leaderboard from './pages/Leaderboard';
@@ -15,14 +15,9 @@ type ScreenId = 'home' | 'shop' | 'settings' | 'leaderboard' | GameId;
 function App() {
   const [screen, setScreen] = useState<ScreenId>('home');
 
-  // 모든 화면이 세로 전용이라 앱 전체를 세로로 고정한다(폰을 가로로 돌려도 화면이 돌지 않게).
-  // 지원하지 않는 토스 앱 버전에서는 아무것도 하지 않는다.
+  // 모든 화면이 세로 전용이라 앱 전체를 세로로 고정한다(폰을 가로로 돌려도 화면이 돌지 않게)
   useEffect(() => {
-    try {
-      if (Screen.setOrientation.isSupported()) void Screen.setOrientation({ type: 'portrait' }).catch(() => undefined);
-    } catch {
-      // 토스 앱 밖(브라우저 개발 환경 등)
-    }
+    platform.lockPortrait();
   }, []);
   // 지금 고른 게임 — 홈 오락기 화면·코인 표시·상점·순위표가 함께 쓴다
   const [game, setGame] = useState<GameId>('pinball');

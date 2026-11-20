@@ -3,6 +3,31 @@
   "plugins": ["react", "typescript", "oxc"],
   "rules": {
     "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
+    "react/only-export-components": ["warn", { "allowConstantExport": true }],
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": [{ "name": "@apps-in-toss/web-framework", "message": "토스 SDK는 src/platform/toss에서만 써요. 앱 코드는 src/platform을 쓰세요." }],
+        "patterns": [{ "group": ["@capacitor/*"], "message": "Capacitor는 src/platform/android에서만 써요. 앱 코드는 src/platform을 쓰세요." }]
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": ["src/platform/toss/**"],
+      "rules": {
+        "no-restricted-imports": ["error", { "patterns": [{ "group": ["@capacitor/*"], "message": "토스 구현에서는 Capacitor를 쓰지 않아요." }] }]
+      }
+    },
+    {
+      "files": ["src/platform/android/**"],
+      "rules": {
+        "no-restricted-imports": ["error", { "paths": [{ "name": "@apps-in-toss/web-framework", "message": "안드로이드 구현에서는 토스 SDK를 쓰지 않아요." }] }]
+      }
+    },
+    {
+      "files": ["capacitor.config.ts"],
+      "rules": { "no-restricted-imports": "off" }
+    }
+  ]
 }

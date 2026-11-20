@@ -1,23 +1,19 @@
-import { IAP, graniteEvent } from '@apps-in-toss/web-framework';
 import { useCallback, useEffect, useState } from 'react';
 import { ArcadeIcon } from '../components/ArcadeIcon';
 import { ChevronLeft, ChevronRight } from '../components/icons';
 import { SUPPORT_EMAIL } from '../game/appInfo';
 import { haptic, setHapticEnabled } from '../game/haptic';
-import { itemForSku } from '../game/iap';
+import { itemForSku, paymentsAvailable } from '../game/iap';
 import { useSave } from '../game/save-context';
 import { playSfx, setSoundEnabled } from '../game/sfx';
 import { NAV_BAR_OFFSET, useSafeArea } from '../game/useSafeArea';
+import { platform } from '../platform';
 import '../styles/arcade.css';
 import './Settings.css';
 
 function useBackEvent(handler: () => void) {
   useEffect(() => {
-    try {
-      return graniteEvent.addEventListener('backEvent', { onEvent: handler, onError: () => undefined });
-    } catch {
-      return undefined;
-    }
+    return platform.onBack(handler);
   }, [handler]);
 }
 
@@ -71,7 +67,11 @@ function SettingsMain({ onExit, onOpenPurchases }: { onExit: () => void; onOpenP
         />
         <ToggleRow
           label="진동"
-          description="게임 중에 짧은 진동으로 알려 줘요. 토스 앱과 휴대폰 설정에서도 진동이 켜져 있어야 해요"
+          description={
+            platform.id === 'toss'
+              ? '게임 중에 짧은 진동으로 알려 줘요. 토스 앱과 휴대폰 설정에서도 진동이 켜져 있어야 해요'
+              : '게임 중에 짧은 진동으로 알려 줘요. 휴대폰 설정에서도 진동이 켜져 있어야 해요'
+          }
           checked={save.settings.haptic}
           onChange={(on) => {
             updateSettings({ haptic: on });
@@ -83,20 +83,22 @@ function SettingsMain({ onExit, onOpenPurchases }: { onExit: () => void; onOpenP
         />
       </section>
 
-      <section className="settings-group" aria-labelledby="settings-purchase">
-        <h2 id="settings-purchase" className="settings-group-title">
-          구매
-        </h2>
-        <button type="button" className="settings-row is-link" onClick={onOpenPurchases}>
-          <span className="settings-row-text">
-            <span className="settings-row-label">구매 내역</span>
-            <span className="settings-row-desc">유료 아이템 결제와 환불 내역을 볼 수 있어요</span>
-          </span>
-          <span className="settings-chevron">
-            <ChevronRight size={20} />
-          </span>
-        </button>
-      </section>
+      {paymentsAvailable && (
+        <section className="settings-group" aria-labelledby="settings-purchase">
+          <h2 id="settings-purchase" className="settings-group-title">
+            구매
+          </h2>
+          <button type="button" className="settings-row is-link" onClick={onOpenPurchases}>
+            <span className="settings-row-text">
+              <span className="settings-row-label">구매 내역</span>
+              <span className="settings-row-desc">유료 아이템 결제와 환불 내역을 볼 수 있어요</span>
+            </span>
+            <span className="settings-chevron">
+              <ChevronRight size={20} />
+            </span>
+          </button>
+        </section>
+      )}
 
       <section className="settings-group" aria-labelledby="settings-help">
         <h2 id="settings-help" className="settings-group-title">
@@ -123,14 +125,14 @@ function SettingsMain({ onExit, onOpenPurchases }: { onExit: () => void; onOpenP
           {serverStatus === 'off' ? (
             <ul className="settings-info-list">
               <li>코인, 기록, 코인으로 산 아이템은 이 기기에만 저장돼요.</li>
-              <li>토스 앱을 지우거나 기기를 바꾸면 이 데이터는 사라져요.</li>
-              <li>유료 아이템은 토스 구매 내역으로 다시 받을 수 있어요.</li>
+              <li>{platform.id === 'toss' ? '토스 앱' : '앱'}을 지우거나 기기를 바꾸면 이 데이터는 사라져요.</li>
+              {paymentsAvailable && <li>유료 아이템은 토스 구매 내역으로 다시 받을 수 있어요.</li>}
             </ul>
           ) : (
             <ul className="settings-info-list">
               <li>코인, 기록, 코인으로 산 아이템은 서버에 저장돼서 기기를 바꿔도 이어져요.</li>
               <li>연결이 끊겨도 이 기기에 먼저 저장했다가, 다시 연결되면 서버에 보내요.</li>
-              <li>유료 아이템은 토스 구매 내역으로 다시 받을 수 있어요.</li>
+              {paymentsAvailable && <li>유료 아이템은 토스 구매 내역으로 다시 받을 수 있어요.</li>}
             </ul>
           )}
         </div>
@@ -191,7 +193,7 @@ const LOAD_ERROR_MESSAGE = '구매 내역을 불러오지 못했어요. 잠시 �
 
 function historySupported(): boolean {
   try {
-    return IAP.getCompletedOrRefundedOrders.isSupported();
+    return platform.payments?.canReadHistory() ?? false;
   } catch {
     return false;
   }
@@ -208,8 +210,9 @@ function PurchaseHistory({ onBack }: { onBack: () => void }) {
 
   const load = useCallback(async (key: string | null, prev: Order[]) => {
     try {
-      const res = await IAP.getCompletedOrRefundedOrders(key ? { key } : undefined);
-      setState({ kind: 'ready', orders: [...prev, ...res.orders], nextKey: res.hasNext ? (res.nextKey ?? null) : null });
+      if (!platform.payments) throw new Error('payments_unavailable');
+      const res = await platform.payments.historyPage(key);
+      setState({ kind: 'ready', orders: [...prev, ...res.orders], nextKey: res.nextKey });
     } catch {
       setState({ kind: 'error', message: LOAD_ERROR_MESSAGE });
     }

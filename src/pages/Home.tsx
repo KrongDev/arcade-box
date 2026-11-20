@@ -1,4 +1,3 @@
-import { closeView, graniteEvent } from '@apps-in-toss/web-framework';
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { ArcadeIcon, GameIcon } from '../components/ArcadeIcon';
 import { GameArt } from '../components/GameArt';
@@ -12,6 +11,7 @@ import { bestRecord, unlockProgress } from '../game/progression';
 import { ATTENDANCE_COINS, GAMES, boardLabel, getGame, type GameDef, type GameId, type UnlockRule } from '../game/registry';
 import type { SaveData } from '../game/save';
 import { useSave } from '../game/save-context';
+import { platform } from '../platform';
 import { NAV_BAR_OFFSET, useSafeArea } from '../game/useSafeArea';
 import '../styles/arcade.css';
 import '../styles/game-dialog.css';
@@ -41,25 +41,14 @@ export default function Home({
 
   // 홈에서 뒤로가기: 열린 창이 있으면 닫고, 없으면 종료할지 묻는다(바로 꺼지지 않게)
   useEffect(() => {
-    try {
-      return graniteEvent.addEventListener('backEvent', {
-        onEvent: () => {
-          if (chooserOpen) setChooserOpen(false);
-          else setExitOpen((open) => !open);
-        },
-        onError: () => undefined,
-      });
-    } catch {
-      return undefined;
-    }
+    return platform.onBack(() => {
+      if (chooserOpen) setChooserOpen(false);
+      else setExitOpen((open) => !open);
+    });
   }, [chooserOpen]);
   const exitApp = () => {
     setExitOpen(false);
-    try {
-      void closeView().catch(() => undefined);
-    } catch {
-      // 지원하지 않는 환경
-    }
+    platform.exit();
   };
 
   const unlockedGames = GAMES.filter((g) => save.unlocked.includes(g.id));
@@ -299,7 +288,9 @@ export default function Home({
         새 게임이 계속 추가될 예정이에요.{' '}
         {serverStatus === 'online'
           ? '코인과 기록은 서버에 저장돼서 기기를 바꿔도 이어져요.'
-          : '코인과 기록은 이 기기에 먼저 저장되고, 서버에 연결되면 함께 저장돼요.'}
+          : API_BASE
+            ? '코인과 기록은 이 기기에 먼저 저장되고, 서버에 연결되면 함께 저장돼요.'
+            : '코인과 기록은 이 기기에 저장돼요.'}
       </p>
 
       {exitOpen && (

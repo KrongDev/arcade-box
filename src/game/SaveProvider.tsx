@@ -1,5 +1,5 @@
-import { Storage } from '@apps-in-toss/web-framework';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { platform } from '../platform';
 import { API_BASE, ApiError, api as serverApi, initApi, type RunReport, type ServerSnapshot } from './api';
 import { AD_REWARDS_PER_DAY, AD_REWARD_COINS, ATTENDANCE_COINS, GAMES, type GameId } from './registry';
 import { setHapticEnabled } from './haptic';
@@ -35,7 +35,7 @@ function applySnapshot(cur: SaveData, snap: ServerSnapshot): SaveData {
 
 async function loadQueue(key: string): Promise<SyncOp[]> {
   try {
-    const raw = await Storage.getItem(key);
+    const raw = await platform.storage.getItem(key);
     const parsed = raw ? (JSON.parse(raw) as unknown) : [];
     return Array.isArray(parsed) ? (parsed as SyncOp[]) : [];
   } catch {
@@ -44,11 +44,8 @@ async function loadQueue(key: string): Promise<SyncOp[]> {
 }
 
 async function saveQueue(key: string, queue: SyncOp[]): Promise<void> {
-  try {
-    await Storage.setItem(key, JSON.stringify(queue));
-  } catch {
-    // 저장 실패 시 다음 실행에서 큐가 비어 있을 수 있다 — 서버 스냅샷이 다시 맞춘다
-  }
+  // 저장 실패 시 다음 실행에서 큐가 비어 있을 수 있다 — 서버 스냅샷이 다시 맞춘다
+  await platform.storage.setItem(key, JSON.stringify(queue));
 }
 
 export function SaveProvider({ children }: { children: ReactNode }) {

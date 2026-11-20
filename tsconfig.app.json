@@ -16,6 +16,11 @@
     "noEmit": true,
     "jsx": "react-jsx",
 
+    /* 플랫폼 구현: 빌드는 vite.config.ts가 모드로 고르고, 타입 검사는 토스 구현으로 한다(두 구현 모두 Platform 타입을 지킨다) */
+    "paths": {
+      "@platform-impl": ["./src/platform/toss/index.ts"]
+    },
+
     /* Linting */
     "noUnusedLocals": true,
     "noUnusedParameters": true,

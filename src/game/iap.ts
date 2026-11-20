@@ -1,5 +1,7 @@
-import { IAP } from '@apps-in-toss/web-framework';
+import { platform, type PurchaseOutcome } from '../platform';
 import { CATALOG, type ShopItem } from './catalog';
+
+export type { PurchaseOutcome } from '../platform';
 
 /**
  * 유료 코스튬 인앱결제 — 평생 소장형(비소모성) 상품.
@@ -51,42 +53,16 @@ export function itemForSku(sku: string): ShopItem | undefined {
   return CATALOG.find((i) => i.price.type === 'paid' && skuOf(i) === sku);
 }
 
-function supported(fn: { isSupported: () => boolean }): boolean {
+/** 이 플랫폼에 인앱결제가 있는지 — 없으면 유료 아이템·구매 내역을 숨긴다 */
+export const paymentsAvailable = platform.payments !== null;
+
+export function canPurchase(): boolean {
   try {
-    return fn.isSupported();
+    return platform.payments?.canPurchase() ?? false;
   } catch {
     return false;
   }
 }
-
-export function canPurchase(): boolean {
-  return supported(IAP.createOneTimePurchaseOrder);
-}
-
-export type PurchaseOutcome =
-  | { kind: 'success' }
-  | { kind: 'canceled' }
-  | { kind: 'pending' }
-  | { kind: 'error'; message: string };
-
-function errorCode(error: unknown): string | null {
-  if (error && typeof error === 'object') {
-    const e = error as { code?: unknown; errorCode?: unknown; name?: unknown };
-    for (const v of [e.code, e.errorCode, e.name]) if (typeof v === 'string' && v.length > 0) return v;
-  }
-  return null;
-}
-
-const ERROR_MESSAGES: Record<string, string> = {
-  INVALID_PRODUCT_ID: '지금은 살 수 없는 상품이에요.',
-  NETWORK_ERROR: '네트워크 연결을 확인하고 다시 시도해 주세요.',
-  INVALID_USER_ENVIRONMENT: '이 기기나 계정에서는 살 수 없는 상품이에요.',
-  APP_MARKET_VERIFICATION_FAILED: '앱스토어 확인에 실패했어요. 앱스토어에 환불을 문의해 주세요.',
-  TOSS_SERVER_VERIFICATION_FAILED: '결제 정보를 저장하지 못했어요. 앱을 다시 열면 아이템을 받을 수 있어요.',
-  KOREAN_ACCOUNT_ONLY: '한국 계정에서만 살 수 있어요.',
-  PRODUCT_NOT_GRANTED_BY_PARTNER: '아이템을 받지 못했어요. 앱을 다시 열면 다시 받을 수 있어요.',
-  UNSUPPORTED_APP_VERSION: '토스 앱을 최신 버전으로 업데이트해 주세요.',
-};
 
 /**
  * 결제창을 띄운다. grant는 아이템을 실제로 지급(기기 저장)했을 때만 true를 돌려야 한다.
@@ -98,53 +74,13 @@ export function purchase(
   done: (outcome: PurchaseOutcome) => void,
 ): () => void {
   const sku = skuOf(item);
-  if (!sku) {
+  const payments = platform.payments;
+  if (!sku || !payments) {
     done({ kind: 'error', message: '아직 판매를 시작하지 않은 상품이에요.' });
     return () => undefined;
   }
-
   ensureDevProducts();
-  let cleanup: (() => void) | null = null;
-  let finished = false;
-  const finish = (outcome: PurchaseOutcome) => {
-    if (finished) return;
-    finished = true;
-    cleanup?.();
-    cleanup = null;
-    done(outcome);
-  };
-
-  try {
-    cleanup = IAP.createOneTimePurchaseOrder({
-      options: {
-        sku,
-        processProductGrant: ({ orderId }) => {
-          try {
-            return grant(orderId);
-          } catch {
-            return false;
-          }
-        },
-      },
-      onEvent: (event) => {
-        if (event.type === 'success') finish({ kind: 'success' });
-      },
-      onError: (error) => {
-        const code = errorCode(error);
-        if (code === 'USER_CANCELED') finish({ kind: 'canceled' });
-        else if (code === 'PAYMENT_PENDING') finish({ kind: 'pending' });
-        else finish({ kind: 'error', message: (code && ERROR_MESSAGES[code]) || '결제하지 못했어요. 잠시 뒤 다시 시도해 주세요.' });
-      },
-    });
-  } catch (error) {
-    finish({ kind: 'error', message: ERROR_MESSAGES[errorCode(error) ?? ''] ?? '결제하지 못했어요. 잠시 뒤 다시 시도해 주세요.' });
-  }
-
-  return () => {
-    finished = true;
-    cleanup?.();
-    cleanup = null;
-  };
+  return payments.purchase(sku, grant, done);
 }
 
 /**
@@ -153,17 +89,17 @@ export function purchase(
  * 지급한 주문 수를 돌려준다.
  */
 export async function recoverPendingOrders(grant: (orderId: string, itemId: string) => boolean): Promise<number> {
+  const payments = platform.payments;
+  if (!payments) return 0;
   ensureDevProducts();
-  if (!supported(IAP.getPendingOrders)) return 0;
   let recovered = 0;
   try {
-    const res = await IAP.getPendingOrders();
-    for (const order of res?.orders ?? []) {
+    for (const order of await payments.pendingOrders()) {
       const item = order.sku ? itemForSku(order.sku) : undefined;
       if (!item) continue;
       if (!grant(order.orderId, item.id)) continue;
       try {
-        await IAP.completeProductGrant({ params: { orderId: order.orderId } });
+        await payments.completeGrant(order.orderId);
         recovered++;
       } catch {
         // 완료 처리에 실패해도 지급 기록은 orderId로 남아 있어 중복 지급되지 않는다
@@ -181,22 +117,22 @@ export interface PaidOrder {
   refunded: boolean;
 }
 
-/** 토스 구매 내역 전체(완료·환불). 조회할 수 없으면 null — 이때는 기존 기록을 그대로 둔다 */
+/** 구매 내역 전체(완료·환불). 조회할 수 없으면 null — 이때는 기존 기록을 그대로 둔다 */
 export async function fetchPaidOrders(): Promise<PaidOrder[] | null> {
+  const payments = platform.payments;
+  if (!payments) return null;
   ensureDevProducts();
-  if (!supported(IAP.getCompletedOrRefundedOrders)) return null;
+  if (!payments.canReadHistory()) return null;
   const out: PaidOrder[] = [];
   try {
     let key: string | null = null;
     for (let page = 0; page < 20; page++) {
-      const res: Awaited<ReturnType<typeof IAP.getCompletedOrRefundedOrders>> | undefined =
-        await IAP.getCompletedOrRefundedOrders(key ? { key } : undefined);
-      if (!res) return null;
+      const res: Awaited<ReturnType<typeof payments.historyPage>> = await payments.historyPage(key);
       for (const o of res.orders) {
         const item = itemForSku(o.sku);
         if (item) out.push({ orderId: o.orderId, itemId: item.id, refunded: o.status === 'REFUNDED' });
       }
-      if (!res.hasNext || !res.nextKey) break;
+      if (!res.nextKey) break;
       key = res.nextKey;
     }
     return out;
@@ -207,13 +143,11 @@ export async function fetchPaidOrders(): Promise<PaidOrder[] | null> {
 
 /** 콘솔에 등록한 표시 가격(예: "3,000원"). 상점에 카탈로그 가격 대신 보여 준다 */
 export async function fetchDisplayPrices(): Promise<Record<string, string>> {
+  const payments = platform.payments;
+  if (!payments) return {};
   ensureDevProducts();
-  if (!supported(IAP.getProductItemList)) return {};
   try {
-    const res = await IAP.getProductItemList();
-    const prices: Record<string, string> = {};
-    for (const p of res?.products ?? []) prices[p.sku] = p.displayAmount;
-    return prices;
+    return await payments.displayPrices();
   } catch {
     return {};
   }

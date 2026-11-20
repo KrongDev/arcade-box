@@ -1,10 +1,10 @@
-import { graniteEvent } from '@apps-in-toss/web-framework';
 import { useCallback, useEffect, useState } from 'react';
 import { ArcadeIcon } from '../components/ArcadeIcon';
 import { ChevronLeft } from '../components/icons';
 import { GAMES, getGame, type GameId } from '../game/registry';
 import { API_BASE, api, type LeaderboardData } from '../game/api';
 import { useSave } from '../game/save-context';
+import { platform } from '../platform';
 import { NAV_BAR_OFFSET, useSafeArea } from '../game/useSafeArea';
 import '../styles/arcade.css';
 import './Leaderboard.css';
@@ -29,11 +29,7 @@ export default function Leaderboard({ game, onExit }: { game: GameId; onExit: ()
   const [reload, setReload] = useState(0);
 
   useEffect(() => {
-    try {
-      return graniteEvent.addEventListener('backEvent', { onEvent: onExit, onError: () => undefined });
-    } catch {
-      return undefined;
-    }
+    return platform.onBack(onExit);
   }, [onExit]);
 
   useEffect(() => {

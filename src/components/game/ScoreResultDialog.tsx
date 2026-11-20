@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import type { GameId } from '../../game/registry';
+import { canShare } from '../../game/share';
 import type { ScoreRunResult } from '../../game/useScoreRun';
 import { ArcadeIcon } from '../ArcadeIcon';
 import { Coin } from '../gameIcons';
@@ -63,7 +64,7 @@ export function ScoreResultDialog({
             다시 하기
           </button>
           {shareFailed && <p className="dialog-error">공유하지 못했어요. 잠시 뒤 다시 시도해 주세요.</p>}
-          {result.score > 0 && (
+          {canShare && result.score > 0 && (
             <button type="button" className="btn btn-secondary" onClick={onShare} disabled={sharing}>
               점수 공유하기
             </button>

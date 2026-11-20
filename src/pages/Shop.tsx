@@ -1,4 +1,3 @@
-import { graniteEvent } from '@apps-in-toss/web-framework';
 import { useEffect, useRef, useState } from 'react';
 import { ArcadeIcon, GameIcon } from '../components/ArcadeIcon';
 import { ItemPreview } from '../components/ItemPreview';
@@ -7,12 +6,13 @@ import { CATALOG, SLOT_NAMES, TIER_NAMES, abilityLines, effectLine, slotsOf, tie
 import { isEquipped, isOwned } from '../game/equipped';
 import { haptic } from '../game/haptic';
 import { useRewardedAd } from '../game/ads';
-import { canPurchase, fetchDisplayPrices, purchase, skuOf } from '../game/iap';
+import { canPurchase, fetchDisplayPrices, paymentsAvailable, purchase, skuOf } from '../game/iap';
 import { playSfx, setSfxSuspended } from '../game/sfx';
 import { AD_REWARD_COINS, GAMES, getGame, type GameId } from '../game/registry';
 import { Coin, Lock } from '../components/gameIcons';
 import { currencyVars } from '../game/currency';
 import { useSave } from '../game/save-context';
+import { platform } from '../platform';
 import { NAV_BAR_OFFSET, useSafeArea } from '../game/useSafeArea';
 import '../styles/arcade.css';
 import '../styles/game-dialog.css';
@@ -52,14 +52,7 @@ export default function Shop({
   const gameName = getGame(game).name;
 
   useEffect(() => {
-    try {
-      return graniteEvent.addEventListener('backEvent', {
-        onEvent: () => (confirming ? setConfirming(null) : onExit()),
-        onError: () => undefined,
-      });
-    } catch {
-      return undefined;
-    }
+    return platform.onBack(() => (confirming ? setConfirming(null) : onExit()));
   }, [confirming, onExit]);
 
   useEffect(() => () => window.clearTimeout(toastTimer.current), []);
@@ -171,7 +164,8 @@ export default function Shop({
 
   // 콘솔에 인앱 상품을 등록하기 전(상품 코드가 없음)에는 유료 탭을 숨기고 코인 아이템만 보여 준다.
   // 살 수 없는 "판매 준비 중" 버튼을 늘어놓지 않으려는 것이다. 개발 서버는 mock 상품으로 그대로 보인다.
-  const paidReady = CATALOG.some((i) => i.game === game && i.price.type === 'paid' && skuOf(i) !== null);
+  // 유료 아이템은 인앱결제가 있는 플랫폼에서, 콘솔에 상품을 등록한 뒤에만 보인다
+  const paidReady = paymentsAvailable && CATALOG.some((i) => i.game === game && i.price.type === 'paid' && skuOf(i) !== null);
   const shownTab: Tab = paidReady ? tab : 'coin';
   const inTab = (item: ShopItem) => (shownTab === 'paid' ? item.price.type === 'paid' : item.price.type !== 'paid');
 
