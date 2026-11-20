@@ -18,7 +18,7 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         // 스토어에 올릴 때마다 versionCode를 올린다 (ANDROID_VERSION_CODE 환경 변수로 덮어쓸 수 있다)
         versionCode((System.getenv('ANDROID_VERSION_CODE') ?: '1') as int)
-        versionName "1.0.1"
+        versionName "1.0.2"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
