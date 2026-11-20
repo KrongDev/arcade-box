@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArcadeIcon, GameIcon } from '../components/ArcadeIcon';
 import { ItemPreview } from '../components/ItemPreview';
+import { RewardPopup } from '../components/game/RewardPopup';
 import { ChevronLeft } from '../components/icons';
 import { CATALOG, SLOT_NAMES, TIER_NAMES, abilityLines, effectLine, slotsOf, tierOf, type ShopItem } from '../game/catalog';
 import { isEquipped, isOwned } from '../game/equipped';
@@ -43,6 +44,9 @@ export default function Shop({
   const [tab, setTab] = useState<Tab>('coin');
   const [confirming, setConfirming] = useState<ShopItem | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  /** 광고 보상 팝업 — 어느 게임 코인을 받았는지 크게 보여 준다 */
+  const [adReward, setAdReward] = useState<GameId | null>(null);
+  const closeAdReward = useCallback(() => setAdReward(null), []);
   const toastTimer = useRef<number | undefined>(undefined);
   const [purchasingId, setPurchasingId] = useState<string | null>(null);
   const [prices, setPrices] = useState<Record<string, string>>({});
@@ -52,8 +56,12 @@ export default function Shop({
   const gameName = getGame(game).name;
 
   useEffect(() => {
-    return platform.onBack(() => (confirming ? setConfirming(null) : onExit()));
-  }, [confirming, onExit]);
+    return platform.onBack(() => {
+      if (adReward) setAdReward(null);
+      else if (confirming) setConfirming(null);
+      else onExit();
+    });
+  }, [adReward, confirming, onExit]);
 
   useEffect(() => () => window.clearTimeout(toastTimer.current), []);
 
@@ -138,9 +146,7 @@ export default function Shop({
       },
       (result) => {
         if (result === 'rewarded' && granted) {
-          haptic('success', 0);
-          playSfx('coin');
-          showToast(`${getGame(target).name} 코인 ${AD_REWARD_COINS}개를 받았어요`);
+          setAdReward(target); // 효과음·진동은 팝업이 낸다
         } else if (result === 'closed-early') {
           showToast('광고를 끝까지 보면 코인을 받을 수 있어요');
         } else if (result === 'failed') {
@@ -340,6 +346,15 @@ export default function Shop({
             </div>
           </section>
         </div>
+      )}
+      {adReward && (
+        <RewardPopup
+          game={adReward}
+          amount={AD_REWARD_COINS}
+          title="광고 보상"
+          note={adRewardsLeft > 0 ? `오늘 ${adRewardsLeft}번 더 받을 수 있어요` : '오늘 광고 보상을 다 받았어요. 내일 또 받을 수 있어요'}
+          onClose={closeAdReward}
+        />
       )}
     </main>
   );
