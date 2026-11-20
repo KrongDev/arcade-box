@@ -60,6 +60,8 @@ describe('약관 페이지 경로', () => {
       assert.equal(res.status, 200);
       assert.match(res.headers.get('content-type') ?? '', /text\/html; charset=utf-8/);
       assert.match(res.headers.get('content-security-policy') ?? '', /default-src 'none'/);
+      // Cloudflare가 이메일을 스크립트로 감추지 않게 (CSP가 그 스크립트를 막는다)
+      assert.match(res.headers.get('cache-control') ?? '', /no-transform/);
       assert.match(await res.text(), new RegExp(`<title>${title}</title>`));
     }
   });

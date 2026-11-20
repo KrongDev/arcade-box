@@ -66,12 +66,16 @@ async function readJson(req: IncomingMessage): Promise<unknown> {
   }
 }
 
-/** 약관 페이지: 외부 리소스를 막고(CSP), 다른 사이트의 iframe에 들어가지 않게 한다 */
+/**
+ * 약관 페이지: 외부 리소스를 막고(CSP), 다른 사이트의 iframe에 들어가지 않게 한다.
+ * no-transform — 앞단 Cloudflare가 이메일을 스크립트로 감추는 변환(Email Obfuscation)을 하지 않게 한다.
+ * (CSP가 그 스크립트를 막아 이메일이 '[email protected]'으로만 보였다)
+ */
 function sendHtml(res: ServerResponse, html: string, headOnly: boolean) {
   res.writeHead(200, {
     'content-type': 'text/html; charset=utf-8',
     'content-length': Buffer.byteLength(html),
-    'cache-control': 'public, max-age=600',
+    'cache-control': 'public, max-age=600, no-transform',
     'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
     'x-content-type-options': 'nosniff',
     'referrer-policy': 'no-referrer',
