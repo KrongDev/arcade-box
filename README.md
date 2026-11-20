@@ -20,7 +20,7 @@ React 19 · TypeScript · Canvas 2D · Node.js 24 · PostgreSQL · Docker · Git
 
 화면은 오락실의 흰 오락기를 본떴어요. 회색 몸체에 검은 화면, 빛나는 동그란 버튼이 있고, 아이콘부터 게임 화면까지 모두 픽셀 그림이에요.
 
-게임을 계속 더해 가는 것을 전제로, 게임 목록·잠금 조건·코인·순위표를 게임 단위로 나눠 설계했어요. 클라이언트, 게임 서버, 배포 파이프라인까지 담은 개인 프로젝트예요.
+게임을 계속 더해 가는 것을 전제로, 게임 목록·잠금 조건·코인·순위표를 게임 단위로 나눠 설계했어요. 같은 게임 코드를 안드로이드 앱(구글 플레이)으로도 내요. 클라이언트, 게임 서버, 배포 파이프라인까지 담은 개인 프로젝트예요.
 
 ## 화면
 
@@ -118,7 +118,13 @@ flowchart LR
 - 아이콘(16×16)은 문자열 칸 지도로, 홈 화면 게임 그림과 상점 미리보기는 칸 계산으로 만들어요. 같은 색 칸을 SVG `path` 하나로 묶어서 그림 하나의 DOM 노드가 색 수만큼만 생겨요.
 - 색·글꼴·버튼 모양은 디자인 토큰(`src/styles/tokens.css`)과 공통 그림체(`src/styles/arcade.css`)에 모아 둬서, 보라색 테마에서 흰 오락기 테마로 바꿀 때 화면 코드를 거의 건드리지 않았어요.
 
-### 6. 결제·광고 정책 지키기
+### 6. 한 코드로 토스 미니앱과 안드로이드 앱
+
+- 저장·사용자 식별·결제·광고·공유·진동·화면 여백·뒤로가기처럼 플랫폼마다 다른 기능은 `src/platform/`의 인터페이스 하나로 모았어요. 앱 코드는 SDK를 직접 부르지 않아요.
+- 구현은 빌드할 때 하나만 들어가요(`vite build --mode android`면 Capacitor 구현). 토스 번들에는 Capacitor가, 안드로이드 앱에는 토스 SDK가 섞이지 않고, lint 규칙이 경계를 지켜요.
+- 플랫폼에 없는 기능은 `null`이라 화면이 그 기능을 숨겨요. 안드로이드 첫 버전은 기기에만 저장하고 결제·광고·공유·순위표를 숨겨요 — [안드로이드 앱](docs/android.md)
+
+### 7. 결제·광고 정책 지키기
 
 - 인앱결제는 지급을 마친 뒤에만 성공으로 처리하고, 앱을 열 때 지급되지 않은 주문을 다시 처리해요. 기기를 바꾸면 구매 내역으로 복원하고, 환불된 아이템은 회수해요.
 - 보상형 광고는 끝까지 봤다는 이벤트에서만 보상하고, 다음 광고를 미리 불러 둬요.
@@ -127,7 +133,7 @@ flowchart LR
 
 | 영역 | 사용 기술 |
 |---|---|
-| 클라이언트 | React 19, TypeScript, Vite, Canvas 2D, Web Audio, `@apps-in-toss/web-framework` 3.10, 픽셀 글꼴 [Galmuri](https://github.com/quiple/galmuri)(OFL) |
+| 클라이언트 | React 19, TypeScript, Vite, Canvas 2D, Web Audio, `@apps-in-toss/web-framework` 3.10, Capacitor 8(안드로이드), 픽셀 글꼴 [Galmuri](https://github.com/quiple/galmuri)(OFL) |
 | 서버 | Node.js 24 (TypeScript 직접 실행), PostgreSQL 17, `pg` |
 | 인프라 | Docker Compose, Caddy(HTTPS), GCP Compute Engine, GitHub Container Registry, GitHub Actions |
 | 품질 | Node 내장 테스트 러너(클라이언트 53개 · 서버 38개, 클라이언트·서버 규칙 값 일치 검사 포함), oxlint, CI |
@@ -137,6 +143,7 @@ flowchart LR
 ```
 arcade-box/
 ├─ src/
+│  ├─ platform/         플랫폼 모듈: 인터페이스 · 토스 미니앱 구현 · 안드로이드(Capacitor) 구현
 │  ├─ arcade/           게임 공용: 픽셀 그리기 · 타격 연출 · 충돌 판정 · 캔버스 게임 루프
 │  ├─ pinball/          핀볼 물리 엔진 · 픽셀 렌더러 · 타격 연출
 │  ├─ minesweeper/      판 로직 · 확대/이동 제스처
@@ -150,6 +157,7 @@ arcade-box/
 │  ├─ src/              HTTP 라우트 · 게임 규칙 · 저장소(PostgreSQL/메모리) · 파트너 API
 │  ├─ mock-partner/     로컬 개발용 가짜 파트너 API
 │  └─ test/
+├─ android/             안드로이드 앱 프로젝트 (Capacitor · Android Studio)
 ├─ assets/              콘솔 등록용 로고 · 썸네일 · 스크린샷
 └─ .github/workflows/   CI · 미니앱 배포 · 서버 배포
 ```
@@ -160,6 +168,7 @@ arcade-box/
 npm install
 (cd server && docker compose -f docker-compose.dev.yml up -d --build)   # 로컬 게임 서버 (가짜 파트너 API)
 npm run dev                                                             # http://localhost:5173
+npm run dev:android                                                     # 안드로이드 구현으로 브라우저에서 보기
 ```
 
 브라우저에서는 `@apps-in-toss/devtools`가 토스 SDK를 흉내 내요. 서버가 없어도 기기 저장만으로 동작해요.
@@ -169,4 +178,4 @@ npm test                               # 클라이언트 규칙 테스트
 cd server && npm install && npm test   # 서버 테스트
 ```
 
-배포 방법과 필요한 secret은 [docs/deploy.md](docs/deploy.md)에 정리해 뒀어요.
+배포 방법과 필요한 secret은 [docs/deploy.md](docs/deploy.md)에, 안드로이드 앱 빌드와 구글 플레이 출시는 [docs/android.md](docs/android.md)에 정리해 뒀어요.
