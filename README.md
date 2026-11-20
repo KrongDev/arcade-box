@@ -58,13 +58,17 @@ React 19 · TypeScript · Canvas 2D · Node.js 24 · PostgreSQL · Docker · Git
 - 동전 벽돌에서 떨어지는 동전을 패들로 받으면 코인, 아이템 벽돌에서는 넓은 패들 · 멀티볼 · 느린 공
 - 패들에 닿지 않고 이어서 깨면 점수 배수가 올라가요(최대 5배). 스테이지를 깨면 보너스
 
+![벽돌깨기: 이어서 깨기, 아이템 받기, 공 3개로 버티기](docs/images/breakout-play.png)
+
 ### 공통
 
 - **게임별 코인** — 점수 구간 보너스, 판 위 동전, 클리어 보상, 출석(하루 50), 보상형 광고(하루 3번). 게임마다 코인 색이 달라요(핀볼 금색, 지뢰찾기 민트, 벽돌깨기 주황)
 - **지금 고른 게임 하나를 앱 전체가 함께 써요** — 홈 오락기 화면에서 게임을 넘기면 위쪽 코인 액정이 그 게임 코인으로 바뀌고, 상점과 순위표도 그 게임으로 열려요. 상점 안에서 게임을 바꾸면 홈도 따라 바뀌어요
 - **상점** — 코인 아이템과 유료(인앱결제, 평생 소장) 아이템으로 핀볼 판·공, 지뢰찾기 발판·맵, 벽돌깨기 패들·벽돌 꾸미기. 아이템마다 능력(판 위 동전 더 자주, 동전 코인 +%, 지뢰 한 번 막기, 숨은 동전·동전 벽돌 더 많이)과 유료 이펙트(네온·은하수 판, 불꽃·번개 꼬리)가 있어요. 아직 잠긴 게임은 상점 위 게임 버튼에 자물쇠로 보여요
-- **게임별 순위표** — 익명 이름으로 표시
+- **잠금 해제 연출** — 새 게임이나 다음 난이도가 열리면 결과 창 위에서 자물쇠가 덜컥거리다 픽셀 조각으로 부서지고, '잠금 해제!' 카드로 무엇이 열렸는지 알려 줘요
+- **게임별 순위표** — 익명 이름으로 표시. 불러오는 동안 같은 자리에 뼈대를 보여 주고, 시상대가 3위·2위·1위 순으로 솟아요
 - **기기 간 동기화** — 다른 기기에서 열어도 코인·기록·아이템이 그대로
+- **내 기록 지우기** — 설정에서 서버와 기기의 코인·기록·아이템·순위표 기록을 한 번에 지워요
 - 효과음·진동 설정, 점수 공유
 
 ## 아키텍처
@@ -109,6 +113,8 @@ flowchart LR
 - 세션 토큰은 SHA-256 해시로만 저장하고, 순위표에는 내부 사용자 ID의 해시로 만든 익명 이름("플레이어 1A2B")만 보여 줘요.
 - CORS는 미니앱 origin만 정확히 허용해요. 운영 모드에서는 http 파트너 주소나 개발용 origin이 설정돼 있으면 서버가 시작하지 않아요.
 - 비밀값은 저장소에 두지 않고 GitHub Actions secret으로만 넣어요 — [배포와 비밀값 관리](docs/deploy.md)
+- 내 기록 지우기는 동기화 큐를 먼저 멈춘 뒤(보내는 중인 요청이 끝날 때까지 기다려요) 서버 기록을 지우고, 성공했을 때만 기기 기록을 지워요. 지우는 사이에 옛 기록이 서버로 다시 올라가지 않아요.
+- 개인정보처리방침·이용약관은 `docs/*.md` 하나를 원본으로 서버가 HTML 페이지로 보여 줘요(외부 리소스를 막는 CSP). 테스트가 원본과 서버 페이지가 같은지 확인해서 둘이 어긋나지 않아요.
 
 ### 5. 픽셀 그림체를 코드로 그리기
 
@@ -123,6 +129,7 @@ flowchart LR
 - 저장·사용자 식별·결제·광고·공유·진동·화면 여백·뒤로가기처럼 플랫폼마다 다른 기능은 `src/platform/`의 인터페이스 하나로 모았어요. 앱 코드는 SDK를 직접 부르지 않아요.
 - 구현은 빌드할 때 하나만 들어가요(`vite build --mode android`면 Capacitor 구현). 토스 번들에는 Capacitor가, 안드로이드 앱에는 토스 SDK가 섞이지 않고, lint 규칙이 경계를 지켜요.
 - 플랫폼에 없는 기능은 `null`이라 화면이 그 기능을 숨겨요. 안드로이드 첫 버전은 기기에만 저장하고 결제·광고·공유·순위표를 숨겨요 — [안드로이드 앱](docs/android.md)
+- 안드로이드 출시 빌드는 R8로 코드·리소스를 줄여(앱 코드 7.1MB → 0.8MB) 외부와 전혀 통신하지 않아요. 구글 플레이 데이터 보안은 '수집 없음'이에요.
 
 ### 7. 결제·광고 정책 지키기
 
@@ -136,7 +143,7 @@ flowchart LR
 | 클라이언트 | React 19, TypeScript, Vite, Canvas 2D, Web Audio, `@apps-in-toss/web-framework` 3.10, Capacitor 8(안드로이드), 픽셀 글꼴 [Galmuri](https://github.com/quiple/galmuri)(OFL) |
 | 서버 | Node.js 24 (TypeScript 직접 실행), PostgreSQL 17, `pg` |
 | 인프라 | Docker Compose, Caddy(HTTPS), GCP Compute Engine, GitHub Container Registry, GitHub Actions |
-| 품질 | Node 내장 테스트 러너(클라이언트 53개 · 서버 38개, 클라이언트·서버 규칙 값 일치 검사 포함), oxlint, CI |
+| 품질 | Node 내장 테스트 러너(클라이언트 58개 · 서버 46개, 클라이언트·서버 규칙 값 일치 검사 포함), oxlint, CI |
 
 ## 프로젝트 구조
 
@@ -154,7 +161,7 @@ arcade-box/
 │  └─ pages/            홈 · 핀볼 · 지뢰찾기 · 벽돌깨기 · 상점 · 순위표 · 설정 화면
 ├─ test/                클라이언트 규칙 테스트 (node --test)
 ├─ server/
-│  ├─ src/              HTTP 라우트 · 게임 규칙 · 저장소(PostgreSQL/메모리) · 파트너 API
+│  ├─ src/              HTTP 라우트 · 게임 규칙 · 저장소(PostgreSQL/메모리) · 파트너 API · 약관 페이지
 │  ├─ mock-partner/     로컬 개발용 가짜 파트너 API
 │  └─ test/
 ├─ android/             안드로이드 앱 프로젝트 (Capacitor · Android Studio)
@@ -178,4 +185,4 @@ npm test                               # 클라이언트 규칙 테스트
 cd server && npm install && npm test   # 서버 테스트
 ```
 
-배포 방법과 필요한 secret은 [docs/deploy.md](docs/deploy.md)에, 안드로이드 앱 빌드와 구글 플레이 출시는 [docs/android.md](docs/android.md)에 정리해 뒀어요. [개인정보처리방침](docs/privacy-policy.md)과 [이용약관](docs/terms.md)은 토스 미니앱과 안드로이드 앱에 함께 써요.
+배포 방법과 필요한 secret은 [docs/deploy.md](docs/deploy.md)에, 안드로이드 앱 빌드와 구글 플레이 출시는 [docs/android.md](docs/android.md)에 정리해 뒀어요. [개인정보처리방침](https://arcade-api.geonbox.com/privacy)과 [이용약관](https://arcade-api.geonbox.com/terms)은 토스 미니앱과 안드로이드 앱에 함께 써요(원본: `docs/privacy-policy.md`, `docs/terms.md`).
