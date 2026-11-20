@@ -41,4 +41,7 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 세로 고정(screenOrientation=portrait)이 세로 화면을 '필수 기능'으로 만들지 않게 한다.
+         가로 화면만 있는 기기에서도 설치되고, 실행되면 세로로 보여 준다 (구글 플레이 사용 가능 여부 경고) -->
+    <uses-feature android:name="android.hardware.screen.portrait" android:required="false" />
 </manifest>
