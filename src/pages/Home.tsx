@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from 're
 import { ArcadeIcon, GameIcon } from '../components/ArcadeIcon';
 import { GameArt } from '../components/GameArt';
 import { Coin, Lock } from '../components/gameIcons';
-import { ChevronLeft, ChevronRight, Close } from '../components/icons';
+import { RewardPopup } from '../components/game/RewardPopup';
+import { Check, ChevronLeft, ChevronRight, Close } from '../components/icons';
 import { API_BASE } from '../game/api';
 import { currencyVars } from '../game/currency';
 import { haptic } from '../game/haptic';
@@ -36,16 +37,23 @@ export default function Home({
   const { save, canClaimAttendance, claimAttendance, serverStatus } = useSave();
   const insets = useSafeArea();
   const [chooserOpen, setChooserOpen] = useState(false);
-  const [claimedMessage, setClaimedMessage] = useState<string | null>(null);
+  /** 오늘 출석 보상을 받은 게임 (받은 직후 카드에 보여 준다) */
+  const [claimedGame, setClaimedGame] = useState<GameId | null>(null);
+  /** 보상 팝업 — 무엇을 받았는지 크게 보여 준다 */
+  const [reward, setReward] = useState<GameId | null>(null);
+  /** 위쪽 코인 액정의 "+50" 연출 (key가 바뀌면 다시 재생) */
+  const [coinBump, setCoinBump] = useState<{ key: number; amount: number } | null>(null);
   const [exitOpen, setExitOpen] = useState(false);
+  const closeReward = useCallback(() => setReward(null), []);
 
   // 홈에서 뒤로가기: 열린 창이 있으면 닫고, 없으면 종료할지 묻는다(바로 꺼지지 않게)
   useEffect(() => {
     return platform.onBack(() => {
-      if (chooserOpen) setChooserOpen(false);
+      if (reward) setReward(null);
+      else if (chooserOpen) setChooserOpen(false);
       else setExitOpen((open) => !open);
     });
-  }, [chooserOpen]);
+  }, [chooserOpen, reward]);
   const exitApp = () => {
     setExitOpen(false);
     platform.exit();
@@ -152,9 +160,11 @@ export default function Home({
   const claimTargets = unlockedGames.filter((g) => g.playable);
   const claim = (id: GameId) => {
     claimAttendance(id);
-    haptic('success', 0);
     setChooserOpen(false);
-    setClaimedMessage(`${getGame(id).name} 코인 ${ATTENDANCE_COINS}개를 받았어요`);
+    setClaimedGame(id);
+    setReward(id); // 효과음·진동은 팝업이 낸다
+    // 지금 보고 있는 게임 코인이면 위쪽 액정 숫자도 함께 튀게 한다
+    if (id === current.id) setCoinBump({ key: Date.now(), amount: ATTENDANCE_COINS });
   };
   const onClaim = () => {
     if (claimTargets.length === 1) claim(claimTargets[0].id);
@@ -180,9 +190,14 @@ export default function Home({
       <section className="home-coin ab-card" aria-label={`${current.name} 코인`} style={currencyVars(current.id) as CSSProperties}>
         <GameIcon id={current.id} size={16} />
         <span className="home-coin-name">{current.name} 코인</span>
-        <span className="ab-lcd home-coin-lcd">
+        <span key={coinBump?.key ?? 0} className={coinBump ? 'ab-lcd home-coin-lcd is-bump' : 'ab-lcd home-coin-lcd'}>
           <Coin game={current.id} size={16} /> {(save.coins[current.id] ?? 0).toLocaleString()}
         </span>
+        {coinBump && (
+          <span key={`plus-${coinBump.key}`} className="home-coin-plus" aria-hidden="true">
+            +{coinBump.amount}
+          </span>
+        )}
       </section>
 
       <section className="machine" aria-label="게임 고르기">
@@ -254,9 +269,18 @@ export default function Home({
         <div className="coin-door-text">
           <p className="coin-door-title">출석 보상</p>
           <p className="coin-door-desc">
-            {canClaimAttendance
-              ? `하루 한 번 코인 ${ATTENDANCE_COINS}개를 받을 수 있어요`
-              : (claimedMessage ?? '오늘 보상을 받았어요. 내일 다시 받을 수 있어요')}
+            {canClaimAttendance ? (
+              `하루 한 번 코인 ${ATTENDANCE_COINS}개를 받을 수 있어요`
+            ) : claimedGame ? (
+              <>
+                <strong className="coin-door-got" style={currencyVars(claimedGame) as CSSProperties}>
+                  <Coin game={claimedGame} size={14} /> {getGame(claimedGame).name} 코인 +{ATTENDANCE_COINS}
+                </strong>{' '}
+                받았어요. 내일 또 받을 수 있어요
+              </>
+            ) : (
+              '오늘 보상을 받았어요. 내일 또 받을 수 있어요'
+            )}
           </p>
         </div>
         <button
@@ -265,9 +289,19 @@ export default function Home({
           onClick={onClaim}
           disabled={!canClaimAttendance || claimTargets.length === 0}
         >
-          {canClaimAttendance ? '받기' : '받음'}
+          {canClaimAttendance ? (
+            '받기'
+          ) : (
+            <>
+              <Check size={16} /> 받음
+            </>
+          )}
         </button>
       </section>
+
+      {reward && (
+        <RewardPopup game={reward} amount={ATTENDANCE_COINS} title="출석 보상" note="내일 또 받을 수 있어요" onClose={closeReward} />
+      )}
 
       <div className="home-tiles">
         <button type="button" className="home-tile ab-card" onClick={onOpenShop}>

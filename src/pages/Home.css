@@ -40,6 +40,59 @@
   justify-content: flex-end;
 }
 
+/* 코인을 받으면 액정 숫자가 튀며 빛나고, 옆에 "+50"이 떠오른다 */
+.home-coin {
+  position: relative;
+}
+
+.home-coin-lcd.is-bump {
+  animation: coin-bump 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.4);
+}
+
+.home-coin-plus {
+  position: absolute;
+  right: 18px;
+  top: -6px;
+  font-family: var(--font-pixel);
+  font-size: var(--font-size-body);
+  font-weight: 700;
+  color: var(--cur-ink, var(--color-text-strong));
+  text-shadow: 0 2px 0 #fff;
+  pointer-events: none;
+  animation: coin-plus 1.4s ease-out both;
+}
+
+@keyframes coin-bump {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.12);
+    box-shadow: 0 0 18px 4px var(--cur-soft, rgba(255, 217, 61, 0.7));
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes coin-plus {
+  0% {
+    transform: translateY(12px);
+    opacity: 0;
+  }
+  20% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-16px);
+    opacity: 0;
+  }
+}
+
 /* 오락기 화면 */
 .machine-crt {
   height: 216px;
@@ -383,6 +436,30 @@
 .coin-door-button {
   flex-shrink: 0;
   min-width: 76px;
+  gap: 4px;
+}
+
+/* 받은 뒤: 무엇을 받았는지 코인 색으로 */
+.coin-door-got {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--cur-soft, #fff3a8);
+  color: var(--cur-ink, var(--color-text-strong));
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-coin-lcd.is-bump,
+  .home-coin-plus {
+    animation: none;
+  }
+  .home-coin-plus {
+    display: none;
+  }
 }
 
 /* 상점 · 순위표 */

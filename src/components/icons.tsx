@@ -118,3 +118,21 @@ export function Search({ size = '1em' }: IconProps) {
     </svg>
   );
 }
+
+export function Check({ size = '1em' }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M5 12.5 L10 17.5 L19 7" />
+    </svg>
+  );
+}
