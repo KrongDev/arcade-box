@@ -76,7 +76,7 @@ function sendStatic(res: ServerResponse, page: StaticAsset, headOnly: boolean) {
     'content-type': page.type,
     'content-length': page.body.length,
     'cache-control': `public, max-age=${page.maxAge}, no-transform`,
-    'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+    'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
     'x-content-type-options': 'nosniff',
     'referrer-policy': 'no-referrer',
   });
@@ -140,9 +140,6 @@ export function createApp(deps: AppDeps) {
 
     if (path === '/healthz' && method === 'GET') return send(res, 200, { ok: true });
 
-    // 공개 페이지: 개인정보처리방침·이용약관(스토어·콘솔에 넣는 주소), 테스터 모집(/test)
-    const page = staticPages.get(path);
-    if (page && (method === 'GET' || method === 'HEAD')) return sendStatic(res, page, method === 'HEAD');
 
     // 익명 식별키 인증 코드 → 세션 발급
     if (path === '/v1/auth/exchange' && method === 'POST') {
@@ -283,6 +280,14 @@ export function createApp(deps: AppDeps) {
 
   return async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
     try {
+      // 공개 페이지(약관·테스터 모집)와 그 이미지·글꼴은 origin을 따지지 않고 준다.
+      // 브라우저는 같은 서버의 글꼴도 Origin 헤더를 붙여 요청해서, CORS 검사를 먼저 하면 403이 난다.
+      // (CORS 허용 헤더는 붙이지 않으니 다른 사이트의 스크립트가 읽어 갈 수는 없다)
+      const method = req.method ?? 'GET';
+      if (method === 'GET' || method === 'HEAD') {
+        const page = staticPages.get(new URL(req.url ?? '/', 'http://localhost').pathname);
+        if (page) return sendStatic(res, page, method === 'HEAD');
+      }
       if (!applyCors(req, res)) {
         // 허용하지 않은 origin — 본문을 내주지 않는다
         return send(res, 403, { error: 'origin_not_allowed' });

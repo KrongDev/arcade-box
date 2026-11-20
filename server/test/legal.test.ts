@@ -77,7 +77,12 @@ describe('약관 페이지 경로', () => {
       assert.match(html, /https:\/\/play\.google\.com\/store\/apps\/details\?id=com\.geonbox\.arcadebox/);
       assert.match(html, /og:image" content="https:\/\/arcade-api\.geonbox\.com\/test\/og\.png"/);
     }
-    for (const path of ['/test/icon.png', '/test/og.png']) {
+    // 브라우저는 같은 서버의 글꼴도 Origin을 붙여 요청한다 — 공개 페이지 자원은 origin과 상관없이 준다
+    const font = await fetch(base + '/test/galmuri11-bold.woff2', { headers: { origin: 'https://arcade-api.geonbox.com' } });
+    assert.equal(font.status, 200);
+    assert.equal(font.headers.get('content-type'), 'font/woff2');
+    assert.match(font.headers.get('content-security-policy') ?? '', /font-src 'self'/);
+    for (const path of ['/test/icon.png', '/test/og.png', '/test/game-pinball.png', '/test/game-minesweeper.png', '/test/game-breakout.png']) {
       const res = await fetch(base + path);
       assert.equal(res.status, 200);
       assert.equal(res.headers.get('content-type'), 'image/png');

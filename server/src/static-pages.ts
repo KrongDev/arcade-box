@@ -16,6 +16,12 @@ const TESTER_FILES = [
   { paths: ['/test', '/test/'], file: 'tester.html', type: HTML, maxAge: 600 },
   { paths: ['/test/icon.png'], file: 'icon.png', type: 'image/png', maxAge: 86400 },
   { paths: ['/test/og.png'], file: 'og.png', type: 'image/png', maxAge: 86400 },
+  { paths: ['/test/game-pinball.png'], file: 'game-pinball.png', type: 'image/png', maxAge: 86400 },
+  { paths: ['/test/game-minesweeper.png'], file: 'game-minesweeper.png', type: 'image/png', maxAge: 86400 },
+  { paths: ['/test/game-breakout.png'], file: 'game-breakout.png', type: 'image/png', maxAge: 86400 },
+  // 앱과 같은 픽셀 글꼴 Galmuri(SIL OFL) — 라이선스 전문을 함께 둔다
+  { paths: ['/test/galmuri11-bold.woff2'], file: 'galmuri11-bold.woff2', type: 'font/woff2', maxAge: 604800 },
+  { paths: ['/test/galmuri-ofl.txt'], file: 'galmuri-ofl.txt', type: 'text/plain; charset=utf-8', maxAge: 86400 },
 ] as const;
 
 export function loadStaticPages(): Map<string, StaticAsset> {
