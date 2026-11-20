@@ -76,6 +76,9 @@ describe('약관 페이지 경로', () => {
       assert.match(html, /https:\/\/play\.google\.com\/apps\/testing\/com\.geonbox\.arcadebox/);
       assert.match(html, /https:\/\/play\.google\.com\/store\/apps\/details\?id=com\.geonbox\.arcadebox/);
       assert.match(html, /og:image" content="https:\/\/arcade-api\.geonbox\.com\/test\/og\.png"/);
+      // 의견 보내기: 메일 앱(mailto)과 Gmail 작성 화면 모두 받는 사람이 채워진다
+      assert.match(html, /href="mailto:leegeondev@gmail\.com\?subject=/);
+      assert.match(html, /href="https:\/\/mail\.google\.com\/mail\/\?view=cm&amp;fs=1&amp;to=leegeondev@gmail\.com&amp;su=/);
     }
     // 브라우저는 같은 서버의 글꼴도 Origin을 붙여 요청한다 — 공개 페이지 자원은 origin과 상관없이 준다
     const font = await fetch(base + '/test/galmuri11-bold.woff2', { headers: { origin: 'https://arcade-api.geonbox.com' } });
