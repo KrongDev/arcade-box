@@ -29,6 +29,13 @@
   flex-shrink: 0;
 }
 
+/* 잠긴 게임: 자물쇠를 달고 흐리게, 누를 수 없다 */
+.shop-games .ab-tab.is-locked {
+  box-shadow: 0 3px 0 var(--line);
+  color: var(--color-text-disabled);
+  cursor: not-allowed;
+}
+
 /* 잔액 — 플라스틱 판 위 액정, 숫자는 지금 게임의 코인 색(--cur-*: game/currency.ts) */
 .shop-balance {
   margin-bottom: var(--space-4);

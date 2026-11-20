@@ -10,7 +10,7 @@ import { useRewardedAd } from '../game/ads';
 import { canPurchase, fetchDisplayPrices, purchase, skuOf } from '../game/iap';
 import { playSfx, setSfxSuspended } from '../game/sfx';
 import { AD_REWARD_COINS, GAMES, getGame, type GameId } from '../game/registry';
-import { Coin } from '../components/gameIcons';
+import { Coin, Lock } from '../components/gameIcons';
 import { currencyVars } from '../game/currency';
 import { useSave } from '../game/save-context';
 import { NAV_BAR_OFFSET, useSafeArea } from '../game/useSafeArea';
@@ -34,7 +34,9 @@ export default function Shop({
   const ad = useRewardedAd();
   const insets = useSafeArea();
 
-  const games = GAMES.filter((g) => save.unlocked.includes(g.id) && g.playable);
+  // 위쪽 게임 버튼은 잠긴 게임도 자물쇠와 함께 보여 준다 (누를 수는 없다)
+  const tabGames = GAMES.filter((g) => g.playable);
+  const games = tabGames.filter((g) => save.unlocked.includes(g.id));
   // 고른 게임이 아직 잠겼거나 준비 중이면 열린 첫 게임 상점을 보여 준다
   const game: GameId = games.some((g) => g.id === selectedGame) ? selectedGame : (games[0]?.id ?? 'pinball');
   const setGame = onGameChange;
@@ -187,20 +189,25 @@ export default function Shop({
         <p className="shop-subtitle">게임을 고르면 그 게임 코인과 아이템이 보여요</p>
       </header>
 
-      {games.length > 1 && (
+      {tabGames.length > 1 && (
         <div className="ab-tabs shop-games" role="tablist" aria-label="게임 선택">
-          {games.map((g) => (
-            <button
-              key={g.id}
-              type="button"
-              role="tab"
-              aria-selected={g.id === game}
-              className={g.id === game ? 'ab-tab is-active' : 'ab-tab'}
-              onClick={() => setGame(g.id)}
-            >
-              <GameIcon id={g.id} size={16} /> {g.name}
-            </button>
-          ))}
+          {tabGames.map((g) => {
+            const locked = !save.unlocked.includes(g.id);
+            return (
+              <button
+                key={g.id}
+                type="button"
+                role="tab"
+                aria-selected={g.id === game}
+                aria-label={locked ? `${g.name}, 아직 잠겨 있어요` : undefined}
+                disabled={locked}
+                className={locked ? 'ab-tab is-locked' : g.id === game ? 'ab-tab is-active' : 'ab-tab'}
+                onClick={() => setGame(g.id)}
+              >
+                {locked ? <Lock size={16} /> : <GameIcon id={g.id} size={16} />} {g.name}
+              </button>
+            );
+          })}
         </div>
       )}
 
