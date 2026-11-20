@@ -15,6 +15,7 @@ import {
   updateSettings,
   type UserState,
 } from './domain.ts';
+import { loadLegalPages } from './legal.ts';
 import type { PartnerApi } from './partner.ts';
 import type { Store } from './store.ts';
 
@@ -24,6 +25,8 @@ export interface AppDeps {
   allowedOrigins: string[];
   sessionTtlDays: number;
   now?: () => Date;
+  /** 약관 페이지(경로 → HTML). 없으면 src/legal/*.html을 읽는다 */
+  legalPages?: Map<string, string>;
 }
 
 const MAX_BODY = 32 * 1024;
@@ -63,6 +66,19 @@ async function readJson(req: IncomingMessage): Promise<unknown> {
   }
 }
 
+/** 약관 페이지: 외부 리소스를 막고(CSP), 다른 사이트의 iframe에 들어가지 않게 한다 */
+function sendHtml(res: ServerResponse, html: string, headOnly: boolean) {
+  res.writeHead(200, {
+    'content-type': 'text/html; charset=utf-8',
+    'content-length': Buffer.byteLength(html),
+    'cache-control': 'public, max-age=600',
+    'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+    'x-content-type-options': 'nosniff',
+    'referrer-policy': 'no-referrer',
+  });
+  res.end(headOnly ? undefined : html);
+}
+
 function send(res: ServerResponse, status: number, body: unknown) {
   const text = JSON.stringify(body);
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'content-length': Buffer.byteLength(text) });
@@ -72,6 +88,7 @@ function send(res: ServerResponse, status: number, body: unknown) {
 export function createApp(deps: AppDeps) {
   const now = deps.now ?? (() => new Date());
   const allowed = new Set(deps.allowedOrigins);
+  const legalPages = deps.legalPages ?? loadLegalPages();
 
   function applyCors(req: IncomingMessage, res: ServerResponse): boolean {
     const origin = req.headers.origin;
@@ -118,6 +135,10 @@ export function createApp(deps: AppDeps) {
     const method = req.method ?? 'GET';
 
     if (path === '/healthz' && method === 'GET') return send(res, 200, { ok: true });
+
+    // 개인정보처리방침·이용약관 (구글 플레이·앱인토스 콘솔에 넣는 공개 주소)
+    const legal = legalPages.get(path);
+    if (legal && (method === 'GET' || method === 'HEAD')) return sendHtml(res, legal, method === 'HEAD');
 
     // 익명 식별키 인증 코드 → 세션 발급
     if (path === '/v1/auth/exchange' && method === 'POST') {

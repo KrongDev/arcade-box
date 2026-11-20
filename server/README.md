@@ -47,6 +47,7 @@ npm run typecheck
 | PUT | `/v1/me/equipped` | `{ itemId }` |
 | PUT | `/v1/me/settings` | `{ sound?, haptic? }` |
 | GET | `/v1/leaderboards/:board` | `pinball`, `minesweeper.easy|normal|hard` 순위 |
+| GET | `/privacy`, `/terms` | 개인정보처리방침·이용약관 페이지 (원본 `docs/*.md` → `npm run legal`로 만든 `src/legal/*.html`) |
 
 인증이 필요한 경로는 `Authorization: Bearer <token>`.
 

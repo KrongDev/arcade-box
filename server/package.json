@@ -9,7 +9,8 @@
   "scripts": {
     "start": "node src/index.ts",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "node --test test/*.test.ts"
+    "test": "node --test test/*.test.ts",
+    "legal": "node scripts/build-legal.ts"
   },
   "dependencies": {
     "pg": "^8.23.1"
