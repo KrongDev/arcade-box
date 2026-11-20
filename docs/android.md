@@ -56,6 +56,7 @@ ANDROID_VERSION_CODE=1 ./gradlew bundleRelease
 
 - 올릴 때마다 `ANDROID_VERSION_CODE`를 1씩 올려요(마지막으로 만든 값: 4, 버전 이름 1.0.2).
 - 출시 빌드는 R8(코드·리소스 줄이기, 최적화)이 켜져 있어요. 난독화 매핑 파일은 AAB 안에 함께 들어가서 구글 플레이가 비정상 종료 기록을 풀 때 써요. Capacitor 플러그인은 Capacitor가 주는 보호 규칙으로 지켜져요.
+- 구글 플레이 'R8 구성'의 리소스 축소 최적화(`android/gradle.properties`의 `android.r8.optimizedResourceShrinking`)와 클래스 리패키징(`android/app/proguard-rules.pro`의 `-repackageclasses`)도 켜 두었어요. 남은 최적화 비율은 Capacitor 플러그인·WebView 연결부·AndroidX처럼 이름으로 찾아 쓰는 클래스를 지키는 규칙 몫이라 더 줄이면 앱이 깨져요.
 - 폰·에뮬레이터에서 먼저 보려면 `./gradlew assembleDebug` 후 `adb install -r app/build/outputs/apk/debug/app-debug.apk`.
 - 브라우저에서 안드로이드 화면을 보려면 `npm run dev:android`(Capacitor 플러그인의 웹 대체 동작을 써요).
 
