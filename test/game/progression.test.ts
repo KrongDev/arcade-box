@@ -17,12 +17,10 @@ test('단계 조건: 그 단계를 깼으면 열린다', () => {
   assert.equal(isUnlockMet(rule, { ...start, cleared: ['minesweeper.hard'] }), true);
 });
 
-test('핀볼 30,000점이면 지뢰찾기, 지뢰찾기 고급을 깨면 벽돌깨기가 새로 열린다', () => {
+test('핀볼 30,000점이면 지뢰찾기, 지뢰찾기 중급을 깨면 벽돌깨기가 새로 열린다', () => {
   assert.deepEqual(newlyUnlocked({ ...start, best: { pinball: 31000 } }), ['minesweeper']);
-  assert.deepEqual(
-    newlyUnlocked({ ...start, unlocked: ['pinball', 'minesweeper'], cleared: ['minesweeper.easy', 'minesweeper.normal', 'minesweeper.hard'] }),
-    ['breakout'],
-  );
+  assert.deepEqual(newlyUnlocked({ ...start, unlocked: ['pinball', 'minesweeper'], cleared: ['minesweeper.easy'] }), []);
+  assert.deepEqual(newlyUnlocked({ ...start, unlocked: ['pinball', 'minesweeper'], cleared: ['minesweeper.easy', 'minesweeper.normal'] }), ['breakout']);
 });
 
 test('이미 열린 게임은 다시 열리지 않는다', () => {

@@ -374,22 +374,22 @@ describe('벽돌깨기', () => {
   /** 지뢰찾기 단계를 깬 기록 (안전한 칸을 다 열고 지뢰에 깃발을 다 꽂음) */
   const clearRun = (board: string, safe: number, mines: number) => ({ board, won: true, seconds: 60, opened: safe, correctFlags: mines, wrongFlags: 0, coins: 0 });
 
-  it('지뢰찾기 고급을 깨야 열리고, 열리면 점수가 벽돌깨기 순위표에 오른다', async () => {
+  it('지뢰찾기 중급을 깨야 열리고, 열리면 점수가 벽돌깨기 순위표에 오른다', async () => {
     const kim = await login('code-kim-00001', 'anon-kim');
     advance(5000);
     await call('POST', '/v1/me/runs', { token: kim, body: { board: 'pinball', score: 30000, coins: 0 } });
     advance(5000);
     assert.equal((await call('POST', '/v1/me/runs', { token: kim, body: { board: 'breakout', score: 100, coins: 0 } })).status, 403);
     advance(5000);
-    await call('POST', '/v1/me/runs', { token: kim, body: clearRun('minesweeper.easy', 70, 10) });
+    const easy = await call('POST', '/v1/me/runs', { token: kim, body: clearRun('minesweeper.easy', 70, 10) });
+    assert.deepEqual(easy.body.run.newlyUnlocked, []);
+    advance(5000);
+    assert.equal((await call('POST', '/v1/me/runs', { token: kim, body: { board: 'breakout', score: 100, coins: 0 } })).status, 403);
     advance(5000);
     const normal = await call('POST', '/v1/me/runs', { token: kim, body: clearRun('minesweeper.normal', 180, 36) });
-    assert.deepEqual(normal.body.run.newlyUnlocked, []);
-    advance(5000);
-    const hard = await call('POST', '/v1/me/runs', { token: kim, body: clearRun('minesweeper.hard', 336, 80) });
-    assert.equal(hard.status, 200);
-    assert.deepEqual(hard.body.run.newlyUnlocked, ['breakout']);
-    assert.ok(hard.body.unlocked.includes('breakout'));
+    assert.equal(normal.status, 200);
+    assert.deepEqual(normal.body.run.newlyUnlocked, ['breakout']);
+    assert.ok(normal.body.unlocked.includes('breakout'));
 
     advance(5000);
     const run = await call('POST', '/v1/me/runs', { token: kim, body: { board: 'breakout', score: 12340, coins: 35 } });
@@ -426,26 +426,26 @@ describe('벽돌깨기', () => {
 });
 
 describe('깬 단계 가져오기와 잠금 다시 계산', () => {
-  it('기기에서 지뢰찾기 고급까지 깼으면 가져올 때 깬 단계와 벽돌깨기 잠금 해제도 가져온다', async () => {
+  it('기기에서 지뢰찾기 중급까지 깼으면 가져올 때 깬 단계와 벽돌깨기 잠금 해제도 가져온다', async () => {
     const nat = await login('code-nat-00001', 'anon-nat');
     const r = await call('POST', '/v1/me/import', {
       token: nat,
-      body: { save: { best: { pinball: 31000 }, cleared: ['minesweeper.easy', 'minesweeper.normal', 'minesweeper.hard'] } },
+      body: { save: { best: { pinball: 31000 }, cleared: ['minesweeper.easy', 'minesweeper.normal'] } },
     });
     assert.equal(r.status, 200);
-    assert.deepEqual(r.body.cleared, ['minesweeper.easy', 'minesweeper.normal', 'minesweeper.hard']);
+    assert.deepEqual(r.body.cleared, ['minesweeper.easy', 'minesweeper.normal']);
     assert.ok(r.body.unlocked.includes('breakout'));
   });
 
   it('앞 단계를 건너뛴 깬 기록은 가져오지 않는다', async () => {
     const oli = await login('code-oli-00001', 'anon-oli');
-    const r = await call('POST', '/v1/me/import', { token: oli, body: { save: { best: { pinball: 31000 }, cleared: ['minesweeper.easy', 'minesweeper.hard'] } } });
-    assert.deepEqual(r.body.cleared, ['minesweeper.easy']);
+    const r = await call('POST', '/v1/me/import', { token: oli, body: { save: { best: { pinball: 31000 }, cleared: ['minesweeper.normal', 'minesweeper.hard'] } } });
+    assert.deepEqual(r.body.cleared, []);
     assert.equal(r.body.unlocked.includes('breakout'), false);
   });
 
-  it('저장된 상태를 불러올 때 새로 생긴 잠금 조건을 다시 계산한다', () => {
-    const state = normalizeState({ unlocked: ['pinball', 'minesweeper'], cleared: ['minesweeper.easy', 'minesweeper.normal', 'minesweeper.hard'], best: { pinball: 30000 } });
+  it('저장된 상태를 불러올 때 새로 생긴 잠금 조건을 다시 계산한다 (중급만 깬 기존 사용자도 벽돌깨기가 열린다)', () => {
+    const state = normalizeState({ unlocked: ['pinball', 'minesweeper'], cleared: ['minesweeper.easy', 'minesweeper.normal'], best: { pinball: 30000 } });
     assert.ok(state.unlocked.includes('breakout'));
   });
 });

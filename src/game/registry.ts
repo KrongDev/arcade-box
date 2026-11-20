@@ -59,7 +59,7 @@ export const GAMES: GameDef[] = [
     id: 'breakout',
     name: '벽돌깨기',
     description: '공을 튕겨 벽돌을 모두 깨요',
-    unlock: { kind: 'clear', stage: 'minesweeper.hard' },
+    unlock: { kind: 'clear', stage: 'minesweeper.normal' },
     playable: true,
     boards: [{ id: 'breakout', label: '벽돌깨기' }],
     scoreNote: '깬 벽돌·스테이지 보너스·연속 배수로 매긴 점수예요',

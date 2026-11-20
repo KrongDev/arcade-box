@@ -19,7 +19,7 @@ export type UnlockRule =
 
 export const UNLOCK_RULES: Partial<Record<GameId, UnlockRule>> = {
   minesweeper: { kind: 'score', gameId: 'pinball', score: 30000 },
-  breakout: { kind: 'clear', stage: 'minesweeper.hard' },
+  breakout: { kind: 'clear', stage: 'minesweeper.normal' },
 };
 
 /** 리더보드(=기록 단위). higher: 점수가 클수록 / lower: 시간이 짧을수록 좋다 */
