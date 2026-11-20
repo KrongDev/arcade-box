@@ -208,3 +208,193 @@
 .board-home-button {
   margin-top: var(--space-5);
 }
+
+/* ───────── 불러오는 중: 결과와 같은 자리의 뼈대 ───────── */
+.board-skeleton {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 내 순위 카드 자리 — 오락기 화면처럼 "불러오는 중..." */
+.board-me--loading {
+  align-items: center;
+  min-height: 74px;
+}
+
+.board-loading-text {
+  margin: 0;
+  color: #5fd0ff;
+  font-family: var(--font-pixel);
+  font-size: var(--font-size-body);
+  font-weight: 700;
+}
+
+.board-loading-dots::after {
+  content: '';
+  display: inline-block;
+  width: 1.5em;
+  text-align: left;
+  animation: board-dots 1.2s steps(4, end) infinite;
+}
+
+@keyframes board-dots {
+  0% {
+    content: '';
+  }
+  25% {
+    content: '.';
+  }
+  50% {
+    content: '..';
+  }
+  75% {
+    content: '...';
+  }
+}
+
+/* 반짝이는 빈 막대 */
+.sk {
+  display: block;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--line) 0%, #f1f2f5 50%, var(--line) 100%);
+  background-size: 200% 100%;
+  animation: board-shimmer 1.3s ease-in-out infinite;
+}
+
+@keyframes board-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+.podium-step.is-skeleton .sk-medal {
+  width: 32px;
+  height: 32px;
+  margin-bottom: 2px;
+  border-radius: 50%;
+}
+
+.podium-step.is-skeleton .sk-name {
+  width: 70%;
+  height: 12px;
+  margin: 3px 0;
+}
+
+.podium-step.is-skeleton .sk-value {
+  width: 55%;
+  height: 14px;
+  margin: 3px 0;
+}
+
+.podium-step.is-skeleton .podium-base {
+  background: var(--line);
+  box-shadow: 0 5px 0 var(--line-strong);
+}
+
+.board-row.is-skeleton .sk-rank {
+  width: 24px;
+  height: 14px;
+}
+
+.board-row.is-skeleton .sk-player {
+  flex: 1;
+  max-width: 120px;
+  height: 14px;
+}
+
+.board-row.is-skeleton .sk-score {
+  width: 64px;
+  height: 14px;
+  margin-left: auto;
+}
+
+/* ───────── 결과가 나타날 때 ───────── */
+.board-result .board-me {
+  animation: board-rise 0.32s cubic-bezier(0.2, 0.9, 0.3, 1.1) both;
+}
+
+/* 시상대는 3위 → 2위 → 1위 순서로 솟아오른다 */
+.board-result .podium-base {
+  transform-origin: 50% 100%;
+  animation: podium-grow 0.42s cubic-bezier(0.2, 0.9, 0.3, 1.15) both;
+}
+
+.board-result .podium-step > :not(.podium-base) {
+  animation: board-fade 0.3s ease-out both;
+}
+
+.board-result .podium-step.is-rank-3 .podium-base {
+  animation-delay: 0.08s;
+}
+.board-result .podium-step.is-rank-2 .podium-base {
+  animation-delay: 0.18s;
+}
+.board-result .podium-step.is-rank-1 .podium-base {
+  animation-delay: 0.28s;
+}
+.board-result .podium-step.is-rank-3 > :not(.podium-base) {
+  animation-delay: 0.3s;
+}
+.board-result .podium-step.is-rank-2 > :not(.podium-base) {
+  animation-delay: 0.4s;
+}
+.board-result .podium-step.is-rank-1 > :not(.podium-base) {
+  animation-delay: 0.5s;
+}
+
+/* 4위부터는 위에서부터 차례로 */
+.board-result .board-row {
+  animation: board-rise 0.3s ease-out both;
+  animation-delay: calc(0.45s + var(--row, 0) * 0.04s);
+}
+
+.board-result .board-empty-box {
+  animation: board-fade 0.3s ease-out both;
+}
+
+@keyframes board-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes board-fade {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes podium-grow {
+  0% {
+    transform: scaleY(0);
+  }
+  100% {
+    transform: scaleY(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sk,
+  .board-loading-dots::after,
+  .board-result .board-me,
+  .board-result .podium-base,
+  .board-result .podium-step > :not(.podium-base),
+  .board-result .board-row,
+  .board-result .board-empty-box {
+    animation: none;
+  }
+  .board-loading-dots::after {
+    content: '...';
+  }
+}

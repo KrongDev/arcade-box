@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type CSSProperties } from 'react';
 import { ArcadeIcon } from '../components/ArcadeIcon';
 import { ChevronLeft } from '../components/icons';
 import { GAMES, getGame, type GameId } from '../game/registry';
@@ -12,6 +12,9 @@ import './Leaderboard.css';
 type State = { kind: 'loading' } | { kind: 'ready'; data: LeaderboardData } | { kind: 'error' };
 
 const MEDALS = ['medal1', 'medal2', 'medal3'] as const;
+
+/** 응답이 빨라도 불러오는 화면이 깜빡이고 지나가지 않게, 적어도 이만큼은 보여 준다 */
+const MIN_LOADING_MS = 450;
 
 function formatValue(value: number): string {
   return `${value.toLocaleString()}점`;
@@ -35,10 +38,17 @@ export default function Leaderboard({ game, onExit }: { game: GameId; onExit: ()
   useEffect(() => {
     if (!API_BASE) return;
     let alive = true;
+    const started = performance.now();
+    const settle = (next: State) => {
+      const wait = Math.max(0, MIN_LOADING_MS - (performance.now() - started));
+      window.setTimeout(() => {
+        if (alive) setState(next);
+      }, wait);
+    };
     api
       .leaderboard(board)
-      .then((data) => alive && setState({ kind: 'ready', data }))
-      .catch(() => alive && setState({ kind: 'error' }));
+      .then((data) => settle({ kind: 'ready', data }))
+      .catch(() => settle({ kind: 'error' }));
     return () => {
       alive = false;
     };
@@ -85,7 +95,7 @@ export default function Leaderboard({ game, onExit }: { game: GameId; onExit: ()
 
       {!API_BASE && <p className="board-empty">순위표는 서버에 연결된 버전에서 볼 수 있어요.</p>}
 
-      {API_BASE && state.kind === 'loading' && <p className="board-empty">불러오는 중이에요</p>}
+      {API_BASE && state.kind === 'loading' && <BoardSkeleton />}
 
       {API_BASE && state.kind === 'error' && (
         <div className="board-empty-box">
@@ -98,7 +108,7 @@ export default function Leaderboard({ game, onExit }: { game: GameId; onExit: ()
       )}
 
       {API_BASE && state.kind === 'ready' && (
-        <>
+        <div key={board} className="board-result">
           <section className="board-me" aria-label="내 순위">
             {state.data.me ? (
               <>
@@ -134,8 +144,12 @@ export default function Leaderboard({ game, onExit }: { game: GameId; onExit: ()
                 ))}
             </ol>
             <ol className="board-list" start={4}>
-              {state.data.entries.slice(3).map((e) => (
-                <li key={`${e.rank}-${e.player}`} className={e.me ? 'board-row is-me' : 'board-row'}>
+              {state.data.entries.slice(3).map((e, i) => (
+                <li
+                  key={`${e.rank}-${e.player}`}
+                  className={e.me ? 'board-row is-me' : 'board-row'}
+                  style={{ '--row': Math.min(i, 12) } as CSSProperties}
+                >
                   <span className="board-rank">
                     {e.rank <= 3 ? <ArcadeIcon name={MEDALS[e.rank - 1]} size={32} label={`${e.rank}위`} /> : e.rank}
                   </span>
@@ -146,12 +160,44 @@ export default function Leaderboard({ game, onExit }: { game: GameId; onExit: ()
             </ol>
             </>
           )}
-        </>
+        </div>
       )}
 
       <button type="button" className="ab-btn ab-btn--ghost ab-btn--block board-home-button" onClick={onExit}>
         홈으로
       </button>
     </main>
+  );
+}
+
+/** 불러오는 동안 보여 주는 뼈대 — 결과와 같은 자리·높이를 잡아 두어 화면이 튀지 않게 한다 */
+function BoardSkeleton() {
+  return (
+    <div className="board-skeleton" role="status" aria-live="polite">
+      <section className="board-me board-me--loading">
+        <p className="board-loading-text">
+          불러오는 중<span className="board-loading-dots" aria-hidden="true" />
+        </p>
+      </section>
+      <div className="board-podium" aria-hidden="true">
+        {[2, 1, 3].map((rank) => (
+          <div key={rank} className={`podium-step is-rank-${rank} is-skeleton`}>
+            <span className="sk sk-medal" />
+            <span className="sk sk-name" />
+            <span className="sk sk-value" />
+            <span className="podium-base" />
+          </div>
+        ))}
+      </div>
+      <div className="board-list" aria-hidden="true">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="board-row is-skeleton">
+            <span className="sk sk-rank" />
+            <span className="sk sk-player" />
+            <span className="sk sk-score" />
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
