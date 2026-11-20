@@ -54,7 +54,7 @@ ANDROID_VERSION_CODE=1 ./gradlew bundleRelease
 # → android/app/build/outputs/bundle/release/app-release.aab
 ```
 
-- 올릴 때마다 `ANDROID_VERSION_CODE`를 1씩 올려요.
+- 올릴 때마다 `ANDROID_VERSION_CODE`를 1씩 올려요(마지막으로 만든 값: 3, 버전 이름 1.0.1. 2는 비공개 테스트 첫 버전).
 - 출시 빌드는 R8(코드·리소스 줄이기, 최적화)이 켜져 있어요. 난독화 매핑 파일은 AAB 안에 함께 들어가서 구글 플레이가 비정상 종료 기록을 풀 때 써요. Capacitor 플러그인은 Capacitor가 주는 보호 규칙으로 지켜져요.
 - 폰·에뮬레이터에서 먼저 보려면 `./gradlew assembleDebug` 후 `adb install -r app/build/outputs/apk/debug/app-debug.apk`.
 - 브라우저에서 안드로이드 화면을 보려면 `npm run dev:android`(Capacitor 플러그인의 웹 대체 동작을 써요).
