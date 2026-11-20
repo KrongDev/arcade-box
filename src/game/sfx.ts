@@ -30,7 +30,9 @@ export type Sfx =
   | 'brick'
   | 'brickTough'
   | 'powerUp'
-  | 'stageClear';
+  | 'stageClear'
+  | 'lockShake'
+  | 'unlock';
 
 let enabled = true;
 let suspended = false;
@@ -221,6 +223,16 @@ export function playSfx(name: Sfx): void {
       break;
     case 'stageClear':
       [523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) => tone(ac, t + i * 0.08, f, 0.2, 'square', 0.045));
+      break;
+    case 'lockShake':
+      // 자물쇠가 덜컥거리는 짧은 금속음
+      [0, 0.12, 0.24].forEach((d) => tone(ac, t + d, 300, 0.05, 'square', 0.035, 240));
+      break;
+    case 'unlock':
+      // 자물쇠가 '쩍' 부서지고, 밝은 소리가 올라간다
+      noise(ac, t, 0.12, 0.16);
+      tone(ac, t, 180, 0.12, 'square', 0.06, 90);
+      [659, 880, 1175, 1568, 2093].forEach((f, i) => tone(ac, t + 0.14 + i * 0.07, f, 0.2, 'triangle', 0.07));
       break;
   }
 }

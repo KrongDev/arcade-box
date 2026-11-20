@@ -1,14 +1,17 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { GameId } from '../../game/registry';
 import { canShare } from '../../game/share';
+import { unlockMessage } from '../../game/unlocks';
 import type { ScoreRunResult } from '../../game/useScoreRun';
 import { ArcadeIcon } from '../ArcadeIcon';
 import { Coin } from '../gameIcons';
+import { UnlockCelebration } from './UnlockCelebration';
 import '../../styles/game-dialog.css';
 
 /**
  * 점수 게임 결과 창 — 점수, 최고 기록, 받은 코인, 새로 열린 게임, 다시 하기·공유·홈으로.
  * 게임마다 다른 줄(예: 도달한 스테이지)은 extraRows로 넣는다.
+ * 새로 열린 게임이 있으면 결과 창 위에 잠금 해제 연출을 먼저 보여 준다.
  */
 export function ScoreResultDialog({
   game,
@@ -29,6 +32,7 @@ export function ScoreResultDialog({
   onShare: () => void;
   onHome: () => void;
 }) {
+  const [celebrating, setCelebrating] = useState(result.unlocks.length > 0);
   return (
     <div className="game-overlay">
       <section className="game-dialog" role="dialog" aria-modal="true" aria-labelledby="result-title">
@@ -54,9 +58,9 @@ export function ScoreResultDialog({
             </dd>
           </div>
         </dl>
-        {result.unlocks.map((text) => (
-          <p key={text} className="result-unlock">
-            <ArcadeIcon name="unlock" size={16} /> {text}
+        {result.unlocks.map((n) => (
+          <p key={unlockMessage(n)} className="result-unlock">
+            <ArcadeIcon name="unlock" size={16} /> {unlockMessage(n)}
           </p>
         ))}
         <div className="dialog-actions">
@@ -74,6 +78,7 @@ export function ScoreResultDialog({
           </button>
         </div>
       </section>
+      {celebrating && <UnlockCelebration notices={result.unlocks} onDone={() => setCelebrating(false)} />}
     </div>
   );
 }

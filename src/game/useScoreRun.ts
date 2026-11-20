@@ -1,9 +1,8 @@
 import { useCallback, useRef, useState } from 'react';
 import type { ScoreGameId } from './api';
-import { subjectParticle } from './korean';
-import { getGame } from './registry';
 import { useSave } from './save-context';
 import { shareWithLink } from './share';
+import { gameUnlocks, type UnlockNotice } from './unlocks';
 
 /** 점수 게임 한 판의 결과 */
 export interface ScoreRunResult {
@@ -11,8 +10,8 @@ export interface ScoreRunResult {
   coins: number;
   isBest: boolean;
   best: number;
-  /** "새 게임 ○○가 열렸어요" 문구 */
-  unlocks: string[];
+  /** 이번 판으로 새로 열린 게임 */
+  unlocks: UnlockNotice[];
 }
 
 /**
@@ -35,10 +34,7 @@ export function useScoreRun(game: ScoreGameId) {
         coins,
         isBest: r.isBest,
         best: r.best,
-        unlocks: r.newlyUnlocked.map((id) => {
-          const name = getGame(id).name;
-          return `새 게임 ${name}${subjectParticle(name)} 열렸어요`;
-        }),
+        unlocks: gameUnlocks(r.newlyUnlocked),
       };
     },
     [game, addCoins, recordScore, submitRun],

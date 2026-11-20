@@ -6,11 +6,11 @@ import { currencyVars } from '../game/currency';
 import { CURRENCY } from '../game/currency';
 import { mapLook, minesweeperGear, tileLook } from '../game/equipped';
 import { haptic } from '../game/haptic';
-import { subjectParticle } from '../game/korean';
-import { getGame } from '../game/registry';
 import { playSfx } from '../game/sfx';
 import { canShare, shareWithLink } from '../game/share';
 import { useSave } from '../game/save-context';
+import { gameUnlocks, unlockMessage, type UnlockNotice } from '../game/unlocks';
+import { UnlockCelebration } from '../components/game/UnlockCelebration';
 import { platform } from '../platform';
 import { NAV_BAR_OFFSET, useSafeArea } from '../game/useSafeArea';
 import {
@@ -211,7 +211,7 @@ interface Result {
   coins: number;
   bonus: number;
   /** 이번 판으로 새로 열린 것 (다음 난이도·새 게임) */
-  unlocks: string[];
+  unlocks: UnlockNotice[];
 }
 
 function MinesweeperPlay({
@@ -255,6 +255,8 @@ function MinesweeperPlay({
   const [result, setResult] = useState<Result | null>(null);
   /** 판이 끝난 뒤 결과 창을 보이는지 — 지뢰를 밟으면 폭발·지뢰 공개 연출을 먼저 보여 준다 */
   const [showResult, setShowResult] = useState(false);
+  /** 잠금 해제 연출을 이미 봤는지 (판마다 한 번) */
+  const [celebrated, setCelebrated] = useState(false);
   const [shaking, setShaking] = useState(false);
   const fxTimers = useRef<number[]>([]);
   useEffect(() => () => fxTimers.current.forEach((t) => window.clearTimeout(t)), []);
@@ -329,11 +331,8 @@ function MinesweeperPlay({
         coins: coinsRef.current,
         bonus: diff.clearBonus,
         unlocks: [
-          ...(r.firstClear && next ? [`${next.name}${subjectParticle(next.name)} 열렸어요`] : []),
-          ...r.newlyUnlocked.map((id) => {
-            const name = getGame(id).name;
-            return `새 게임 ${name}${subjectParticle(name)} 열렸어요`;
-          }),
+          ...(r.firstClear && next ? [{ kind: 'level', gameId: 'minesweeper', level: next.name } as const] : []),
+          ...gameUnlocks(r.newlyUnlocked),
         ],
       });
       setPhase('won');
@@ -680,6 +679,10 @@ function MinesweeperPlay({
         </div>
       )}
 
+      {ended && result && showResult && !celebrated && result.unlocks.length > 0 && (
+        <UnlockCelebration notices={result.unlocks} onDone={() => setCelebrated(true)} />
+      )}
+
       {ended && result && showResult && (
         <div className="game-overlay is-soft">
           <section className="game-dialog" role="dialog" aria-modal="true" aria-labelledby="ms-result-title">
@@ -733,9 +736,9 @@ function MinesweeperPlay({
                 </dd>
               </div>
             </dl>
-            {result.unlocks.map((text) => (
-              <p key={text} className="result-unlock">
-                <ArcadeIcon name="unlock" size={16} /> {text}
+            {result.unlocks.map((n) => (
+              <p key={unlockMessage(n)} className="result-unlock">
+                <ArcadeIcon name="unlock" size={16} /> {unlockMessage(n)}
               </p>
             ))}
             <div className="dialog-actions">
