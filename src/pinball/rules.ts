@@ -35,6 +35,14 @@ export const POINTS = {
   /** 보너스 구멍의 점수 보상 두 가지 */
   bonusSmall: 3000,
   bonusBig: 10000,
+  /** 램프로 2층에 올라갔을 때 (연속으로 올리면 2배, 3배…) */
+  ramp: 2000,
+  /** 2층 다락: 범퍼, 자동 키커, 타깃, 불 꺼진 구멍, 잭팟 */
+  atticBumper: 200,
+  kicker: 50,
+  atticTarget: 1000,
+  atticHole: 2000,
+  atticJackpot: 25000,
 } as const;
 
 /** 점수 구간 보너스 코인 */
@@ -53,3 +61,9 @@ export const BONUS_ORDER = ['small', 'coins', 'big', 'save', 'lock'] as const;
 export type BonusAward = (typeof BONUS_ORDER)[number];
 /** 보너스 구멍의 코인 보상 (공 스킨의 코인 능력은 붙지 않는다) */
 export const BONUS_COINS = 10;
+
+/** 램프를 이 시간(초) 안에 또 올리면 점수 배수가 하나 오른다 (최대 MAX_RAMP_COMBO배) */
+export const RAMP_COMBO_WINDOW = 12;
+export const MAX_RAMP_COMBO = 5;
+/** 공이 2층에 이 시간(초)보다 오래 있으면 출구로 내보낸다 (끼임 방지) */
+export const ATTIC_MAX_STAY = 20;

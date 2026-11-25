@@ -11,6 +11,9 @@
  *                   멀티볼 중에 넣으면 잭팟
  *   보너스 구멍     들어갈 때마다 정해진 차례대로 보상을 준다 (rules.ts BONUS_ORDER)
  *   스피너          돌아가는 길 입구. 공이 빠르게 지나갈수록 여러 번 돌고, 돌 때마다 점수
+ *   램프와 2층 다락 램프를 올라간 공은 2층(level 1)이 된다. 다락은 같은 평면의 닫힌 방이고 누르는 플리퍼가 없다 —
+ *                   범퍼와 자동 키커가 공을 튕긴다. 타깃 셋을 맞히면 잭팟 불, 그 뒤 구멍에 넣으면 다락 잭팟.
+ *                   램프를 12초 안에 또 올리면 점수가 2배, 3배…(최대 5배)
  *   슬링샷          플리퍼 위 삼각 튕김대. 맞으면 공을 가운데로 차 낸다
  *   바깥 길         옆으로 들어간 공은 판 밖으로 빠진다
  *   킥백            왼쪽 바깥 길 바닥에 닿은 공을 한 번 살려 준다 (정해진 길을 따라 판 안으로 올려 보낸다).
@@ -21,6 +24,7 @@
  */
 
 import {
+  ATTIC_MAX_STAY,
   BALL_R,
   BALL_SAVE_TIME,
   BALLS_PER_GAME,
@@ -29,23 +33,32 @@ import {
   COIN_PICKUP_VALUE,
   MAX_COINS_PER_RUN,
   MAX_MULTIPLIER,
+  MAX_RAMP_COMBO,
   MAX_SCORE,
   MILESTONES,
   POINTS,
+  RAMP_COMBO_WINDOW,
   type BonusAward,
 } from './rules.ts';
 import {
+  ATTIC,
+  ATTIC_EXIT_GATE,
+  ATTIC_MOUTH_GATE,
+  ATTIC_TARGETS,
+  BONUS_CHUTE,
   BUMPERS,
   CHARGE_TIME,
   COIN_ZONES,
   DROP_TARGETS,
   FLIPPERS,
+  FLIPPER_Y,
   GATE,
   KICKBACK,
   LANES,
   LANE_X,
   PLUNGER_Y,
   PULL_DISTANCE,
+  RAMP,
   REST_X,
   REST_Y,
   SAUCERS,
@@ -55,6 +68,7 @@ import {
   TABLE_H,
   WALLS,
   WALL_R,
+  inPolygon,
   launchSpeed,
   type Point,
   type RideDef,
@@ -78,7 +92,6 @@ const COIN_SPAWN_INTERVAL = 3.5;
 const COMBO_WINDOW = 1.2;
 const COMBO_STEP = 5;
 
-const BUMPER_KICK = 720;
 const SLING_KICK = 760;
 /** 슬링샷이 반응하는 최소 충돌 속도 — 굴러 내려오는 공은 차지 않는다 */
 const SLING_TRIGGER = 90;
@@ -98,6 +111,10 @@ export interface Bumper {
   x: number;
   y: number;
   r: number;
+  /** 공을 차 내는 힘 */
+  kick: number;
+  /** 2층 다락의 범퍼 */
+  attic?: boolean;
   flash: number;
   cooldown: number;
 }
@@ -111,6 +128,8 @@ export interface Sling {
   /** 차는 면이 판 안쪽을 보는 방향 */
   nx: number;
   ny: number;
+  /** 2층 다락의 자동 키커 */
+  kicker?: boolean;
   flash: number;
   cooldown: number;
 }
@@ -120,6 +139,15 @@ export interface DropTarget {
   y1: number;
   y2: number;
   down: boolean;
+  flash: number;
+}
+
+/** 2층 타깃 — 다락 위쪽의 가로 막대. 쓰러지지 않고 불만 켜진다 */
+export interface AtticTarget {
+  x1: number;
+  x2: number;
+  y: number;
+  lit: boolean;
   flash: number;
 }
 
@@ -170,21 +198,25 @@ export interface Ball {
   held: number;
   heldBy: SaucerId | null;
   slow: number;
-  /** 0 = 1층, 1 = 2층 다락 */
+  /** 0 = 1층, 1 = 2층 다락 (다락 안에 있으면 1) */
   level: 0 | 1;
+  /** 램프 난간 사이에 있는지 — 램프를 올라와서 다락에 들어간 것인지 알려고 적어 둔다 */
+  onRamp: boolean;
+  /** 2층에 머문 시간 */
+  atticTime: number;
   /** 정해진 길(레일·킥백)을 타는 중이면 그 길과 지나온 거리·속도. 타는 동안에는 아무것과도 부딪히지 않는다 */
   ride: Ride | null;
 }
 
 export interface Ride {
-  track: 'kick' | 'rail';
+  track: 'kick' | 'rail' | 'chute';
   s: number;
   v: number;
 }
 
 /** 공 하나를 만든다 (안 준 값은 멈춘 상태) */
 export function makeBall(init: Partial<Ball> & { x: number; y: number }): Ball {
-  return { id: 0, vx: 0, vy: 0, held: 0, heldBy: null, slow: 0, level: 0, ride: null, ...init };
+  return { id: 0, vx: 0, vy: 0, held: 0, heldBy: null, slow: 0, level: 0, onRamp: false, atticTime: 0, ride: null, ...init };
 }
 
 export type BallState = 'ready' | 'live';
@@ -213,7 +245,12 @@ export type PinballEvent =
   /** relit은 꺼져 있던 킥백이 다시 켜졌을 때 true */
   | { type: 'standupBank'; points: number; relit: boolean }
   | { type: 'spinner'; x: number; y: number; points: number }
-  | { type: 'bonus'; x: number; y: number; award: BonusAward; points: number; coins: number };
+  | { type: 'bonus'; x: number; y: number; award: BonusAward; points: number; coins: number }
+  /** 램프를 올라 2층에 들어감. combo는 이번에 곱해진 배수(1~5) */
+  | { type: 'ramp'; x: number; y: number; points: number; combo: number }
+  | { type: 'atticTarget'; x: number; y: number; points: number }
+  | { type: 'jackpotLit' }
+  | { type: 'atticHole'; x: number; y: number; points: number; jackpot: boolean };
 
 function createSling(shape: SlingShape): Sling {
   // 차는 면(tip→top)의 법선 중 판 안쪽(toward)을 보는 쪽
@@ -228,7 +265,7 @@ function createSling(shape: SlingShape): Sling {
     nx = -nx;
     ny = -ny;
   }
-  return { side: shape.side, top: shape.top, corner: shape.corner, tip: shape.tip, nx, ny, flash: 0, cooldown: 0 };
+  return { side: shape.side, top: shape.top, corner: shape.corner, tip: shape.tip, nx, ny, kicker: shape.kicker, flash: 0, cooldown: 0 };
 }
 
 function createBumpers(): Bumper[] {
@@ -238,11 +275,16 @@ function createBumpers(): Bumper[] {
 /** 정해진 길 — 길 위의 공은 물리 계산을 하지 않는다 */
 const RIDES: Record<Ride['track'], RideDef> = {
   kick: KICKBACK.ride,
+  chute: BONUS_CHUTE,
   // 레일은 다락과 함께 들어온다. 그때까지는 킥백 길을 가리켜 둔다
   rail: KICKBACK.ride,
 };
 
 const inZone = (p: Point, z: Zone) => p.x >= z.x && p.x <= z.x + z.w && p.y >= z.y && p.y <= z.y + z.h;
+
+function createAtticTargets(): AtticTarget[] {
+  return ATTIC_TARGETS.map((t) => ({ ...t, lit: false, flash: 0 }));
+}
 
 function createStandups(): Standup[] {
   return STANDUPS.map((t) => ({ ...t, lit: false, flash: 0 }));
@@ -353,13 +395,19 @@ export class PinballEngine {
   slings: Sling[] = SLINGS.map(createSling);
   targets: DropTarget[] = createTargets();
   standups: Standup[] = createStandups();
+  atticTargets: AtticTarget[] = createAtticTargets();
+  /** 2층 타깃을 다 맞혀 잭팟 구멍에 불이 켜졌는지 */
+  jackpotLit = false;
+  /** 램프를 연속으로 올린 횟수(다음에 곱해질 배수는 이 값 + 1, 최대 5)와 연속이 이어지는 남은 시간 */
+  rampCombo = 0;
+  rampComboLeft = 0;
   /** 킥백이 켜져 있는지 — 왼쪽 바깥 길의 공을 한 번 살려 준다 */
   kickbackLit = true;
   lanes: RolloverLane[] = createLanes();
   flippers: Flipper[] = createFlippers();
   coins: CoinPickup[] = [];
   /** 구멍마다: 공을 붙잡은 순간 1 → 0으로 줄어드는 번쩍임, 뱉은 뒤 다시 붙잡기까지 남은 시간 */
-  saucers: Record<SaucerId, { flash: number; cooldown: number }> = { lock: { flash: 0, cooldown: 0 }, bonus: { flash: 0, cooldown: 0 } };
+  saucers: Record<SaucerId, { flash: number; cooldown: number }> = { lock: { flash: 0, cooldown: 0 }, bonus: { flash: 0, cooldown: 0 }, attic: { flash: 0, cooldown: 0 } };
   /** 보너스 구멍이 다음에 줄 보상 (BONUS_ORDER의 몇 번째인지) */
   bonusIndex = 0;
   /** 스피너: 그림용 각도·도는 빠르기, 아직 점수를 주지 않은 바퀴 수 */
@@ -374,6 +422,7 @@ export class PinballEngine {
   private bankReset = 0;
   private lanesReset = 0;
   private standupReset = 0;
+  private atticReset = 0;
   private pendingLaunch = 0;
   private spinnerTick = 0;
   private wasMultiball = false;
@@ -510,6 +559,18 @@ export class PinballEngine {
     }
     for (const t of this.targets) t.flash = Math.max(0, t.flash - frame * 3);
     for (const t of this.standups) t.flash = Math.max(0, t.flash - frame * 3);
+    for (const t of this.atticTargets) t.flash = Math.max(0, t.flash - frame * 3);
+    if (this.rampComboLeft > 0) {
+      this.rampComboLeft -= frame;
+      if (this.rampComboLeft <= 0) {
+        this.rampComboLeft = 0;
+        this.rampCombo = 0;
+      }
+    }
+    if (this.atticReset > 0) {
+      this.atticReset -= frame;
+      if (this.atticReset <= 0) for (const t of this.atticTargets) t.lit = false;
+    }
     for (const l of this.lanes) {
       l.flash = Math.max(0, l.flash - frame * 2);
       l.cooldown = Math.max(0, l.cooldown - frame);
@@ -550,9 +611,12 @@ export class PinballEngine {
         const from = ball.heldBy ?? 'lock';
         ball.heldBy = null;
         if (from === 'bonus') {
-          // 아래 왼쪽 플리퍼 쪽으로 떨어뜨린다
-          ball.vx = -50 - this.random() * 30;
-          ball.vy = 220 + this.random() * 40;
+          // 미끄럼길로 왼쪽 안쪽 길까지 내려 준다
+          ball.ride = { track: 'chute', s: 0, v: BONUS_CHUTE.startSpeed };
+        } else if (from === 'attic') {
+          // 다락 안쪽(왼쪽 아래 범퍼 쪽)으로 내보낸다
+          ball.vx = -260 - this.random() * 80;
+          ball.vy = 80 + this.random() * 60;
         } else {
           ball.vx = -470 - this.random() * 80;
           ball.vy = -420 - this.random() * 60;
@@ -575,7 +639,8 @@ export class PinballEngine {
   }
 
   private integrateBall(ball: Ball, h: number): void {
-    ball.vy += GRAVITY * h;
+    // 램프 위에서는 오르막이라 더 세게 아래로 당겨진다
+    ball.vy += (GRAVITY + (ball.onRamp ? RAMP.pull : 0)) * h;
     const speed = Math.hypot(ball.vx, ball.vy);
     if (speed > MAX_SPEED) {
       ball.vx = (ball.vx / speed) * MAX_SPEED;
@@ -591,11 +656,15 @@ export class PinballEngine {
       collideCapsule(ball, w.ax, w.ay, w.bx, w.by, WALL_R, w.bounce);
     }
     if (this.gateClosed) collideCapsule(ball, GATE.ax, GATE.ay, GATE.bx, GATE.by, WALL_R, GATE.bounce);
+    // 다락의 입구는 2층 공에게, 출구는 1층 공에게 벽이다
+    const gate = ball.level === 1 ? ATTIC_MOUTH_GATE : ATTIC_EXIT_GATE;
+    collideCapsule(ball, gate.ax, gate.ay, gate.bx, gate.by, WALL_R, gate.bounce);
     if (!this.gateClosed && ball.x < LANE_X - BALL_R - 4 && ball.y < 300) this.gateClosed = true;
 
     for (const s of this.slings) this.collideSling(ball, s);
     for (const t of this.targets) this.collideTarget(ball, t);
     for (const t of this.standups) this.collideStandup(ball, t);
+    for (const t of this.atticTargets) this.collideAtticTarget(ball, t);
 
     for (const f of this.flippers) {
       const tip = flipperTip(f);
@@ -606,6 +675,7 @@ export class PinballEngine {
     this.checkKickback(ball);
     this.checkLanes(ball);
     this.checkSaucers(ball);
+    this.updateLevel(ball);
 
     for (let i = this.coins.length - 1; i >= 0; i--) {
       const c = this.coins[i];
@@ -716,7 +786,7 @@ export class PinballEngine {
     ball.vy = s.ny * SLING_KICK + s.nx * vt * 0.5;
     s.cooldown = 0.12;
     s.flash = 1;
-    const points = this.award(POINTS.sling);
+    const points = this.award(s.kicker ? POINTS.kicker : POINTS.sling);
     this.events.push({ type: 'sling', x: ball.x, y: ball.y, points, nx: s.nx, ny: s.ny });
     this.hitCombo(ball.x, ball.y);
   }
@@ -755,13 +825,13 @@ export class PinballEngine {
     }
     // 범퍼가 공을 바깥으로 세게 차 낸다
     const out = ball.vx * nx + ball.vy * ny;
-    const kick = Math.max(0, BUMPER_KICK - out);
+    const kick = Math.max(0, b.kick - out);
     ball.vx += nx * kick;
     ball.vy += ny * kick;
     if (b.cooldown <= 0) {
       b.cooldown = 0.08;
       b.flash = 1;
-      const points = this.award(POINTS.bumper);
+      const points = this.award(b.attic ? POINTS.atticBumper : POINTS.bumper);
       this.events.push({ type: 'bumper', x: b.x, y: b.y, points, index });
       this.hitCombo(b.x, b.y);
     }
@@ -801,7 +871,8 @@ export class PinballEngine {
       ball.held = SAUCER_HOLD;
       this.saucers[id].flash = 1;
       if (id === 'lock') this.enterLock(ball);
-      else this.enterBonus();
+      else if (id === 'bonus') this.enterBonus();
+      else this.enterAtticHole();
       this.hitCombo(def.x, def.y);
       return;
     }
@@ -821,6 +892,51 @@ export class PinballEngine {
       const jackpot = this.isMultiball;
       const points = this.award(jackpot ? POINTS.jackpot : POINTS.saucer);
       this.events.push({ type: 'saucer', x, y, points, jackpot });
+    }
+  }
+
+  /** 2층 구멍: 잭팟 불이 켜져 있으면 다락 잭팟 */
+  private enterAtticHole(): void {
+    const { x, y } = SAUCERS.attic;
+    const jackpot = this.jackpotLit;
+    this.jackpotLit = false;
+    const points = this.award(jackpot ? POINTS.atticJackpot : POINTS.atticHole);
+    this.events.push({ type: 'atticHole', x, y, points, jackpot });
+  }
+
+  /** 공이 어느 층에 있는지 위치로 정하고, 램프를 올라 다락에 들어온 순간에 점수를 준다 */
+  private updateLevel(ball: Ball): void {
+    const inAttic = inPolygon(ATTIC.polygon, ball);
+    if (inAttic && ball.level === 0) {
+      ball.level = 1;
+      ball.atticTime = 0;
+      if (ball.onRamp) this.climbedRamp(ball);
+    } else if (!inAttic && ball.level === 1) {
+      ball.level = 0;
+    }
+    ball.onRamp = ball.level === 0 && inPolygon(RAMP.polygon, ball);
+  }
+
+  private climbedRamp(ball: Ball): void {
+    this.rampCombo = Math.min(MAX_RAMP_COMBO, this.rampCombo + 1);
+    this.rampComboLeft = RAMP_COMBO_WINDOW;
+    const points = this.award(POINTS.ramp * this.rampCombo);
+    this.events.push({ type: 'ramp', x: ball.x, y: ball.y, points, combo: this.rampCombo });
+  }
+
+  private collideAtticTarget(ball: Ball, t: AtticTarget): void {
+    const c = collideCapsule(ball, t.x1, t.y, t.x2, t.y, TARGET_R, 0.35);
+    if (!c || c.impact < TARGET_TRIGGER || t.lit) return;
+    t.lit = true;
+    t.flash = 1;
+    const x = (t.x1 + t.x2) / 2;
+    const points = this.award(POINTS.atticTarget);
+    this.events.push({ type: 'atticTarget', x, y: t.y, points });
+    this.hitCombo(x, t.y);
+    if (this.atticTargets.every((a) => a.lit)) {
+      this.jackpotLit = true;
+      this.atticReset = 1.0;
+      this.events.push({ type: 'jackpotLit' });
     }
   }
 
@@ -943,15 +1059,34 @@ export class PinballEngine {
         continue;
       }
 
+      // 2층에 너무 오래 머문 공은 출구 바로 아래로 내보낸다
+      if (ball.level === 1) {
+        ball.atticTime += frame;
+        if (ball.atticTime > ATTIC_MAX_STAY) this.leaveAttic(ball);
+      }
+
       // 공이 어딘가에 끼어 멈추면 살짝 튕겨 준다 (플리퍼로 공을 잡아 둔 상태는 제외)
       const speed = Math.hypot(ball.vx, ball.vy);
-      ball.slow = speed < 15 && !holding ? ball.slow + frame : 0;
+      // 올린 플리퍼 위에 받쳐 둔 공만 봐준다. 플리퍼에서 먼 곳에 멈춘 공은 누르고 있어도 튕겨 준다
+      const cradled = holding && ball.y > FLIPPER_Y - 60;
+      ball.slow = speed < 15 && !cradled ? ball.slow + frame : 0;
       if (ball.slow > 2.5) {
         ball.slow = 0;
         ball.vy = -420;
         ball.vx = (this.random() - 0.5) * 300;
       }
     }
+  }
+
+  /** 다락 안의 공을 출구 바로 아래로 옮겨 내보낸다 */
+  private leaveAttic(ball: Ball): void {
+    const [a, b] = ATTIC.exit;
+    ball.x = (a.x + b.x) / 2;
+    ball.y = a.y + BALL_R + WALL_R + 2;
+    ball.vx = 0;
+    ball.vy = 120;
+    ball.level = 0;
+    ball.atticTime = 0;
   }
 
   /** 판 위의 마지막 공이 빠졌을 때 (x는 공이 나간 가로 위치) */

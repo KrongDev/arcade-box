@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { BALLS_PER_GAME } from '../../src/pinball/rules.ts';
-import { FLIPPERS, LANE_X, TABLE_H, TABLE_W } from '../../src/pinball/table.ts';
+import { FLIPPERS, LANE_X, TABLE_H, TABLE_W, WALLS } from '../../src/pinball/table.ts';
 import { engineWith, ofType, placeBall, run } from './helpers.ts';
 
 /** 긴 판(400×1300)의 발사와 아래쪽 길 — 안쪽 길은 플리퍼로, 바깥 길은 판 밖으로 */
@@ -113,4 +113,46 @@ test('프레임 간격이 아주 길어도 공이 판 밖으로 나가지 않는
       assert.ok(b.x > 0 && b.x < TABLE_W && b.y > 0, `(${b.x}, ${b.y})`);
     }
   }
+});
+
+test('플리퍼를 계속 눌러도, 플리퍼에서 먼 곳에 멈춘 공은 3초 안에 튕겨 준다', () => {
+  // 판 가운데에 오목한 그릇을 잠깐 놓고 그 안에 공을 가둔다
+  const cup = [
+    { ax: 250, ay: 700, bx: 310, by: 700, bounce: 0 },
+    { ax: 250, ay: 700, bx: 250, by: 670, bounce: 0 },
+    { ax: 310, ay: 700, bx: 310, by: 670, bounce: 0 },
+  ];
+  WALLS.push(...cup);
+  try {
+    const e = engineWith();
+    const ball = placeBall(e, { x: 280, y: 685 });
+    let nudged = false;
+    for (let t = 0; t < 3.5; t += 1 / 120) {
+      // 연타하는 사람처럼 0.3초마다 눌렀다 뗀다
+      e.setFlipper('left', Math.floor(t / 0.3) % 2 === 0);
+      e.step(1 / 120);
+      e.drainEvents();
+      if (ball.vy < -200) nudged = true;
+    }
+    assert.equal(nudged, true, '멈춘 공을 튕겨 주지 않았어요');
+  } finally {
+    WALLS.splice(WALLS.length - cup.length, cup.length);
+  }
+});
+
+test('플리퍼를 올려서 그 위에 받쳐 둔 공은 튕기지 않는다', () => {
+  const e = engineWith();
+  // 플리퍼를 먼저 다 올린 뒤에 그 위에 공을 살짝 놓는다 (올라간 플리퍼는 축 쪽이 낮아서 공이 축 쪽에 고인다)
+  e.plungerLoaded = false;
+  e.setFlipper('left', true);
+  run(e, 0.3);
+  const ball = placeBall(e, { x: LEFT.px + 16, y: LEFT.py - 26 });
+  run(e, 1.5);
+  let nudged = false;
+  for (let t = 0; t < 4; t += 1 / 120) {
+    e.step(1 / 120);
+    if (ball.vy < -200) nudged = true;
+  }
+  assert.equal(nudged, false, '받쳐 둔 공을 튕겨 버렸어요');
+  assert.ok(e.balls.includes(ball), '받쳐 둔 공을 잃었어요');
 });

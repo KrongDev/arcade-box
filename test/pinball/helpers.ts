@@ -125,10 +125,13 @@ export function playGame(e: PinballEngine, bot: Bot, maxSeconds: number, tableW 
       if (ev.type === 'drain') losses[ev.x < 60 ? 'left' : ev.x > 300 ? 'right' : 'center']++;
     }
     const pressed = e.flippers.some((f) => f.pressed);
+    const flipperY = Math.min(...e.flippers.map((f) => f.py));
     for (const b of e.balls) {
       if (!Number.isFinite(b.x) || !Number.isFinite(b.y) || !Number.isFinite(b.vx) || !Number.isFinite(b.vy)) problems.push(`숫자가 깨짐 t=${t.toFixed(1)}`);
       else if (b.x < 0 || b.x > tableW || b.y < -5) problems.push(`판 밖 (${b.x.toFixed(0)}, ${b.y.toFixed(0)}) t=${t.toFixed(1)}`);
-      const stuck = b.held <= 0 && !b.ride && !pressed && Math.hypot(b.vx, b.vy) < 15;
+      // 올린 플리퍼 위에 받쳐 둔 공은 멈춘 것으로 세지 않는다
+      const cradled = pressed && b.y > flipperY - 60;
+      const stuck = b.held <= 0 && !b.ride && !cradled && Math.hypot(b.vx, b.vy) < 15;
       const time = stuck ? (still.get(b.id) ?? 0) + dt : 0;
       still.set(b.id, time);
       if (time > 5 && time - dt <= 5) problems.push(`5초 넘게 멈춤 (${b.x.toFixed(0)}, ${b.y.toFixed(0)}) t=${t.toFixed(1)}`);

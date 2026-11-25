@@ -242,6 +242,22 @@ export default function Pinball({ onExit }: { onExit: () => void }) {
         haptic('basicMedium', 0);
         playSfx('saucer');
         break;
+      case 'ramp':
+        haptic('success', 0);
+        playSfx('lanes');
+        break;
+      case 'atticTarget':
+        haptic('tap');
+        playSfx('target');
+        break;
+      case 'jackpotLit':
+        haptic('success', 0);
+        playSfx('bank');
+        break;
+      case 'atticHole':
+        haptic(ev.jackpot ? 'confetti' : 'basicMedium', 0);
+        playSfx(ev.jackpot ? 'jackpot' : 'saucer');
+        break;
     }
   };
 

@@ -8,7 +8,8 @@ import { BALL_R } from './rules.ts';
  * 판은 화면보다 길다. 위에서부터
  *   꼭대기   위쪽 레인 4개
  *   위쪽     범퍼 5개. 왼쪽 벽을 따라 꼭대기로 이어지는 돌아가는 길(입구에 스피너)
- *   가운데   오른쪽 벽 타깃 3개, 보너스 구멍, 왼쪽 드롭 타깃 3개, 오른쪽 잠금 구멍
+ *   2층 다락 왼쪽 위에 떠 있는 방. 램프로 올라간다. 타깃 3개, 잭팟 구멍, 범퍼 3개, 자동 키커
+ *   가운데   램프, 오른쪽 벽 타깃 3개, 보너스 구멍, 왼쪽 드롭 타깃 3개, 오른쪽 잠금 구멍
  *   아래쪽   슬링샷 2개, 플리퍼 2개. 안쪽 길은 플리퍼로, 바깥 길은 판 밖으로 이어진다 (왼쪽에는 킥백)
  * 오른쪽 끝은 판 전체 높이의 발사 레인이다.
  */
@@ -35,6 +36,8 @@ export interface Wall {
   bounce: number;
   /** 아래로 떨어지는 공만 막는다 (발사대 바닥: 당겼다 놓은 공은 위로 통과) */
   oneWay?: boolean;
+  /** 2층 다락의 테두리나 램프 난간 — 그릴 때 바닥 벽이 아니라 위층 그림으로 그린다 */
+  upper?: boolean;
 }
 
 /** 슬링샷 모양. 세 꼭짓점 중 top–corner, corner–tip은 그냥 벽이고 tip–top 면이 공을 차는 면이다 */
@@ -45,6 +48,8 @@ export interface SlingShape {
   tip: Point;
   /** 차는 면이 바라보는 쪽에 있는 한 점 (판 안쪽) */
   toward: Point;
+  /** 2층 다락의 자동 키커 */
+  kicker?: boolean;
 }
 
 export interface FlipperShape {
@@ -107,7 +112,22 @@ function polyline(points: [number, number][], bounce: number): Wall[] {
 }
 
 const mirror = (p: Point): Point => ({ x: MIRROR - p.x, y: p.y });
+const pt = ([x, y]: [number, number]): Point => ({ x, y });
+
+/** 점이 다각형 안에 있는지 */
+export function inPolygon(poly: Point[], p: Point): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i];
+    const b = poly[j];
+    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+}
 const mirrorXY = ([x, y]: [number, number]): [number, number] => [MIRROR - x, y];
+
+/** 돌아가는 길 안쪽 벽의 x — 2층 다락의 왼쪽 테두리와 같은 줄 */
+const ORBIT_X = 48;
 
 /** 슬링샷 — 왼쪽을 정하고 오른쪽은 비춰서 만든다 */
 const LEFT_SLING = { top: { x: 66, y: 1040 }, corner: { x: 66, y: 1108 }, tip: { x: 102, y: 1156 } };
@@ -116,7 +136,77 @@ const SLING_TOWARD: Point = { x: MIRROR / 2, y: 980 };
 export const SLINGS: SlingShape[] = [
   { side: 'left', ...LEFT_SLING, toward: SLING_TOWARD },
   { side: 'right', top: mirror(LEFT_SLING.top), corner: mirror(LEFT_SLING.corner), tip: mirror(LEFT_SLING.tip), toward: SLING_TOWARD },
+  // 2층 다락의 자동 키커: 왼쪽 아래 모서리에 딱 붙어 있다. 공이 닿으면 다락 안쪽으로 차 올린다
+  { side: 'left', top: { x: 52, y: 532 }, corner: { x: 52, y: 608 }, tip: { x: 102, y: 608 }, toward: { x: 150, y: 470 }, kicker: true },
 ];
+
+/**
+ * 2층 다락 — 같은 평면 위의 닫힌 방이라 층이 겹치는 계산이 없다. 램프 입구(mouth)와 출구(exit) 두 곳으로만 바깥과 이어진다.
+ *   입구   램프를 올라온 공만 지나간다. 다락 안의 공에게는 벽이다 (되돌아 내려가지 않는다)
+ *   출구   다락 안의 공만 지나간다. 아래에서 올라오는 1층 공에게는 벽이다
+ */
+const ATTIC_POLYGON: [number, number][] = [
+  [ORBIT_X, 345],
+  [175, 332],
+  [212, 372],
+  [212, 596], // 입구 오른쪽 끝
+  [164, 612], // 입구 왼쪽 끝
+  [142, 618], // 출구 오른쪽 끝
+  [108, 618], // 출구 왼쪽 끝
+  [ORBIT_X, 618],
+];
+export const ATTIC = {
+  polygon: ATTIC_POLYGON.map(pt),
+  mouth: [pt(ATTIC_POLYGON[3]), pt(ATTIC_POLYGON[4])] as [Point, Point],
+  exit: [pt(ATTIC_POLYGON[5]), pt(ATTIC_POLYGON[6])] as [Point, Point],
+};
+/**
+ * 다락 테두리 벽 (입구와 출구는 뚫려 있다). 바닥은 오른쪽이 높아서 공이 출구 쪽으로 굴러간다.
+ * 왼쪽 테두리는 돌아가는 길의 안쪽 벽과 한 줄이다 — 어긋나면 그 틈에 공이 얹혀 멈춘다.
+ */
+const ATTIC_RIM: [number, number][][] = [
+  [ATTIC_POLYGON[6], ATTIC_POLYGON[7], ATTIC_POLYGON[0], ATTIC_POLYGON[1], ATTIC_POLYGON[2], ATTIC_POLYGON[3]],
+  [ATTIC_POLYGON[4], ATTIC_POLYGON[5]],
+];
+/** 입구와 출구의 한 방향 벽 — 엔진이 공의 층을 보고 고른다 */
+export const ATTIC_MOUTH_GATE: Wall = { ax: ATTIC.mouth[0].x, ay: ATTIC.mouth[0].y, bx: ATTIC.mouth[1].x, by: ATTIC.mouth[1].y, bounce: 0.35, upper: true };
+export const ATTIC_EXIT_GATE: Wall = { ax: ATTIC.exit[0].x, ay: ATTIC.exit[0].y, bx: ATTIC.exit[1].x, by: ATTIC.exit[1].y, bounce: 0.35, upper: true };
+
+/** 2층 타깃 — 다락 위쪽 테두리 앞의 가로 막대 */
+export const ATTIC_TARGETS: { x1: number; x2: number; y: number }[] = [
+  { x1: 84, x2: 106, y: 358 },
+  { x1: 113, x2: 135, y: 355 },
+  { x1: 142, x2: 164, y: 352 },
+];
+
+/**
+ * 램프 — 1층에서 다락 입구로 올라가는 길. 양옆 난간은 벽이고, 안에서는 아래로 당기는 힘(pull)이 더해진다(오르막).
+ * 플리퍼 가운데쯤으로 친 공은 판 가운데(x 167~193)로 거의 곧게 올라가서, 입구를 그 자리에 뒀다 — 어느 플리퍼로도 올릴 수 있다.
+ * 난간은 아래가 넓고 위로 천천히 좁아진다. 급하게 꺾이면 공이 크게 튕겨서 못 올라간다.
+ */
+const RAMP_LEFT: [number, number][] = [
+  [146, 850],
+  [156, 780],
+  [160, 700],
+  ATTIC_POLYGON[4],
+];
+const RAMP_RIGHT: [number, number][] = [
+  [214, 850],
+  [206, 780],
+  [208, 700],
+  ATTIC_POLYGON[3],
+];
+
+export const RAMP = {
+  /** 가운데 선: 아래 입구 → 다락 입구 가운데 */
+  center: RAMP_LEFT.map(([x, y], i) => ({ x: (x + RAMP_RIGHT[i][0]) / 2, y: (y + RAMP_RIGHT[i][1]) / 2 })),
+  left: RAMP_LEFT.map(pt),
+  right: RAMP_RIGHT.map(pt),
+  /** 난간 사이 — 이 안의 1층 공은 램프 위에 있다 */
+  polygon: [...RAMP_LEFT, ...[...RAMP_RIGHT].reverse()].map(pt),
+  /** 램프 위의 공을 아래로 당기는 가속 (중력에 더해진다) */
+  pull: 600,
+};
 
 export const FLIPPERS: FlipperShape[] = [
   { side: 'left', px: 110, py: FLIPPER_Y, len: 58, rest: 0.5, up: -0.45 },
@@ -142,9 +232,6 @@ const LEFT_ROOF: [number, number][] = [
   [8, 950],
   [34, 990],
 ];
-/** 돌아가는 길 안쪽 벽의 x */
-const ORBIT_X = 48;
-
 const RIGHT_ROOF: [number, number][] = [
   [LANE_X, 950],
   [326, 990],
@@ -175,16 +262,20 @@ export const WALLS: Wall[] = [
   ...polyline(LEFT_DIVIDER.map(mirrorXY), 0.35),
   ...polyline(LEFT_ROOF, 0.35),
   ...polyline(RIGHT_ROOF, 0.35),
-  // 돌아가는 길의 안쪽 벽 — 왼쪽 바깥벽과 이 벽 사이가 길이다
-  { ax: ORBIT_X, ay: 772, bx: ORBIT_X, by: 340, bounce: 0.35 },
+  // 돌아가는 길의 안쪽 벽 — 왼쪽 바깥벽과 이 벽 사이가 길이다. 위로는 다락의 왼쪽 테두리가 이어받는다
+  { ax: ORBIT_X, ay: 772, bx: ORBIT_X, by: 618, bounce: 0.35 },
   ...LANE_POSTS,
+  // 2층 다락의 테두리와 램프 난간
+  ...ATTIC_RIM.flatMap((line) => polyline(line, 0.35)).map((w) => ({ ...w, upper: true })),
+  ...polyline(RAMP_LEFT, 0.35).map((w) => ({ ...w, upper: true })),
+  ...polyline(RAMP_RIGHT, 0.35).map((w) => ({ ...w, upper: true })),
 ];
 
 /** 공이 레인을 빠져나간 뒤 닫히는 문 — 공이 레인으로 다시 떨어지지 않게 한다 */
 export const GATE: Wall = { ax: LANE_X, ay: 180, bx: RIGHT_X, by: 140, bounce: 0.4 };
 
 /** 구멍(세이커): 공을 잠깐 붙잡았다 뱉는다. catchR 안으로 들어온 공을 붙잡는다 */
-export type SaucerId = 'lock' | 'bonus';
+export type SaucerId = 'lock' | 'bonus' | 'attic';
 export interface SaucerDef {
   x: number;
   y: number;
@@ -195,18 +286,24 @@ export const SAUCERS: Record<SaucerId, SaucerDef> = {
   /** 오른쪽 잠금 구멍 — 잠금 불이 켜져 있으면 멀티볼 */
   lock: { x: 322, y: 892, r: 13, catchR: 11 },
   /** 보너스 구멍 — 들어갈 때마다 정해진 차례대로 보상 */
-  bonus: { x: 150, y: 726, r: 12, catchR: 10 },
+  bonus: { x: 82, y: 774, r: 12, catchR: 10 },
+  /** 2층 잭팟 구멍 — 2층 타깃을 다 맞혀 불이 켜졌을 때 들어가면 다락 잭팟 */
+  attic: { x: 72, y: 398, r: 11, catchR: 9 },
 };
 
 /** 스피너 — 돌아가는 길 입구에 가로로 걸린 판. 공이 지나가면 돈다 */
 export const SPINNER = { x: 29, y: 744, half: 17 };
 
-export const BUMPERS: { x: number; y: number; r: number }[] = [
-  { x: 118, y: 190, r: 22 },
-  { x: 196, y: 160, r: 22 },
-  { x: 274, y: 196, r: 22 },
-  { x: 298, y: 300, r: 20 },
-  { x: 262, y: 400, r: 20 },
+/** 범퍼. attic은 2층 다락의 작은 범퍼 — 방이 좁아서 차는 힘(kick)이 약하다 */
+export const BUMPERS: { x: number; y: number; r: number; kick: number; attic?: boolean }[] = [
+  { x: 118, y: 190, r: 22, kick: 720 },
+  { x: 196, y: 160, r: 22, kick: 720 },
+  { x: 274, y: 196, r: 22, kick: 720 },
+  { x: 298, y: 300, r: 20, kick: 720 },
+  { x: 262, y: 400, r: 20, kick: 720 },
+  { x: 98, y: 456, r: 13, kick: 520, attic: true },
+  { x: 152, y: 430, r: 13, kick: 520, attic: true },
+  { x: 126, y: 508, r: 13, kick: 520, attic: true },
 ];
 
 /** 드롭 타깃 — 왼쪽 벽 앞의 세로 막대 */
@@ -260,6 +357,24 @@ export const KICKBACK = {
   } satisfies RideDef,
 };
 
+/**
+ * 보너스 구멍의 미끄럼길 — 구멍이 붙잡았던 공을 왼쪽 안쪽 길까지 내려 준다.
+ * 구멍이 있는 자리는 위·옆이 막혀 있어서 그냥 뱉으면 공이 슬링샷이나 플리퍼에 세게 떨어져 어디로 튈지 모른다.
+ */
+export const BONUS_CHUTE: RideDef = {
+  track: makeTrack([
+    { x: SAUCERS.bonus.x, y: SAUCERS.bonus.y },
+    { x: 64, y: 850 },
+    { x: 54, y: 950 },
+    { x: 51, y: 1052 },
+  ]),
+  startSpeed: 240,
+  minSpeed: 240,
+  maxSpeed: 520,
+  accel: 500,
+  release: { vx: 0, vy: 160 },
+};
+
 /** 바닥 표시등: 보너스 배율 ×2~×5, 공 살리기 */
 export const MULT_INSERTS: Point[] = [128, 161, 194, 227].map((x) => ({ x, y: 1000 }));
 export const SAVE_INSERT: Point = { x: 180, y: 1268 };
@@ -267,7 +382,6 @@ export const SAVE_INSERT: Point = { x: 180, y: 1268 };
 /** 판 위 동전이 생기는 빈 자리 (1층의 열린 곳만) */
 export const COIN_ZONES: Zone[] = [
   { x: 70, y: 110, w: 260, h: 200 },
-  { x: 235, y: 440, w: 95, h: 400 },
-  { x: 70, y: 840, w: 230, h: 130 },
-  { x: 70, y: 650, w: 110, h: 140 },
+  { x: 240, y: 440, w: 90, h: 400 },
+  { x: 70, y: 860, w: 230, h: 110 },
 ];

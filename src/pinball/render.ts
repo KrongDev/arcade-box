@@ -2,14 +2,17 @@ import type { BallLook, PinballTableLook } from '../game/catalog';
 import { flipperTip, type Ball, type Flipper, type PinballEngine } from './engine';
 import { withAlpha, type PinballFx } from './fx';
 import { FULL_H, LOW_H, LOW_W, P, PIXEL_FONT, Pix, lowCanvas, mix, type Pt } from './pixel';
-import { BALL_R, BALL_SAVE_TIME, BONUS_ORDER, MAX_MULTIPLIER, type BonusAward } from './rules';
-import { GATE, KICKBACK, LANE_X, MULT_INSERTS, PLUNGER_TOP, PULL_DISTANCE, RIGHT_X, SAUCERS, SAVE_INSERT, SPINNER, TABLE_H, VIEW_H, VIEW_W, WALLS, type Point } from './table';
+import { makeTrack, trackAt } from './path';
+import { BALL_R, BALL_SAVE_TIME, BONUS_ORDER, MAX_MULTIPLIER, MAX_RAMP_COMBO, type BonusAward } from './rules';
+import { ATTIC, BONUS_CHUTE, GATE, KICKBACK, LANE_X, MULT_INSERTS, PLUNGER_TOP, PULL_DISTANCE, RAMP, RIGHT_X, SAUCERS, SAVE_INSERT, SPINNER, TABLE_H, VIEW_H, VIEW_W, WALLS, inPolygon, type Point } from './table';
 
 /**
  * 핀볼 판 그리기 — 픽셀 그림체.
  * 판과 장치는 낮은 해상도 캔버스(한 칸 = 판 좌표 3)에 칸 단위로 칠하고, 흐림 없이 키워서 화면에 올린다.
  * 점수 팝업·큰 알림·배율 글자만 원래 해상도에서 픽셀 글꼴로 쓴다(작은 칸으로는 읽히지 않아서).
  * 판·공 색은 상점 카탈로그(장착한 코스튬)에서 온다.
+ *
+ * 그리는 순서로 높이를 나타낸다: 바닥과 1층 장치 → 1층 공 → 위층 그림(다락·램프) → 다락 장치 → 램프 위·다락 안의 공.
  *
  * 판이 화면보다 길어서 화면에는 cameraY부터 VIEW_H만큼만 보인다. 낮은 해상도 캔버스는 보이는 범위 크기이고,
  * 판 좌표로 그리는 것들은 세로로 cameraY만큼 밀어서 그린다. cameraY는 3의 배수여야 한다(snapCamera).
@@ -18,14 +21,12 @@ export type TableTheme = PinballTableLook & BallLook;
 
 const SPRING_BOTTOM = TABLE_H - 2;
 const GAUGE_HEIGHT = 150;
-/** 정해진 길 위의 공은 떠 있는 것처럼 그림자를 이만큼 더 멀리 떨어뜨린다 */
-const RIDE_LIFT = 6;
 /** 보너스 구멍 옆에 쓰는 보상 이름 */
 export const BONUS_LABELS: Record<BonusAward, string> = { small: '3,000점', coins: '코인 +10', big: '10,000점', save: '공 살리기', lock: '잠금 불' };
 
 let low: { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D; pix: Pix } | null = null;
-/** 바뀌지 않는 바닥·벽은 한 번만 그려 둔다(판 색이 바뀌면 다시) */
-let base: { canvas: HTMLCanvasElement; key: string } | null = null;
+/** 바뀌지 않는 그림은 판 전체 크기로 한 번만 그려 둔다(판 색이 바뀌면 다시): 바닥과 벽 한 장, 그 위에 올라가는 다락·램프 한 장 */
+let base: { canvas: HTMLCanvasElement; upper: HTMLCanvasElement; key: string } | null = null;
 
 export function drawTable(ctx: CanvasRenderingContext2D, engine: PinballEngine, theme: TableTheme, fx: PinballFx, cameraY: number): void {
   if (!low) {
@@ -33,7 +34,7 @@ export function drawTable(ctx: CanvasRenderingContext2D, engine: PinballEngine, 
     low = { ...c, pix: new Pix(c.ctx) };
   }
   const key = Object.values(theme).join('|');
-  if (!base || base.key !== key) base = { canvas: drawBase(theme), key };
+  if (!base || base.key !== key) base = { canvas: drawBase(theme), upper: drawUpper(theme), key };
 
   const t = engine.time;
   const l = low.ctx;
@@ -54,15 +55,28 @@ export function drawTable(ctx: CanvasRenderingContext2D, engine: PinballEngine, 
   drawKickback(pix, engine, theme);
   drawSpinner(pix, engine, theme);
   drawSaucers(pix, engine, theme, t);
-  drawSlings(pix, engine, theme);
-  drawBumpers(pix, engine, theme);
+  drawSlings(pix, engine, theme, false);
+  drawBumpers(pix, engine, theme, false);
   drawPlunger(pix, engine, theme);
   drawCoins(pix, engine, theme);
   for (const f of engine.flippers) drawFlipper(pix, f, theme);
-  fx.drawUnder(pix, theme, BALL_R);
-  for (const b of engine.balls) drawBall(pix, b, theme, b.ride ? RIDE_LIFT : 0);
+  // 1층 공
+  const isUp = (b: Ball) => b.level === 1 || b.onRamp;
+  const floor = engine.balls.filter((b) => !isUp(b));
+  const up = engine.balls.filter(isUp);
+  fx.drawUnder(pix, theme, BALL_R, floor);
+  for (const b of floor) drawBall(pix, b, theme);
   const plunger = engine.plungerBall();
   if (plunger) drawBall(pix, plunger, theme);
+  // 위층: 다락과 램프, 그 안의 장치와 공
+  l.setTransform(1, 0, 0, 1, 0, 0);
+  l.drawImage(base.upper, 0, -camCells);
+  l.setTransform(1, 0, 0, 1, 0, -camCells);
+  drawAttic(pix, engine, theme, t);
+  drawSlings(pix, engine, theme, true);
+  drawBumpers(pix, engine, theme, true);
+  fx.drawUnder(pix, theme, BALL_R, up);
+  for (const b of up) drawBall(pix, b, theme);
   fx.drawOver(pix);
   l.setTransform(1, 0, 0, 1, 0, 0);
   drawOffscreenBalls(pix, engine, theme, cameraY);
@@ -119,14 +133,93 @@ function drawBase(theme: TableTheme): HTMLCanvasElement {
   const stage = mix(theme.tableGlow, theme.wall, 0.22);
   pix.ring(215, 250, 104, 1, stage);
   pix.ring(215, 250, 80, 1, stage);
+  // 보너스 구멍에서 왼쪽 안쪽 길로 내려가는 미끄럼길: 바닥에 점선으로 표시
+  const chute = BONUS_CHUTE.track;
+  for (let d = 22; d < chute.length - 8; d += 16) {
+    const at = trackAt(chute, d);
+    pix.rect(at.x - 1.5, at.y - 1.5, 3, 3, mix(theme.tableGlow, theme.coin, 0.35));
+  }
   wallLines(pix, theme, false);
   return canvas;
 }
 
+/** 2층 다락의 바닥 색 — 1층 바닥보다 밝다 */
+const deckFloor = (theme: TableTheme) => mix(theme.tableGlow, theme.wall, 0.3);
+
+/** 위층 그림(투명 바탕): 다락과 램프. 아래로 떨어지는 그림자로 떠 있는 느낌을 준다 */
+function drawUpper(theme: TableTheme): HTMLCanvasElement {
+  const { canvas, ctx } = lowCanvas(LOW_W, FULL_H);
+  const pix = new Pix(ctx);
+  const deck = ATTIC.polygon;
+  const floor = deckFloor(theme);
+  const shift = (pts: Pt[], dx: number, dy: number) => pts.map((p) => ({ x: p.x + dx, y: p.y + dy }));
+  const rim = theme.flipper;
+
+  // 다락의 그림자와 옆면(두께)
+  pix.poly(shift(deck, 6, 11), 'rgba(0, 0, 0, 0.36)');
+  pix.poly(shift(deck, 0, 6), mix(floor, '#000000', 0.45));
+
+  // 램프: 아래는 1층 바닥 색, 올라갈수록 다락 색. 위쪽 절반은 떠 있어서 그림자가 진다
+  const { left, right, center } = RAMP;
+  const n = left.length - 1;
+  pix.poly(shift([left[1], ...left.slice(2), ...[...right.slice(1)].reverse()], 5, 9), 'rgba(0, 0, 0, 0.28)');
+  const low0 = mix(theme.table, theme.tableGlow, 0.9);
+  const STEPS = 6;
+  for (let i = 0; i < n; i++) {
+    for (let k = 0; k < STEPS; k++) {
+      const a = k / STEPS;
+      const b = (k + 1) / STEPS;
+      const at = (p: Pt, q: Pt, u: number) => ({ x: p.x + (q.x - p.x) * u, y: p.y + (q.y - p.y) * u });
+      pix.poly([at(left[i], left[i + 1], a), at(left[i], left[i + 1], b), at(right[i], right[i + 1], b), at(right[i], right[i + 1], a)], mix(low0, floor, (i + (k + 0.5) / STEPS) / n));
+    }
+  }
+  // 올라가는 방향 화살표 무늬
+  const mid = makeTrack(center, 1);
+  for (let d = 26; d < mid.length - 10; d += 26) {
+    const at = trackAt(mid, d);
+    const bx = at.x - at.tx * 8;
+    const by = at.y - at.ty * 8;
+    pix.line(at.x, at.y, bx - at.ty * 11, by + at.tx * 11, 1, theme.coin);
+    pix.line(at.x, at.y, bx + at.ty * 11, by - at.tx * 11, 1, theme.coin);
+  }
+  for (const rail of [left, right]) {
+    pix.polyline(shift(rail, 0, P), 1, mix(rim, theme.table, 0.6));
+    pix.polyline(rail, 1, rim);
+    pix.disc(rail[0].x, rail[0].y, 4, rim);
+  }
+
+  // 다락 바닥과 점 무늬
+  pix.poly(deck, floor);
+  const dot = mix(floor, theme.wall, 0.25);
+  const xs = deck.map((p) => p.x);
+  const ys = deck.map((p) => p.y);
+  for (let cy = Math.ceil(Math.min(...ys) / P); cy < Math.max(...ys) / P; cy++) {
+    if (cy % 4 !== 2) continue;
+    for (let cx = Math.ceil(Math.min(...xs) / P); cx < Math.max(...xs) / P; cx++) {
+      if ((cx + (cy % 8 === 2 ? 0 : 2)) % 4 !== 0) continue;
+      if (inPolygon(deck, { x: (cx + 0.5) * P, y: (cy + 0.5) * P })) pix.cells(cx, cy, 1, 1, dot);
+    }
+  }
+  // 테두리: 다락과 램프의 벽은 흰색으로 (1층 벽과 구별된다)
+  const walls = WALLS.filter((w) => w.upper && !RAMP_RAIL_KEYS.has(wallKey(w)));
+  for (const w of walls) pix.line(w.ax, w.ay + P, w.bx, w.by + P, 2, mix(rim, floor, 0.6));
+  for (const w of walls) pix.line(w.ax, w.ay, w.bx, w.by, 2, rim);
+  // 출구를 가리키는 화살표
+  const [ea, eb] = ATTIC.exit;
+  arrow(pix, (ea.x + eb.x) / 2, ea.y - 18, Math.PI / 2, 8, mix(floor, theme.wall, 0.5));
+  return canvas;
+}
+
+const wallKey = (w: { ax: number; ay: number; bx: number; by: number }) => `${w.ax},${w.ay},${w.bx},${w.by}`;
+/** 램프 난간은 위에서 가는 선으로 따로 그리므로 굵은 테두리에서 뺀다 */
+const RAMP_RAIL_KEYS = new Set(
+  [RAMP.left, RAMP.right].flatMap((rail) => rail.slice(1).map((b, i) => wallKey({ ax: rail[i].x, ay: rail[i].y, bx: b.x, by: b.y }))),
+);
+
 /** 벽: 아래로 한 칸 진한 띠(두께) + 벽 색 두 칸 */
 function wallLines(pix: Pix, theme: TableTheme, gate: boolean): void {
   const under = mix(theme.wall, theme.table, 0.55);
-  const walls = gate ? [GATE] : WALLS.filter((w) => !w.oneWay); // 발사대 바닥은 플런저로 따로 그린다
+  const walls = gate ? [GATE] : WALLS.filter((w) => !w.oneWay && !w.upper); // 발사대 바닥은 플런저로, 다락·램프는 위층 그림으로 따로 그린다
   for (const w of walls) pix.line(w.ax, w.ay + P, w.bx, w.by + P, 2, under);
   for (const w of walls) pix.line(w.ax, w.ay, w.bx, w.by, 2, theme.wall);
 }
@@ -135,8 +228,8 @@ function wallLines(pix: Pix, theme: TableTheme, gate: boolean): void {
 function drawWallsLive(pix: Pix, engine: PinballEngine, theme: TableTheme, glow: number): void {
   if (glow > 0) {
     const halo = withAlpha(theme.wall, Math.min(0.35, 0.12 * glow));
-    for (const w of WALLS) if (!w.oneWay) pix.line(w.ax, w.ay, w.bx, w.by, 5, halo);
-    for (const w of WALLS) if (!w.oneWay) pix.line(w.ax, w.ay, w.bx, w.by, 2, theme.wall);
+    for (const w of WALLS) if (!w.oneWay && !w.upper) pix.line(w.ax, w.ay, w.bx, w.by, 5, halo);
+    for (const w of WALLS) if (!w.oneWay && !w.upper) pix.line(w.ax, w.ay, w.bx, w.by, 2, theme.wall);
   }
   if (engine.gateClosed) wallLines(pix, theme, true);
 }
@@ -151,6 +244,9 @@ function drawInserts(pix: Pix, engine: PinballEngine, theme: TableTheme, t: numb
   engine.standups.forEach((tg) => arrow(pix, tg.x - 26, (tg.y1 + tg.y2) / 2, 0, 8, tg.lit ? theme.coin : off));
   arrow(pix, SPINNER.x, SPINNER.y + 56, -Math.PI / 2, 9, engine.spinner.pending > 0 ? theme.coin : off);
   arrow(pix, SAUCERS.bonus.x, SAUCERS.bonus.y + 40, -Math.PI / 2, 9, Math.sin(t * 4) > 0 ? theme.coin : off);
+  // 램프 앞 화살표: 연속으로 올릴 수 있는 동안 깜빡인다
+  const rampIn = RAMP.center[0];
+  arrow(pix, rampIn.x, rampIn.y + 34, -Math.PI / 2, 12, engine.rampComboLeft > 0 && !blink ? off : theme.coin);
 
   for (let m = 2; m <= MAX_MULTIPLIER; m++) {
     const { x, y } = MULT_INSERTS[m - 2];
@@ -211,10 +307,21 @@ function drawLabels(ctx: CanvasRenderingContext2D, engine: PinballEngine, theme:
     ctx.fillStyle = Math.sin(t * 10) > 0 ? theme.bumperFlash : theme.bumper;
     ctx.fillText('잠금', SAUCERS.lock.x, SAUCERS.lock.y + 62);
   }
+  if (engine.rampComboLeft > 0) {
+    const rampIn = RAMP.center[0];
+    ctx.font = `700 13px ${PIXEL_FONT}`;
+    ctx.fillStyle = theme.coin;
+    ctx.fillText(`×${Math.min(MAX_RAMP_COMBO, engine.rampCombo + 1)}`, rampIn.x, rampIn.y + 58);
+  }
+  if (engine.jackpotLit) {
+    ctx.font = `700 13px ${PIXEL_FONT}`;
+    ctx.fillStyle = Math.sin(t * 10) > 0 ? theme.bumperFlash : theme.bumper;
+    ctx.fillText('잭팟', SAUCERS.attic.x, SAUCERS.attic.y + 28);
+  }
   // 보너스 구멍이 다음에 줄 보상
   ctx.font = `700 12px ${PIXEL_FONT}`;
   ctx.fillStyle = withAlpha(theme.coin, 0.9);
-  ctx.fillText(`다음 ${BONUS_LABELS[BONUS_ORDER[engine.bonusIndex % BONUS_ORDER.length]]}`, SAUCERS.bonus.x, SAUCERS.bonus.y - 26);
+  ctx.fillText(`다음 ${BONUS_LABELS[BONUS_ORDER[engine.bonusIndex % BONUS_ORDER.length]]}`, SAUCERS.bonus.x + 16, SAUCERS.bonus.y - 26);
 }
 
 function drawLanes(pix: Pix, engine: PinballEngine, theme: TableTheme): void {
@@ -284,6 +391,21 @@ function drawSaucers(pix: Pix, engine: PinballEngine, theme: TableTheme, t: numb
   drawHole(pix, bonus.x, bonus.y, bonus.r, theme, engine.saucers.bonus.flash > 0 ? theme.coinRing : theme.coin, true);
 }
 
+/** 2층 다락의 타깃(가로 막대)과 잭팟 구멍 */
+function drawAttic(pix: Pix, engine: PinballEngine, theme: TableTheme, t: number): void {
+  for (const tg of engine.atticTargets) {
+    const w = tg.x2 - tg.x1;
+    const face = tg.lit ? mix(theme.coin, theme.coinRing, tg.flash) : mix(theme.coin, deckFloor(theme), 0.5);
+    pix.rect(tg.x1, tg.y, w, 8, mix(theme.coin, '#000000', tg.lit ? 0.4 : 0.6));
+    pix.rect(tg.x1, tg.y - 3, w, 7, face);
+    if (tg.lit) pix.rect(tg.x1 + 5, tg.y - 1, w - 10, 3, theme.coinRing);
+  }
+  const hole = SAUCERS.attic;
+  const flash = engine.saucers.attic.flash;
+  const lit = engine.jackpotLit && Math.sin(t * 10) > 0;
+  drawHole(pix, hole.x, hole.y, hole.r, theme, flash > 0 || lit ? theme.bumperFlash : theme.bumper, true);
+}
+
 /** 스피너: 길에 가로로 걸린 판. 도는 동안 판의 세로 폭이 변한다 */
 function drawSpinner(pix: Pix, engine: PinballEngine, theme: TableTheme): void {
   const { x, y, half } = SPINNER;
@@ -297,8 +419,9 @@ function drawSpinner(pix: Pix, engine: PinballEngine, theme: TableTheme): void {
   pix.disc(x + half, y, 3.5, theme.flipper);
 }
 
-function drawSlings(pix: Pix, engine: PinballEngine, theme: TableTheme): void {
+function drawSlings(pix: Pix, engine: PinballEngine, theme: TableTheme, attic: boolean): void {
   for (const s of engine.slings) {
+    if (Boolean(s.kicker) !== attic) continue;
     const tri = (dy: number): Pt[] => [
       { x: s.top.x, y: s.top.y + dy },
       { x: s.corner.x, y: s.corner.y + dy },
@@ -331,8 +454,9 @@ function drawSlings(pix: Pix, engine: PinballEngine, theme: TableTheme): void {
 }
 
 /** 범퍼: 버섯 모양 — 고무 링(옆면 + 면) 위에 뚜껑(옆면 + 면), 가운데 고리 */
-function drawBumpers(pix: Pix, engine: PinballEngine, theme: TableTheme): void {
+function drawBumpers(pix: Pix, engine: PinballEngine, theme: TableTheme, attic: boolean): void {
   for (const b of engine.bumpers) {
+    if (Boolean(b.attic) !== attic) continue;
     const r = b.r * (1 + b.flash * 0.16);
     const lift = 6 - b.flash * 3; // 맞으면 뚜껑이 눌렸다가 올라온다
     pix.ellipse(b.x, b.y + lift + 3, b.r + 3, b.r * 0.9, 'rgba(0, 0, 0, 0.3)');

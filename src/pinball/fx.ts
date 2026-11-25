@@ -128,6 +128,35 @@ export class PinballFx extends ArcadeFx {
         this.popup(ev.x - 36, ev.y, `+${ev.points.toLocaleString()}`, theme.coin);
         this.kick(2);
         break;
+      case 'ramp':
+        this.burst(ev.x, ev.y, 16, [theme.coin, theme.flipper], 280, 0, -1);
+        this.ring(ev.x, ev.y, theme.coin, 44);
+        this.show(ev.combo > 1 ? `램프 ×${ev.combo}` : '2층!', `+${ev.points.toLocaleString()}`, theme.coin);
+        this.kick(4);
+        break;
+      case 'atticTarget':
+        this.burst(ev.x, ev.y + 6, 10, [theme.coin, theme.coinRing], 220, 0, 1);
+        this.popup(ev.x, ev.y + 30, `+${ev.points.toLocaleString()}`, theme.coin);
+        this.kick(2);
+        break;
+      case 'jackpotLit':
+        this.show('잭팟 준비!', '2층 구멍에 넣어 보세요', theme.bumper);
+        this.screenFlash(theme.bumper);
+        this.kick(4);
+        break;
+      case 'atticHole':
+        if (ev.jackpot) {
+          this.burst(ev.x, ev.y, 40, [theme.coin, theme.bumperFlash, theme.bumper], 420);
+          this.ring(ev.x, ev.y, theme.coin, 90);
+          this.show('다락 잭팟!', `+${ev.points.toLocaleString()}`, theme.coin);
+          this.screenFlash(theme.coin);
+          this.kick(8);
+        } else {
+          this.burst(ev.x, ev.y, 14, [theme.bumper, theme.bumperFlash], 220);
+          this.popup(ev.x + 10, ev.y - 26, `+${ev.points.toLocaleString()}`, theme.bumperFlash);
+          this.kick(3);
+        }
+        break;
       case 'spinner':
         this.burst(ev.x, ev.y, 3, [theme.coin, theme.coinRing], 130);
         break;
@@ -151,7 +180,7 @@ export class PinballFx extends ArcadeFx {
 
   /** 장착한 공·판 이펙트 — 부딪힐 때 */
   handleSkin(ev: PinballEvent): boolean {
-    if (ev.type !== 'bumper' && ev.type !== 'sling' && ev.type !== 'target' && ev.type !== 'saucer' && ev.type !== 'standup' && ev.type !== 'bonus') return false;
+    if (ev.type !== 'bumper' && ev.type !== 'sling' && ev.type !== 'target' && ev.type !== 'saucer' && ev.type !== 'standup' && ev.type !== 'bonus' && ev.type !== 'atticTarget' && ev.type !== 'atticHole') return false;
     const { x, y } = ev;
     if (this.skin.table === 'neon') this.neon = 1;
     if (this.skin.hit === 'fire') {
@@ -229,9 +258,11 @@ export class PinballFx extends ArcadeFx {
   }
 
   /** 공 아래에 그리는 것: 꼬리 */
-  drawUnder(pix: Pix, theme: TableTheme, radius: number): void {
+  /** only를 주면 그 공들의 꼬리만 그린다 (1층 공과 위층 공을 따로 그리려고) */
+  drawUnder(pix: Pix, theme: TableTheme, radius: number, only?: Ball[]): void {
+    const trails = only ? only.map((b) => this.trails.get(b.id)).filter((tr): tr is { x: number; y: number }[] => tr !== undefined) : [...this.trails.values()];
     if (this.skin.trail === 'lightning') {
-      for (const trail of this.trails.values()) {
+      for (const trail of trails) {
         if (trail.length < 3) continue;
         const zig = trail.map((p, i) => {
           const j = i === trail.length - 1 ? 0 : (Math.random() - 0.5) * 9;
@@ -242,7 +273,7 @@ export class PinballFx extends ArcadeFx {
       }
       return;
     }
-    for (const trail of this.trails.values()) {
+    for (const trail of trails) {
       for (let i = 0; i < trail.length - 1; i++) {
         const a = (i + 1) / trail.length;
         pix.disc(trail[i].x, trail[i].y, radius * (0.45 + a * 0.45), withAlpha(theme.ballLight, a * 0.28));
