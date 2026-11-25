@@ -63,13 +63,15 @@ test('레일 위의 공은 1층 장치와 부딪히지 않는다', () => {
   assert.ok(e.targets.every((t) => !t.down));
 });
 
-test('멀티볼에서 한 공이 레일 위에 있을 때 다른 공이 빠져도 공을 잃지 않는다', () => {
+test('멀티볼에서 한 공이 레일 위에 있을 때 다른 공이 빠져도 공을 잃지 않고, 멀티볼만 끝난다', () => {
   const e = engineWith();
   const rider = dropToExit(e);
   runUntil(e, 'rail', 1);
-  e.balls.push(makeBall({ id: 3001, x: 180, y: TABLE_H + 40 }));
-  const events = run(e, 0.1);
+  // 다른 공은 플리퍼 사이를 지나 판 아래로 떨어지는 중이다
+  e.balls.push(makeBall({ id: 3001, x: 180, y: TABLE_H - 20, vy: 600 }));
+  const events = run(e, 0.2);
   assert.equal(ofType(events, 'drain').length, 0);
+  assert.equal(ofType(events, 'multiballEnd').length, 1);
   assert.equal(e.ballsLeft, BALLS_PER_GAME);
   assert.deepEqual(e.balls, [rider]);
 });

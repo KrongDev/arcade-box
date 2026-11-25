@@ -140,7 +140,7 @@ export class PinballFx extends ArcadeFx {
         this.kick(2);
         break;
       case 'jackpotLit':
-        this.show('잭팟 준비!', '2층 구멍에 넣어 보세요', theme.bumper);
+        this.show('잭팟 준비!', '2층 구멍에 들어가면 잭팟', theme.bumper);
         this.screenFlash(theme.bumper);
         this.kick(4);
         break;
