@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { BALLS_PER_GAME, BALL_SAVE_TIME, COIN_PICKUP_VALUE, MAX_COINS_PER_RUN, MAX_MULTIPLIER, MAX_SCORE, MILESTONES, POINTS, SAUCERS, TABLE_H } from '../../src/pinball/engine.ts';
+import { BALLS_PER_GAME, BALL_SAVE_TIME, COIN_PICKUP_VALUE, LOWER_LANES_Y, MAX_COINS_PER_RUN, MAX_MULTIPLIER, MAX_SCORE, MILESTONES, POINTS, SAUCERS, TABLE_H } from '../../src/pinball/engine.ts';
 
 const SAUCER = SAUCERS.lock;
 import { clearBalls, engineWith, ofType, placeBall, run, runUntil } from './helpers.ts';
@@ -36,7 +36,7 @@ test('기본 점수와 판 규칙의 숫자는 정해진 값이다', () => {
     { bumper: POINTS.bumper, sling: POINTS.sling, target: POINTS.target, bank: POINTS.bank, rollover: POINTS.rollover, lanes: POINTS.lanes, saucer: POINTS.saucer, jackpot: POINTS.jackpot, coin: POINTS.coin, comboPerHit: POINTS.comboPerHit },
     { bumper: 100, sling: 30, target: 500, bank: 5000, rollover: 300, lanes: 3000, saucer: 2000, jackpot: 20000, coin: 500, comboPerHit: 100 },
   );
-  assert.deepEqual([BALLS_PER_GAME, BALL_SAVE_TIME, MAX_MULTIPLIER, COIN_PICKUP_VALUE, MAX_COINS_PER_RUN, MAX_SCORE], [3, 8, 5, 5, 400, 5_000_000]);
+  assert.deepEqual([BALLS_PER_GAME, MAX_MULTIPLIER, COIN_PICKUP_VALUE, MAX_COINS_PER_RUN, MAX_SCORE], [3, 5, 5, 400, 5_000_000]);
   assert.deepEqual(MILESTONES, [{ score: 10000, coins: 10 }, { score: 30000, coins: 20 }, { score: 50000, coins: 30 }]);
 });
 
@@ -122,7 +122,59 @@ test('멀티볼이 아닐 때 구멍은 2,000점을 준다', () => {
   assert.equal(saucer.points, POINTS.saucer);
 });
 
-test('발사 뒤 8초 안에 잃은 공은 한 번 돌려주고, 두 번째는 잃는다', () => {
+/** 발사한 공을 그 자리에 붙들어 둔 채 seconds초를 보낸다 */
+function holdBallAt(e: ReturnType<typeof engineWith>, at: { x: number; y: number }, seconds: number) {
+  for (let t = 0; t < seconds - 1e-9; t += 1 / 60) {
+    e.gateClosed = true;
+    Object.assign(e.balls[0], { ...at, vx: 0, vy: 0 });
+    e.step(1 / 60);
+  }
+  e.drainEvents();
+}
+const UP_TOP = { x: 200, y: 300 };
+const IN_LOWER_LANES = { x: 180, y: LOWER_LANES_Y + 20 };
+
+test('공 살리기 시간은 5초다', () => {
+  assert.equal(BALL_SAVE_TIME, 5);
+});
+
+test('공 살리기 시간은 공이 아래쪽 길에 내려오기 전에는 가지 않는다', () => {
+  const e = engineWith();
+  e.launch(1);
+  holdBallAt(e, UP_TOP, 12);
+  assert.equal(e.saveTimer, BALL_SAVE_TIME);
+  // 위에서 한참 놀다 내려오자마자 잃어도 돌려준다
+  assert.equal(ofType(loseBall(e), 'ballSaved').length, 1);
+});
+
+test('공이 아래쪽 길에 내려온 뒤 5초 안에 잃으면 돌려준다', () => {
+  const e = engineWith();
+  e.launch(1);
+  holdBallAt(e, UP_TOP, 12);
+  holdBallAt(e, IN_LOWER_LANES, 4.5);
+  assert.ok(e.saveTimer > 0 && e.saveTimer < 1, `남은 시간 ${e.saveTimer}`);
+  assert.equal(ofType(loseBall(e), 'ballSaved').length, 1);
+});
+
+test('공이 아래쪽 길에 내려온 뒤 5초가 지나면 돌려주지 않는다 (그사이 다시 위로 올라가도 시간은 간다)', () => {
+  const e = engineWith();
+  e.launch(1);
+  holdBallAt(e, IN_LOWER_LANES, 1);
+  holdBallAt(e, UP_TOP, 4.5);
+  assert.equal(e.saveTimer, 0);
+  const events = loseBall(e);
+  assert.equal(ofType(events, 'ballSaved').length, 0);
+  assert.equal(ofType(events, 'drain').length, 1);
+});
+
+test('발사 레인에 있는 공은 아래쪽 길에 내려온 것으로 세지 않는다', () => {
+  const e = engineWith();
+  e.launch(0); // 아주 약하게 쏴서 레인 안에서만 움직인다
+  run(e, 1);
+  assert.equal(e.saveTimer, BALL_SAVE_TIME);
+});
+
+test('공 살리기가 켜져 있을 때 잃은 공은 한 번 돌려주고, 두 번째는 잃는다', () => {
   const e = engineWith();
   assert.equal(e.launch(1), true);
   const first = loseBall(e);

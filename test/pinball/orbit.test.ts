@@ -81,7 +81,16 @@ test('보너스 구멍의 보상: 5,000점, 코인 10개, 10,000점, 공 살리�
   e.saveTimer = 0;
   enterBonus(e);
   assert.equal(e.saveUsed, false);
-  assert.ok(e.saveTimer > BALL_SAVE_TIME - 0.05, `공 살리기 남은 시간 ${e.saveTimer}`);
+  assert.equal(e.saveTimer, BALL_SAVE_TIME);
+  // 구멍에 붙잡혀 있거나 미끄럼길을 타는 동안에는 시간이 가지 않고, 안쪽 길에 내려온 뒤부터 간다
+  const ball = e.balls[0];
+  for (let t = 0; t < 4 && (ball.held > 0 || !ball.ride || ball.ride.s < 200); t += 1 / 120) e.step(1 / 120);
+  assert.ok(ball.ride, '미끄럼길을 타고 있지 않아요');
+  assert.equal(e.saveTimer, BALL_SAVE_TIME);
+  for (let t = 0; t < 4 && ball.ride; t += 1 / 120) e.step(1 / 120);
+  run(e, 0.5);
+  assert.ok(e.saveTimer < BALL_SAVE_TIME - 0.4 && e.saveTimer > BALL_SAVE_TIME - 0.6, `공 살리기 남은 시간 ${e.saveTimer}`);
+  clearBalls(e);
 
   assert.equal(e.lockLit, false);
   enterBonus(e);

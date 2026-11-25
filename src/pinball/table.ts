@@ -74,6 +74,8 @@ export const LANE_X = 350;
 export const RIGHT_X = 392;
 /** 플리퍼 축의 높이 */
 export const FLIPPER_Y = 1204;
+/** 아래쪽 길(안쪽 길·바깥 길)이 시작되는 높이 — 나눔벽의 꼭대기. 공이 여기까지 내려오면 플리퍼로 칠 차례가 온 것이다 */
+export const LOWER_LANES_Y = 1030;
 export const PLUNGER_Y = 1210;
 /** 발사대 위에서 기다리는 공의 자리 */
 export const REST_X = (LANE_X + RIGHT_X) / 2;
@@ -225,7 +227,7 @@ export const LANE_POSTS: Wall[] = [80, 130, 180, 230, 280].map((x) => ({ ax: x, 
  * 옆에서 튕겨 온 공만 들어간다.
  */
 const LEFT_DIVIDER: [number, number][] = [
-  [36, 1030],
+  [36, LOWER_LANES_Y],
   [36, 1129],
   [104, 1198],
 ];

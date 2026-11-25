@@ -20,7 +20,7 @@
  *   킥백            왼쪽 바깥 길 바닥에 닿은 공을 한 번 살려 준다 (정해진 길을 따라 판 안으로 올려 보낸다).
  *                   공을 새로 받으면 켜지고, 오른쪽 타깃을 다 맞혀도 다시 켜진다
  *   오른쪽 타깃     맞히면 불이 켜진다. 셋 다 켜면 보너스와 함께 킥백이 다시 켜진다
- *   공 살리기       발사 뒤 BALL_SAVE_TIME초 안에 공을 잃으면 한 번 돌려준다
+ *   공 살리기       발사한 공이 아래쪽 길에 처음 내려온 뒤 BALL_SAVE_TIME초 안에 잃으면 한 번 돌려준다
  *   콤보            짧은 간격으로 계속 맞히면 5번마다 보너스
  */
 
@@ -60,6 +60,7 @@ import {
   LANES,
   LANE_X,
   LOCK_CHUTE,
+  LOWER_LANES_Y,
   PLUNGER_Y,
   PULL_DISTANCE,
   RAIL,
@@ -408,9 +409,10 @@ export class PinballEngine {
   multiplier = 1;
   /** 타깃을 다 쓰러뜨려 구멍에 잠금 불이 켜졌는지 */
   lockLit = false;
-  /** 공 살리기 남은 시간 */
+  /** 공 살리기 남은 시간. 공이 아래쪽 길에 처음 내려온 뒤부터 줄어든다 */
   saveTimer = 0;
   saveUsed = false;
+  private saveCounting = false;
   comboCount = 0;
   bumpers: Bumper[] = createBumpers();
   slings: Sling[] = SLINGS.map(createSling);
@@ -525,9 +527,15 @@ export class PinballEngine {
     if (this.over || !this.plungerLoaded) return false;
     const p = Math.max(0, Math.min(1, power));
     this.plungerLoaded = false;
-    if (!this.saveUsed) this.saveTimer = BALL_SAVE_TIME;
+    if (!this.saveUsed) this.armBallSave();
     this.spawnLaunchedBall(p, false);
     return true;
+  }
+
+  /** 공 살리기를 켠다. 시간은 공이 아래쪽 길에 내려올 때까지 멈춰 있다 */
+  private armBallSave(): void {
+    this.saveTimer = BALL_SAVE_TIME;
+    this.saveCounting = false;
   }
 
   /** 발사대 위치에서 공 하나를 위로 쏜다 */
@@ -609,7 +617,9 @@ export class PinballEngine {
     }
     this.updateSpinner(frame);
     this.comboTimer = Math.max(0, this.comboTimer - frame);
-    if (this.balls.length > 0) this.saveTimer = Math.max(0, this.saveTimer - frame);
+    // 공 살리기 시간은 공이 아래쪽 길에 처음 내려온 뒤부터 간다 (발사 레인 안의 공은 세지 않는다)
+    if (!this.saveCounting && this.balls.some((b) => b.held <= 0 && !b.ride && b.x < LANE_X && b.y > LOWER_LANES_Y)) this.saveCounting = true;
+    if (this.saveCounting) this.saveTimer = Math.max(0, this.saveTimer - frame);
 
     if (this.bankReset > 0) {
       this.bankReset -= frame;
@@ -989,7 +999,7 @@ export class PinballEngine {
       this.coinsEarned += coins;
     } else if (award === 'save') {
       this.saveUsed = false;
-      this.saveTimer = BALL_SAVE_TIME;
+      this.armBallSave();
     } else this.lockLit = true;
     this.events.push({ type: 'bonus', x, y, award, points, coins });
   }
