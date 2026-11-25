@@ -86,15 +86,21 @@ export * from './rules.ts';
 export * from './table.ts';
 
 const GRAVITY = 900;
-/** 속도 상한 — 한 번 나눠 적분할 때 3.6쯤 움직여서 벽(공 반지름 9 + 벽 2)을 뚫지 못한다 */
+/** 속도 상한 — 한 번 계산할 때 1.8쯤 움직여서 벽(공 반지름 9 + 벽 2)을 뚫지 못한다 */
 const MAX_SPEED = 1700;
-const SUBSTEPS = 8;
+/**
+ * 물리를 한 번 계산하는 간격(초) — 960분의 1초. 화면이 초당 몇 번 그려지든 늘 이 간격으로 계산한다.
+ * 프레임 시간을 그대로 나눠 쓰면 주사율이 다른 폰마다 플리퍼로 친 공의 세기와 각도가 달라진다.
+ */
+const PHYSICS_STEP = 1 / 120 / 8;
+/** 한 프레임에 계산하는 시간의 상한 — 화면이 오래 멈췄다 돌아와도 공이 한꺼번에 멀리 가지 않는다 */
+const MAX_FRAME = 1 / 30;
 const FLIPPER_R = 7;
 const TARGET_R = 3;
 
 /**
  * 이보다 약하게 닿는 것은 부딪힌 게 아니라 면에 얹혀 있는 것으로 본다.
- * 얹힌 공이 한 번 계산하는 동안 중력으로 면 쪽으로 얻는 속도는 많아야 6쯤이다 (가장 긴 프레임, 램프 위).
+ * 얹힌 공이 한 번 계산하는 동안 중력으로 면 쪽으로 얻는 속도는 많아야 1.6쯤이다 (램프 위).
  */
 const RESTING_IMPACT = 12;
 
@@ -426,6 +432,8 @@ export class PinballEngine {
   /** 스피너: 그림용 각도·도는 빠르기, 아직 점수를 주지 않은 바퀴 수 */
   spinner = { angle: 0, speed: 0, pending: 0, flash: 0 };
   time = 0;
+  /** 아직 물리로 계산하지 않은 시간 (계산 간격보다 짧다) */
+  private owed = 0;
 
   private events: PinballEvent[] = [];
   private nextCoinId = 1;
@@ -535,11 +543,16 @@ export class PinballEngine {
 
   step(dt: number): void {
     if (this.over) return;
-    const frame = Math.min(dt, 1 / 30);
-    const h = frame / SUBSTEPS;
+    const frame = dt > 0 ? Math.min(dt, MAX_FRAME) : 0;
+    const h = PHYSICS_STEP;
     this.time += frame;
+    // 계산 간격으로 나누고 남은 시간은 다음 프레임으로 넘긴다 (90Hz면 10번, 11번을 번갈아 계산한다).
+    // 나눗셈 오차로 한 번이 빠지지 않게 아주 조금 보탠다 (60Hz면 정확히 16번)
+    this.owed += frame;
+    const steps = Math.floor(this.owed / PHYSICS_STEP + 1e-6);
+    this.owed = Math.max(0, this.owed - steps * PHYSICS_STEP);
 
-    for (let i = 0; i < SUBSTEPS; i++) {
+    for (let i = 0; i < steps; i++) {
       this.updateFlippers(h);
       for (const ball of this.balls) {
         if (ball.held > 0) continue;
