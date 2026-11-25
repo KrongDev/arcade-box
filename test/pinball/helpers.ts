@@ -1,8 +1,14 @@
 import { PinballEngine, makeBall, type Ball, type PinballEvent } from '../../src/pinball/engine.ts';
 
-/** 같은 씨앗이면 같은 수열을 주는 난수 (테스트 재현용) */
+/**
+ * 같은 씨앗이면 같은 수열을 주는 난수 (테스트 재현용).
+ * 씨앗은 먼저 한 번 섞는다 — 그대로 쓰면 작은 씨앗의 첫 값이 모두 0 근처로 나오고,
+ * 씨앗이 두 배면 수열도 두 배로 따라가서 씨앗을 바꿔도 같은 경우만 겪는다.
+ */
 export function seeded(seed: number): () => number {
-  let s = seed % 2147483647 || 1;
+  let h = Math.imul(seed ^ 0x9e3779b9, 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+  let s = (((h ^ (h >>> 16)) >>> 0) % 2147483646) + 1;
   return () => (s = (s * 16807) % 2147483647) / 2147483647;
 }
 
