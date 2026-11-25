@@ -14,6 +14,7 @@
  *   램프와 2층 다락 램프를 올라간 공은 2층(level 1)이 된다. 다락은 같은 평면의 닫힌 방이고 누르는 플리퍼가 없다 —
  *                   범퍼와 자동 키커가 공을 튕긴다. 타깃 셋을 맞히면 잭팟 불, 그 뒤 구멍에 넣으면 다락 잭팟.
  *                   램프를 12초 안에 또 올리면 점수가 2배, 3배…(최대 5배)
+ *   레일            다락 출구로 나온 공은 레일을 타고 왼쪽 안쪽 길 위로 내려온다
  *   슬링샷          플리퍼 위 삼각 튕김대. 맞으면 공을 가운데로 차 낸다
  *   바깥 길         옆으로 들어간 공은 판 밖으로 빠진다
  *   킥백            왼쪽 바깥 길 바닥에 닿은 공을 한 번 살려 준다 (정해진 길을 따라 판 안으로 올려 보낸다).
@@ -58,6 +59,7 @@ import {
   LANE_X,
   PLUNGER_Y,
   PULL_DISTANCE,
+  RAIL,
   RAMP,
   REST_X,
   REST_Y,
@@ -250,7 +252,10 @@ export type PinballEvent =
   | { type: 'ramp'; x: number; y: number; points: number; combo: number }
   | { type: 'atticTarget'; x: number; y: number; points: number }
   | { type: 'jackpotLit' }
-  | { type: 'atticHole'; x: number; y: number; points: number; jackpot: boolean };
+  | { type: 'atticHole'; x: number; y: number; points: number; jackpot: boolean }
+  /** 다락 출구에서 레일을 타기 시작함 / 레일 끝에서 내려옴 */
+  | { type: 'rail'; x: number; y: number }
+  | { type: 'railEnd'; x: number; y: number };
 
 function createSling(shape: SlingShape): Sling {
   // 차는 면(tip→top)의 법선 중 판 안쪽(toward)을 보는 쪽
@@ -276,8 +281,7 @@ function createBumpers(): Bumper[] {
 const RIDES: Record<Ride['track'], RideDef> = {
   kick: KICKBACK.ride,
   chute: BONUS_CHUTE,
-  // 레일은 다락과 함께 들어온다. 그때까지는 킥백 길을 가리켜 둔다
-  rail: KICKBACK.ride,
+  rail: RAIL.ride,
 };
 
 const inZone = (p: Point, z: Zone) => p.x >= z.x && p.x <= z.x + z.w && p.y >= z.y && p.y <= z.y + z.h;
@@ -714,6 +718,10 @@ export class PinballEngine {
       ball.ride = null;
       ball.vx = def.release.vx;
       ball.vy = def.release.vy;
+      if (ride.track === 'rail') {
+        ball.level = 0;
+        this.events.push({ type: 'railEnd', x: ball.x, y: ball.y });
+      }
     }
   }
 
@@ -912,7 +920,10 @@ export class PinballEngine {
       ball.atticTime = 0;
       if (ball.onRamp) this.climbedRamp(ball);
     } else if (!inAttic && ball.level === 1) {
-      ball.level = 0;
+      const [a, b] = ATTIC.exit;
+      const throughExit = ball.y > a.y - BALL_R && ball.x > Math.min(a.x, b.x) - BALL_R && ball.x < Math.max(a.x, b.x) + BALL_R;
+      if (throughExit) this.startRail(ball);
+      else ball.level = 0;
     }
     ball.onRamp = ball.level === 0 && inPolygon(RAMP.polygon, ball);
   }
@@ -1078,15 +1089,18 @@ export class PinballEngine {
     }
   }
 
-  /** 다락 안의 공을 출구 바로 아래로 옮겨 내보낸다 */
+  /** 다락 안에 너무 오래 있던 공을 출구로 옮겨 레일을 태운다 */
   private leaveAttic(ball: Ball): void {
-    const [a, b] = ATTIC.exit;
-    ball.x = (a.x + b.x) / 2;
-    ball.y = a.y + BALL_R + WALL_R + 2;
-    ball.vx = 0;
-    ball.vy = 120;
-    ball.level = 0;
+    this.startRail(ball);
+  }
+
+  /** 레일 타기 시작 — 타는 동안은 2층(level 1)으로 둔다 (그릴 때 위층, 화면은 1층 공을 먼저 따라간다) */
+  private startRail(ball: Ball): void {
+    ball.level = 1;
     ball.atticTime = 0;
+    ball.onRamp = false;
+    ball.ride = { track: 'rail', s: 0, v: RAIL.ride.startSpeed };
+    this.events.push({ type: 'rail', x: ball.x, y: ball.y });
   }
 
   /** 판 위의 마지막 공이 빠졌을 때 (x는 공이 나간 가로 위치) */

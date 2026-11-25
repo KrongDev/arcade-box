@@ -258,6 +258,12 @@ export default function Pinball({ onExit }: { onExit: () => void }) {
         haptic(ev.jackpot ? 'confetti' : 'basicMedium', 0);
         playSfx(ev.jackpot ? 'jackpot' : 'saucer');
         break;
+      case 'rail':
+        haptic('tickWeak');
+        playSfx('rollover');
+        break;
+      case 'railEnd':
+        break;
     }
   };
 

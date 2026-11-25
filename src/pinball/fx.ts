@@ -157,6 +157,12 @@ export class PinballFx extends ArcadeFx {
           this.kick(3);
         }
         break;
+      case 'rail':
+        this.burst(ev.x, ev.y, 8, [theme.flipper, theme.coinRing], 160, 0, 1);
+        break;
+      case 'railEnd':
+        this.burst(ev.x, ev.y, 6, [theme.flipper, theme.coinRing], 140);
+        break;
       case 'spinner':
         this.burst(ev.x, ev.y, 3, [theme.coin, theme.coinRing], 130);
         break;

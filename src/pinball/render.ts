@@ -4,7 +4,7 @@ import { withAlpha, type PinballFx } from './fx';
 import { FULL_H, LOW_H, LOW_W, P, PIXEL_FONT, Pix, lowCanvas, mix, type Pt } from './pixel';
 import { makeTrack, trackAt } from './path';
 import { BALL_R, BALL_SAVE_TIME, BONUS_ORDER, MAX_MULTIPLIER, MAX_RAMP_COMBO, type BonusAward } from './rules';
-import { ATTIC, BONUS_CHUTE, GATE, KICKBACK, LANE_X, MULT_INSERTS, PLUNGER_TOP, PULL_DISTANCE, RAMP, RIGHT_X, SAUCERS, SAVE_INSERT, SPINNER, TABLE_H, VIEW_H, VIEW_W, WALLS, inPolygon, type Point } from './table';
+import { ATTIC, BONUS_CHUTE, GATE, KICKBACK, LANE_X, MULT_INSERTS, PLUNGER_TOP, PULL_DISTANCE, RAIL, RAMP, RIGHT_X, SAUCERS, SAVE_INSERT, SPINNER, TABLE_H, VIEW_H, VIEW_W, WALLS, inPolygon, type Point } from './table';
 
 /**
  * 핀볼 판 그리기 — 픽셀 그림체.
@@ -12,7 +12,7 @@ import { ATTIC, BONUS_CHUTE, GATE, KICKBACK, LANE_X, MULT_INSERTS, PLUNGER_TOP, 
  * 점수 팝업·큰 알림·배율 글자만 원래 해상도에서 픽셀 글꼴로 쓴다(작은 칸으로는 읽히지 않아서).
  * 판·공 색은 상점 카탈로그(장착한 코스튬)에서 온다.
  *
- * 그리는 순서로 높이를 나타낸다: 바닥과 1층 장치 → 1층 공 → 위층 그림(다락·램프) → 다락 장치 → 램프 위·다락 안의 공.
+ * 그리는 순서로 높이를 나타낸다: 바닥과 1층 장치 → 1층 공 → 위층 그림(다락·램프·레일) → 다락 장치 → 램프 위·다락 안·레일 위의 공.
  *
  * 판이 화면보다 길어서 화면에는 cameraY부터 VIEW_H만큼만 보인다. 낮은 해상도 캔버스는 보이는 범위 크기이고,
  * 판 좌표로 그리는 것들은 세로로 cameraY만큼 밀어서 그린다. cameraY는 3의 배수여야 한다(snapCamera).
@@ -21,6 +21,8 @@ export type TableTheme = PinballTableLook & BallLook;
 
 const SPRING_BOTTOM = TABLE_H - 2;
 const GAUGE_HEIGHT = 150;
+/** 레일 위의 공은 떠 있는 것처럼 그림자를 이만큼 더 멀리 떨어뜨린다 */
+const RAIL_LIFT = 6;
 /** 보너스 구멍 옆에 쓰는 보상 이름 */
 export const BONUS_LABELS: Record<BonusAward, string> = { small: '3,000점', coins: '코인 +10', big: '10,000점', save: '공 살리기', lock: '잠금 불' };
 
@@ -76,7 +78,7 @@ export function drawTable(ctx: CanvasRenderingContext2D, engine: PinballEngine, 
   drawSlings(pix, engine, theme, true);
   drawBumpers(pix, engine, theme, true);
   fx.drawUnder(pix, theme, BALL_R, up);
-  for (const b of up) drawBall(pix, b, theme);
+  for (const b of up) drawBall(pix, b, theme, b.ride?.track === 'rail' ? RAIL_LIFT : 0);
   fx.drawOver(pix);
   l.setTransform(1, 0, 0, 1, 0, 0);
   drawOffscreenBalls(pix, engine, theme, cameraY);
@@ -207,6 +209,25 @@ function drawUpper(theme: TableTheme): HTMLCanvasElement {
   // 출구를 가리키는 화살표
   const [ea, eb] = ATTIC.exit;
   arrow(pix, (ea.x + eb.x) / 2, ea.y - 18, Math.PI / 2, 8, mix(floor, theme.wall, 0.5));
+
+  // 레일: 두 줄과 침목. 1층 위를 지나가므로 바닥에 그림자가 진다
+  const track = RAIL.ride.track;
+  const side = (offset: number): Pt[] => {
+    const pts: Pt[] = [];
+    for (let d = 0; d <= track.length; d += 6) {
+      const at = trackAt(track, d);
+      pts.push({ x: at.x - at.ty * offset, y: at.y + at.tx * offset });
+    }
+    return pts;
+  };
+  pix.polyline(shift(side(0), 5, 9), 2, 'rgba(0, 0, 0, 0.26)');
+  const tie = mix(rim, theme.table, 0.55);
+  for (let d = 8; d < track.length; d += 15) {
+    const at = trackAt(track, d);
+    pix.line(at.x - at.ty * 5, at.y + at.tx * 5, at.x + at.ty * 5, at.y - at.tx * 5, 1, tie);
+  }
+  pix.polyline(side(5), 1, rim);
+  pix.polyline(side(-5), 1, rim);
   return canvas;
 }
 
