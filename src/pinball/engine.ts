@@ -9,6 +9,8 @@
  *   드롭 타깃       맞으면 쓰러진다. 다 쓰러뜨리면 잠금 구멍에 '잠금' 불이 켜진다
  *   잠금 구멍       공을 잠깐 붙잡았다 뱉는다. 잠금 불이 켜져 있으면 멀티볼(공 2개, 점수 2배),
  *                   멀티볼 중에 넣으면 잭팟
+ *   보너스 구멍     들어갈 때마다 정해진 차례대로 보상을 준다 (rules.ts BONUS_ORDER)
+ *   스피너          돌아가는 길 입구. 공이 빠르게 지나갈수록 여러 번 돌고, 돌 때마다 점수
  *   슬링샷          플리퍼 위 삼각 튕김대. 맞으면 공을 가운데로 차 낸다
  *   바깥 길         옆으로 들어간 공은 판 밖으로 빠진다
  *   킥백            왼쪽 바깥 길 바닥에 닿은 공을 한 번 살려 준다 (정해진 길을 따라 판 안으로 올려 보낸다).
@@ -18,7 +20,20 @@
  *   콤보            짧은 간격으로 계속 맞히면 5번마다 보너스
  */
 
-import { BALL_R, BALL_SAVE_TIME, BALLS_PER_GAME, COIN_PICKUP_VALUE, MAX_COINS_PER_RUN, MAX_MULTIPLIER, MAX_SCORE, MILESTONES, POINTS } from './rules.ts';
+import {
+  BALL_R,
+  BALL_SAVE_TIME,
+  BALLS_PER_GAME,
+  BONUS_COINS,
+  BONUS_ORDER,
+  COIN_PICKUP_VALUE,
+  MAX_COINS_PER_RUN,
+  MAX_MULTIPLIER,
+  MAX_SCORE,
+  MILESTONES,
+  POINTS,
+  type BonusAward,
+} from './rules.ts';
 import {
   BUMPERS,
   CHARGE_TIME,
@@ -33,8 +48,9 @@ import {
   PULL_DISTANCE,
   REST_X,
   REST_Y,
-  SAUCER,
+  SAUCERS,
   SLINGS,
+  SPINNER,
   STANDUPS,
   TABLE_H,
   WALLS,
@@ -42,6 +58,7 @@ import {
   launchSpeed,
   type Point,
   type RideDef,
+  type SaucerId,
   type SlingShape,
   type Zone,
 } from './table.ts';
@@ -67,9 +84,15 @@ const SLING_KICK = 760;
 const SLING_TRIGGER = 90;
 const TARGET_TRIGGER = 40;
 
-const SAUCER_CATCH = 11;
 const SAUCER_HOLD = 0.9;
 const SAUCER_LOCK_HOLD = 1.6;
+/** 구멍이 공을 뱉은 뒤 다시 붙잡기까지 */
+const SAUCER_COOLDOWN = 0.5;
+
+/** 스피너: 지나가는 속도 180마다 한 번 돌고(1~8번), 이 간격으로 한 번씩 점수를 준다 */
+const SPINNER_SPEED_PER_SPIN = 180;
+const SPINNER_MAX_SPINS = 8;
+const SPINNER_TICK = 0.06;
 
 export interface Bumper {
   x: number;
@@ -143,8 +166,9 @@ export interface Ball {
   y: number;
   vx: number;
   vy: number;
-  /** 구멍에 붙잡혀 있는 남은 시간 (0이면 자유) */
+  /** 구멍에 붙잡혀 있는 남은 시간 (0이면 자유)과 붙잡은 구멍 */
   held: number;
+  heldBy: SaucerId | null;
   slow: number;
   /** 0 = 1층, 1 = 2층 다락 */
   level: 0 | 1;
@@ -160,7 +184,7 @@ export interface Ride {
 
 /** 공 하나를 만든다 (안 준 값은 멈춘 상태) */
 export function makeBall(init: Partial<Ball> & { x: number; y: number }): Ball {
-  return { id: 0, vx: 0, vy: 0, held: 0, slow: 0, level: 0, ride: null, ...init };
+  return { id: 0, vx: 0, vy: 0, held: 0, heldBy: null, slow: 0, level: 0, ride: null, ...init };
 }
 
 export type BallState = 'ready' | 'live';
@@ -187,7 +211,9 @@ export type PinballEvent =
   | { type: 'kickback'; x: number; y: number }
   | { type: 'standup'; x: number; y: number; points: number }
   /** relit은 꺼져 있던 킥백이 다시 켜졌을 때 true */
-  | { type: 'standupBank'; points: number; relit: boolean };
+  | { type: 'standupBank'; points: number; relit: boolean }
+  | { type: 'spinner'; x: number; y: number; points: number }
+  | { type: 'bonus'; x: number; y: number; award: BonusAward; points: number; coins: number };
 
 function createSling(shape: SlingShape): Sling {
   // 차는 면(tip→top)의 법선 중 판 안쪽(toward)을 보는 쪽
@@ -332,8 +358,12 @@ export class PinballEngine {
   lanes: RolloverLane[] = createLanes();
   flippers: Flipper[] = createFlippers();
   coins: CoinPickup[] = [];
-  /** 구멍에 공이 붙잡혀 있는 동안 1 → 0 */
-  saucerFlash = 0;
+  /** 구멍마다: 공을 붙잡은 순간 1 → 0으로 줄어드는 번쩍임, 뱉은 뒤 다시 붙잡기까지 남은 시간 */
+  saucers: Record<SaucerId, { flash: number; cooldown: number }> = { lock: { flash: 0, cooldown: 0 }, bonus: { flash: 0, cooldown: 0 } };
+  /** 보너스 구멍이 다음에 줄 보상 (BONUS_ORDER의 몇 번째인지) */
+  bonusIndex = 0;
+  /** 스피너: 그림용 각도·도는 빠르기, 아직 점수를 주지 않은 바퀴 수 */
+  spinner = { angle: 0, speed: 0, pending: 0, flash: 0 };
   time = 0;
 
   private events: PinballEvent[] = [];
@@ -345,7 +375,7 @@ export class PinballEngine {
   private lanesReset = 0;
   private standupReset = 0;
   private pendingLaunch = 0;
-  private saucerCooldown = 0;
+  private spinnerTick = 0;
   private wasMultiball = false;
   private milestoneIndex = 0;
   /** 공 능력으로 생긴 코인 소수점 — 1이 쌓이면 코인 하나를 더 준다 */
@@ -484,8 +514,11 @@ export class PinballEngine {
       l.flash = Math.max(0, l.flash - frame * 2);
       l.cooldown = Math.max(0, l.cooldown - frame);
     }
-    this.saucerFlash = Math.max(0, this.saucerFlash - frame * 1.5);
-    this.saucerCooldown = Math.max(0, this.saucerCooldown - frame);
+    for (const sc of Object.values(this.saucers)) {
+      sc.flash = Math.max(0, sc.flash - frame * 1.5);
+      sc.cooldown = Math.max(0, sc.cooldown - frame);
+    }
+    this.updateSpinner(frame);
     this.comboTimer = Math.max(0, this.comboTimer - frame);
     if (this.balls.length > 0) this.saveTimer = Math.max(0, this.saveTimer - frame);
 
@@ -514,9 +547,17 @@ export class PinballEngine {
       ball.held -= frame;
       if (ball.held <= 0) {
         ball.held = 0;
-        ball.vx = -470 - this.random() * 80;
-        ball.vy = -420 - this.random() * 60;
-        this.saucerCooldown = 0.5;
+        const from = ball.heldBy ?? 'lock';
+        ball.heldBy = null;
+        if (from === 'bonus') {
+          // 아래 왼쪽 플리퍼 쪽으로 떨어뜨린다
+          ball.vx = -50 - this.random() * 30;
+          ball.vy = 220 + this.random() * 40;
+        } else {
+          ball.vx = -470 - this.random() * 80;
+          ball.vy = -420 - this.random() * 60;
+        }
+        this.saucers[from].cooldown = SAUCER_COOLDOWN;
       }
     }
   }
@@ -540,8 +581,10 @@ export class PinballEngine {
       ball.vx = (ball.vx / speed) * MAX_SPEED;
       ball.vy = (ball.vy / speed) * MAX_SPEED;
     }
+    const prevY = ball.y;
     ball.x += ball.vx * h;
     ball.y += ball.vy * h;
+    this.checkSpinner(ball, prevY);
 
     for (const w of WALLS) {
       if (w.oneWay && ball.vy < 0) continue;
@@ -562,7 +605,7 @@ export class PinballEngine {
     this.bumpers.forEach((b, i) => this.collideBumper(ball, b, i));
     this.checkKickback(ball);
     this.checkLanes(ball);
-    this.checkSaucer(ball);
+    this.checkSaucers(ball);
 
     for (let i = this.coins.length - 1; i >= 0; i--) {
       const c = this.coins[i];
@@ -744,29 +787,89 @@ export class PinballEngine {
     }
   }
 
-  private checkSaucer(ball: Ball): void {
-    if (this.saucerCooldown > 0 || this.balls.some((b) => b.held > 0)) return;
-    if (Math.hypot(ball.x - SAUCER.x, ball.y - SAUCER.y) > SAUCER_CATCH) return;
-    ball.x = SAUCER.x;
-    ball.y = SAUCER.y;
-    ball.vx = 0;
-    ball.vy = 0;
-    this.saucerFlash = 1;
+  /** 구멍 가까이 온 공을 붙잡는다. 구멍마다 한 번에 공 하나 */
+  private checkSaucers(ball: Ball): void {
+    for (const id of Object.keys(SAUCERS) as SaucerId[]) {
+      const def = SAUCERS[id];
+      if (this.saucers[id].cooldown > 0 || this.balls.some((b) => b.heldBy === id)) continue;
+      if (Math.hypot(ball.x - def.x, ball.y - def.y) > def.catchR) continue;
+      ball.x = def.x;
+      ball.y = def.y;
+      ball.vx = 0;
+      ball.vy = 0;
+      ball.heldBy = id;
+      ball.held = SAUCER_HOLD;
+      this.saucers[id].flash = 1;
+      if (id === 'lock') this.enterLock(ball);
+      else this.enterBonus();
+      this.hitCombo(def.x, def.y);
+      return;
+    }
+  }
+
+  private enterLock(ball: Ball): void {
+    const { x, y } = SAUCERS.lock;
     if (this.lockLit && !this.isMultiball) {
       // 멀티볼: 이 공을 붙잡아 두는 동안 발사대에서 공 하나를 더 쏜다
       this.lockLit = false;
       ball.held = SAUCER_LOCK_HOLD;
       this.pendingLaunch = 0.5;
       const points = this.award(POINTS.saucer);
-      this.events.push({ type: 'saucer', x: SAUCER.x, y: SAUCER.y, points, jackpot: false });
+      this.events.push({ type: 'saucer', x, y, points, jackpot: false });
       this.events.push({ type: 'multiball' });
     } else {
-      ball.held = SAUCER_HOLD;
       const jackpot = this.isMultiball;
       const points = this.award(jackpot ? POINTS.jackpot : POINTS.saucer);
-      this.events.push({ type: 'saucer', x: SAUCER.x, y: SAUCER.y, points, jackpot });
+      this.events.push({ type: 'saucer', x, y, points, jackpot });
     }
-    this.hitCombo(SAUCER.x, SAUCER.y);
+  }
+
+  /** 보너스 구멍: 차례대로 다음 보상을 준다 */
+  private enterBonus(): void {
+    const { x, y } = SAUCERS.bonus;
+    const award = BONUS_ORDER[this.bonusIndex % BONUS_ORDER.length];
+    this.bonusIndex = (this.bonusIndex + 1) % BONUS_ORDER.length;
+    let points = 0;
+    let coins = 0;
+    if (award === 'small') points = this.award(POINTS.bonusSmall);
+    else if (award === 'big') points = this.award(POINTS.bonusBig);
+    else if (award === 'coins') {
+      coins = Math.min(BONUS_COINS, MAX_COINS_PER_RUN - this.coinsEarned);
+      this.coinsEarned += coins;
+    } else if (award === 'save') {
+      this.saveUsed = false;
+      this.saveTimer = BALL_SAVE_TIME;
+    } else this.lockLit = true;
+    this.events.push({ type: 'bonus', x, y, award, points, coins });
+  }
+
+  /** 공이 스피너 선을 지나갔으면 속도에 따라 몇 바퀴 돌린다 */
+  private checkSpinner(ball: Ball, prevY: number): void {
+    if ((prevY - SPINNER.y) * (ball.y - SPINNER.y) >= 0 || Math.abs(ball.x - SPINNER.x) > SPINNER.half) return;
+    const spins = Math.max(1, Math.min(SPINNER_MAX_SPINS, Math.round(Math.abs(ball.vy) / SPINNER_SPEED_PER_SPIN)));
+    this.spinner.pending += spins;
+    this.spinner.speed = Math.sign(ball.vy || 1) * (8 + spins * 4);
+  }
+
+  /** 스피너가 도는 동안 한 바퀴에 한 번씩 점수를 준다 */
+  private updateSpinner(frame: number): void {
+    const sp = this.spinner;
+    sp.flash = Math.max(0, sp.flash - frame * 6);
+    sp.angle += sp.speed * frame;
+    if (sp.pending <= 0) {
+      // 다 돌았으면 천천히 멈춘다
+      sp.speed *= Math.max(0, 1 - frame * 4);
+      return;
+    }
+    this.spinnerTick -= frame;
+    while (this.spinnerTick <= 0 && sp.pending > 0) {
+      this.spinnerTick += SPINNER_TICK;
+      sp.pending -= 1;
+      sp.flash = 1;
+      const points = this.award(POINTS.spinner);
+      this.events.push({ type: 'spinner', x: SPINNER.x, y: SPINNER.y, points });
+    }
+    if (sp.pending <= 0) this.spinnerTick = 0;
   }
 
   /** 짧은 간격으로 계속 맞히면 콤보가 쌓이고 COMBO_STEP번마다 보너스 */
@@ -805,7 +908,7 @@ export class PinballEngine {
       const x = zone.x + this.random() * zone.w;
       const y = zone.y + this.random() * zone.h;
       const clearOfBumpers = this.bumpers.every((b) => Math.hypot(b.x - x, b.y - y) > b.r + 30);
-      const clearOfSaucer = Math.hypot(SAUCER.x - x, SAUCER.y - y) > 40;
+      const clearOfSaucer = Object.values(SAUCERS).every((sc) => Math.hypot(sc.x - x, sc.y - y) > 40);
       const clearOfCoins = this.coins.every((c) => Math.hypot(c.x - x, c.y - y) > 50);
       if (clearOfBumpers && clearOfSaucer && clearOfCoins) {
         this.coins.push({ id: this.nextCoinId++, x, y, r: 10, age: 0 });

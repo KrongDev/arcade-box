@@ -128,6 +128,17 @@ export class PinballFx extends ArcadeFx {
         this.popup(ev.x - 36, ev.y, `+${ev.points.toLocaleString()}`, theme.coin);
         this.kick(2);
         break;
+      case 'spinner':
+        this.burst(ev.x, ev.y, 3, [theme.coin, theme.coinRing], 130);
+        break;
+      case 'bonus': {
+        const text = { small: `+${ev.points.toLocaleString()}`, big: `+${ev.points.toLocaleString()}`, coins: ev.coins > 0 ? `코인 +${ev.coins}` : '코인은 다 받았어요', save: '공 살리기가 켜졌어요', lock: '잠금 불이 켜졌어요' }[ev.award];
+        this.burst(ev.x, ev.y, 18, [theme.coin, theme.coinRing], 260);
+        this.ring(ev.x, ev.y, theme.coin, 50);
+        this.show('보너스!', text, theme.coin);
+        this.kick(4);
+        break;
+      }
       case 'standupBank':
         this.show('타깃 완성!', ev.relit ? '킥백이 다시 켜졌어요' : `+${ev.points.toLocaleString()}`, theme.coin);
         this.screenFlash(theme.coin);
@@ -140,7 +151,7 @@ export class PinballFx extends ArcadeFx {
 
   /** 장착한 공·판 이펙트 — 부딪힐 때 */
   handleSkin(ev: PinballEvent): boolean {
-    if (ev.type !== 'bumper' && ev.type !== 'sling' && ev.type !== 'target' && ev.type !== 'saucer' && ev.type !== 'standup') return false;
+    if (ev.type !== 'bumper' && ev.type !== 'sling' && ev.type !== 'target' && ev.type !== 'saucer' && ev.type !== 'standup' && ev.type !== 'bonus') return false;
     const { x, y } = ev;
     if (this.skin.table === 'neon') this.neon = 1;
     if (this.skin.hit === 'fire') {

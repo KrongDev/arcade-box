@@ -2,8 +2,8 @@ import type { BallLook, PinballTableLook } from '../game/catalog';
 import { flipperTip, type Ball, type Flipper, type PinballEngine } from './engine';
 import { withAlpha, type PinballFx } from './fx';
 import { FULL_H, LOW_H, LOW_W, P, PIXEL_FONT, Pix, lowCanvas, mix, type Pt } from './pixel';
-import { BALL_R, BALL_SAVE_TIME, MAX_MULTIPLIER } from './rules';
-import { GATE, KICKBACK, LANE_X, MULT_INSERTS, PLUNGER_TOP, PULL_DISTANCE, RIGHT_X, SAUCER, SAVE_INSERT, TABLE_H, VIEW_H, VIEW_W, WALLS, type Point } from './table';
+import { BALL_R, BALL_SAVE_TIME, BONUS_ORDER, MAX_MULTIPLIER, type BonusAward } from './rules';
+import { GATE, KICKBACK, LANE_X, MULT_INSERTS, PLUNGER_TOP, PULL_DISTANCE, RIGHT_X, SAUCERS, SAVE_INSERT, SPINNER, TABLE_H, VIEW_H, VIEW_W, WALLS, type Point } from './table';
 
 /**
  * 핀볼 판 그리기 — 픽셀 그림체.
@@ -20,6 +20,8 @@ const SPRING_BOTTOM = TABLE_H - 2;
 const GAUGE_HEIGHT = 150;
 /** 정해진 길 위의 공은 떠 있는 것처럼 그림자를 이만큼 더 멀리 떨어뜨린다 */
 const RIDE_LIFT = 6;
+/** 보너스 구멍 옆에 쓰는 보상 이름 */
+export const BONUS_LABELS: Record<BonusAward, string> = { small: '3,000점', coins: '코인 +10', big: '10,000점', save: '공 살리기', lock: '잠금 불' };
 
 let low: { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D; pix: Pix } | null = null;
 /** 바뀌지 않는 바닥·벽은 한 번만 그려 둔다(판 색이 바뀌면 다시) */
@@ -50,7 +52,8 @@ export function drawTable(ctx: CanvasRenderingContext2D, engine: PinballEngine, 
   drawTargets(pix, engine, theme);
   drawStandups(pix, engine, theme);
   drawKickback(pix, engine, theme);
-  drawSaucer(pix, engine, theme, t);
+  drawSpinner(pix, engine, theme);
+  drawSaucers(pix, engine, theme, t);
   drawSlings(pix, engine, theme);
   drawBumpers(pix, engine, theme);
   drawPlunger(pix, engine, theme);
@@ -144,8 +147,10 @@ function drawInserts(pix: Pix, engine: PinballEngine, theme: TableTheme, t: numb
   const off = mix(theme.tableGlow, theme.wall, 0.25);
   engine.lanes.forEach((l) => arrow(pix, l.x, l.y + 38, -Math.PI / 2, 9, l.lit ? theme.coin : off));
   engine.targets.forEach((tg) => arrow(pix, tg.x + 28, (tg.y1 + tg.y2) / 2, Math.PI, 8, tg.down ? theme.coin : off));
-  arrow(pix, SAUCER.x, SAUCER.y + 40, -Math.PI / 2, 11, engine.lockLit && blink ? theme.bumper : off);
+  arrow(pix, SAUCERS.lock.x, SAUCERS.lock.y + 40, -Math.PI / 2, 11, engine.lockLit && blink ? theme.bumper : off);
   engine.standups.forEach((tg) => arrow(pix, tg.x - 26, (tg.y1 + tg.y2) / 2, 0, 8, tg.lit ? theme.coin : off));
+  arrow(pix, SPINNER.x, SPINNER.y + 56, -Math.PI / 2, 9, engine.spinner.pending > 0 ? theme.coin : off);
+  arrow(pix, SAUCERS.bonus.x, SAUCERS.bonus.y + 40, -Math.PI / 2, 9, Math.sin(t * 4) > 0 ? theme.coin : off);
 
   for (let m = 2; m <= MAX_MULTIPLIER; m++) {
     const { x, y } = MULT_INSERTS[m - 2];
@@ -204,8 +209,12 @@ function drawLabels(ctx: CanvasRenderingContext2D, engine: PinballEngine, theme:
   if (engine.lockLit) {
     ctx.font = `700 13px ${PIXEL_FONT}`;
     ctx.fillStyle = Math.sin(t * 10) > 0 ? theme.bumperFlash : theme.bumper;
-    ctx.fillText('잠금', SAUCER.x, SAUCER.y + 62);
+    ctx.fillText('잠금', SAUCERS.lock.x, SAUCERS.lock.y + 62);
   }
+  // 보너스 구멍이 다음에 줄 보상
+  ctx.font = `700 12px ${PIXEL_FONT}`;
+  ctx.fillStyle = withAlpha(theme.coin, 0.9);
+  ctx.fillText(`다음 ${BONUS_LABELS[BONUS_ORDER[engine.bonusIndex % BONUS_ORDER.length]]}`, SAUCERS.bonus.x, SAUCERS.bonus.y - 26);
 }
 
 function drawLanes(pix: Pix, engine: PinballEngine, theme: TableTheme): void {
@@ -257,13 +266,35 @@ function drawKickback(pix: Pix, engine: PinballEngine, theme: TableTheme): void 
   arrow(pix, x, y - 18, -Math.PI / 2, 8, lit ? theme.coin : mix(theme.tableGlow, theme.wall, 0.25));
 }
 
-function drawSaucer(pix: Pix, engine: PinballEngine, theme: TableTheme, t: number): void {
-  const { x, y, r } = SAUCER;
-  const pulse = engine.lockLit ? 0.5 + 0.5 * Math.sin(t * 8) : 0;
+/** 구멍 하나: 어두운 구덩이와 테두리 고리 */
+function drawHole(pix: Pix, x: number, y: number, r: number, theme: TableTheme, ring: string, thick: boolean): void {
   pix.disc(x, y, r, mix(theme.table, '#000000', 0.55));
   pix.disc(x, y + r * 0.35, r * 0.62, mix(theme.table, '#000000', 0.25));
-  const ring = engine.saucerFlash > 0 ? theme.bumperFlash : engine.lockLit ? theme.bumper : theme.wall;
-  pix.ring(x, y, r + 2, pulse > 0.5 || engine.saucerFlash > 0 ? 2 : 1, ring);
+  pix.ring(x, y, r + 2, thick ? 2 : 1, ring);
+}
+
+function drawSaucers(pix: Pix, engine: PinballEngine, theme: TableTheme, t: number): void {
+  // 잠금 구멍: 잠금 불이 켜지면 테두리가 두근거린다
+  const lock = SAUCERS.lock;
+  const pulse = engine.lockLit ? 0.5 + 0.5 * Math.sin(t * 8) : 0;
+  const lockFlash = engine.saucers.lock.flash;
+  drawHole(pix, lock.x, lock.y, lock.r, theme, lockFlash > 0 ? theme.bumperFlash : engine.lockLit ? theme.bumper : theme.wall, pulse > 0.5 || lockFlash > 0);
+  // 보너스 구멍: 노란 테
+  const bonus = SAUCERS.bonus;
+  drawHole(pix, bonus.x, bonus.y, bonus.r, theme, engine.saucers.bonus.flash > 0 ? theme.coinRing : theme.coin, true);
+}
+
+/** 스피너: 길에 가로로 걸린 판. 도는 동안 판의 세로 폭이 변한다 */
+function drawSpinner(pix: Pix, engine: PinballEngine, theme: TableTheme): void {
+  const { x, y, half } = SPINNER;
+  const sp = engine.spinner;
+  const w = half * 2 - 10;
+  const h = Math.max(3, Math.abs(Math.cos(sp.angle)) * 10);
+  pix.rect(x - half, y - 1, half * 2, 3, mix(theme.flipper, theme.table, 0.35));
+  pix.rect(x - w / 2, y - h / 2 + 3, w, h, mix(theme.coin, '#000000', 0.4));
+  pix.rect(x - w / 2, y - h / 2, w, h, sp.flash > 0 ? mix(theme.coin, theme.coinRing, sp.flash) : theme.coin);
+  pix.disc(x - half, y, 3.5, theme.flipper);
+  pix.disc(x + half, y, 3.5, theme.flipper);
 }
 
 function drawSlings(pix: Pix, engine: PinballEngine, theme: TableTheme): void {

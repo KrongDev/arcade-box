@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { BALLS_PER_GAME, BALL_SAVE_TIME, COIN_PICKUP_VALUE, MAX_COINS_PER_RUN, MAX_MULTIPLIER, MAX_SCORE, MILESTONES, POINTS, SAUCER, TABLE_H } from '../../src/pinball/engine.ts';
+import { BALLS_PER_GAME, BALL_SAVE_TIME, COIN_PICKUP_VALUE, MAX_COINS_PER_RUN, MAX_MULTIPLIER, MAX_SCORE, MILESTONES, POINTS, SAUCERS, TABLE_H } from '../../src/pinball/engine.ts';
+
+const SAUCER = SAUCERS.lock;
 import { clearBalls, engineWith, ofType, placeBall, run, runUntil } from './helpers.ts';
 
 /**

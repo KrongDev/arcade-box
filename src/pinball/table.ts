@@ -7,8 +7,8 @@ import { BALL_R } from './rules.ts';
  *
  * 판은 화면보다 길다. 위에서부터
  *   꼭대기   위쪽 레인 4개
- *   위쪽     범퍼 5개
- *   가운데   오른쪽 벽 타깃 3개, 왼쪽 드롭 타깃 3개, 오른쪽 잠금 구멍
+ *   위쪽     범퍼 5개. 왼쪽 벽을 따라 꼭대기로 이어지는 돌아가는 길(입구에 스피너)
+ *   가운데   오른쪽 벽 타깃 3개, 보너스 구멍, 왼쪽 드롭 타깃 3개, 오른쪽 잠금 구멍
  *   아래쪽   슬링샷 2개, 플리퍼 2개. 안쪽 길은 플리퍼로, 바깥 길은 판 밖으로 이어진다 (왼쪽에는 킥백)
  * 오른쪽 끝은 판 전체 높이의 발사 레인이다.
  */
@@ -142,6 +142,9 @@ const LEFT_ROOF: [number, number][] = [
   [8, 950],
   [34, 990],
 ];
+/** 돌아가는 길 안쪽 벽의 x */
+const ORBIT_X = 48;
+
 const RIGHT_ROOF: [number, number][] = [
   [LANE_X, 950],
   [326, 990],
@@ -172,14 +175,31 @@ export const WALLS: Wall[] = [
   ...polyline(LEFT_DIVIDER.map(mirrorXY), 0.35),
   ...polyline(LEFT_ROOF, 0.35),
   ...polyline(RIGHT_ROOF, 0.35),
+  // 돌아가는 길의 안쪽 벽 — 왼쪽 바깥벽과 이 벽 사이가 길이다
+  { ax: ORBIT_X, ay: 772, bx: ORBIT_X, by: 340, bounce: 0.35 },
   ...LANE_POSTS,
 ];
 
 /** 공이 레인을 빠져나간 뒤 닫히는 문 — 공이 레인으로 다시 떨어지지 않게 한다 */
 export const GATE: Wall = { ax: LANE_X, ay: 180, bx: RIGHT_X, by: 140, bounce: 0.4 };
 
-/** 오른쪽 잠금 구멍(세이커) */
-export const SAUCER = { x: 322, y: 892, r: 13 };
+/** 구멍(세이커): 공을 잠깐 붙잡았다 뱉는다. catchR 안으로 들어온 공을 붙잡는다 */
+export type SaucerId = 'lock' | 'bonus';
+export interface SaucerDef {
+  x: number;
+  y: number;
+  r: number;
+  catchR: number;
+}
+export const SAUCERS: Record<SaucerId, SaucerDef> = {
+  /** 오른쪽 잠금 구멍 — 잠금 불이 켜져 있으면 멀티볼 */
+  lock: { x: 322, y: 892, r: 13, catchR: 11 },
+  /** 보너스 구멍 — 들어갈 때마다 정해진 차례대로 보상 */
+  bonus: { x: 150, y: 726, r: 12, catchR: 10 },
+};
+
+/** 스피너 — 돌아가는 길 입구에 가로로 걸린 판. 공이 지나가면 돈다 */
+export const SPINNER = { x: 29, y: 744, half: 17 };
 
 export const BUMPERS: { x: number; y: number; r: number }[] = [
   { x: 118, y: 190, r: 22 },

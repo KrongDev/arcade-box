@@ -235,6 +235,13 @@ export default function Pinball({ onExit }: { onExit: () => void }) {
         haptic('success', 0);
         playSfx('bank');
         break;
+      case 'spinner':
+        playSfx('rollover');
+        break;
+      case 'bonus':
+        haptic('basicMedium', 0);
+        playSfx('saucer');
+        break;
     }
   };
 

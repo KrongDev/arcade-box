@@ -30,6 +30,11 @@ export const POINTS = {
   /** 오른쪽 타깃 하나, 셋을 다 맞혔을 때 */
   standup: 300,
   standupBank: 2000,
+  /** 스피너가 한 번 돌 때 */
+  spinner: 100,
+  /** 보너스 구멍의 점수 보상 두 가지 */
+  bonusSmall: 3000,
+  bonusBig: 10000,
 } as const;
 
 /** 점수 구간 보너스 코인 */
@@ -38,3 +43,13 @@ export const MILESTONES = [
   { score: 30000, coins: 20 },
   { score: 50000, coins: 30 },
 ] as const;
+
+/**
+ * 보너스 구멍이 주는 보상의 차례 — 들어갈 때마다 다음 것을 준다. 무작위가 아니다
+ * (등급 신고와 스토어 설문에 "무작위로 아이템이 나오는 뽑기는 없다"고 적었다).
+ *   small 3,000점 · coins 코인 10개 · big 10,000점 · save 공 살리기 다시 켜기 · lock 잠금 불 켜기
+ */
+export const BONUS_ORDER = ['small', 'coins', 'big', 'save', 'lock'] as const;
+export type BonusAward = (typeof BONUS_ORDER)[number];
+/** 보너스 구멍의 코인 보상 (공 스킨의 코인 능력은 붙지 않는다) */
+export const BONUS_COINS = 10;
