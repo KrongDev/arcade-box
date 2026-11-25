@@ -41,7 +41,7 @@ function hitAtticTarget(e: PinballEngine, index: number) {
   return run(e, 0.2);
 }
 
-test('램프 입구에 빠르게 들어온 공은 2층에 올라가고 2,000점을 받는다', () => {
+test('램프 입구에 빠르게 들어온 공은 2층에 올라가고 3,000점을 받는다', () => {
   const e = engineWith();
   const ball = shootRamp(e, 1100);
   const [ramp] = ofType(runUntil(e, 'ramp', 2), 'ramp');
@@ -126,14 +126,14 @@ test('1층 공은 다락 벽이나 출구로 들어가지 못한다', () => {
   }
 });
 
-test('2층 타깃을 맞히면 불이 켜지고 1,000점을 받는다', () => {
+test('2층 타깃을 맞히면 불이 켜지고 1,500점을 받는다', () => {
   const e = engineWith();
   const [hit] = ofType(hitAtticTarget(e, 0), 'atticTarget');
   assert.equal(hit.points, POINTS.atticTarget);
   assert.equal(e.atticTargets[0].lit, true);
 });
 
-test('2층 타깃 셋을 맞히면 잭팟 불이 켜지고, 구멍에 넣으면 25,000점을 받는다', () => {
+test('2층 타깃 셋을 맞히면 잭팟 불이 켜지고, 구멍에 넣으면 30,000점을 받는다', () => {
   const e = engineWith();
   const events = e.atticTargets.flatMap((_, i) => hitAtticTarget(e, i));
   assert.equal(ofType(events, 'jackpotLit').length, 1);
@@ -145,14 +145,14 @@ test('2층 타깃 셋을 맞히면 잭팟 불이 켜지고, 구멍에 넣으면 
   assert.equal(e.jackpotLit, false);
 });
 
-test('불이 꺼진 2층 구멍은 2,000점을 준다', () => {
+test('불이 꺼진 2층 구멍은 3,000점을 준다', () => {
   const e = engineWith();
   placeInAttic(e, { x: SAUCERS.attic.x, y: SAUCERS.attic.y });
   const [hole] = ofType(run(e, 1 / 120), 'atticHole');
   assert.deepEqual([hole.jackpot, hole.points], [false, POINTS.atticHole]);
 });
 
-test('2층 범퍼는 200점, 자동 키커는 50점을 준다', () => {
+test('2층 범퍼는 300점, 자동 키커는 50점을 준다', () => {
   const e = engineWith();
   const bumper = e.bumpers.find((b) => b.attic);
   assert.ok(bumper);

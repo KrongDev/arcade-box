@@ -229,6 +229,14 @@ const LEFT_DIVIDER: [number, number][] = [
   [36, 1129],
   [104, 1198],
 ];
+/**
+ * 바깥 길의 안쪽 벽을 판 바닥까지 잇는다. 이 벽이 없으면 경사 아래가 뚫려 있어서,
+ * 플리퍼 사이로 빠진 공이 옆으로 날아와 킥백을 받거나 바깥 길의 공이 킥백 자리를 비켜 간다.
+ */
+const LEFT_APRON: [number, number][] = [
+  [36, 1129],
+  [36, TABLE_H],
+];
 const LEFT_ROOF: [number, number][] = [
   [8, 950],
   [34, 990],
@@ -261,6 +269,8 @@ export const WALLS: Wall[] = [
   { ax: LANE_X, ay: PLUNGER_Y, bx: RIGHT_X, by: PLUNGER_Y, bounce: 0, oneWay: true },
   ...polyline(LEFT_DIVIDER, 0.35),
   ...polyline(LEFT_DIVIDER.map(mirrorXY), 0.35),
+  ...polyline(LEFT_APRON, 0.35),
+  ...polyline(LEFT_APRON.map(mirrorXY), 0.35),
   ...polyline(LEFT_ROOF, 0.35),
   ...polyline(RIGHT_ROOF, 0.35),
   // 돌아가는 길의 안쪽 벽 — 왼쪽 바깥벽과 이 벽 사이가 길이다. 위로는 다락의 왼쪽 테두리가 이어받는다

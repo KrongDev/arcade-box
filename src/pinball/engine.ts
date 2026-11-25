@@ -32,6 +32,7 @@ import {
   BONUS_COINS,
   BONUS_ORDER,
   COIN_PICKUP_VALUE,
+  MAX_COINS_ON_TABLE,
   MAX_COINS_PER_RUN,
   MAX_MULTIPLIER,
   MAX_RAMP_COMBO,
@@ -1025,7 +1026,7 @@ export class PinballEngine {
 
   private updateCoinSpawns(frame: number): void {
     this.coinTimer -= frame;
-    if (this.coinTimer > 0 || this.coins.length >= 3) return;
+    if (this.coinTimer > 0 || this.coins.length >= MAX_COINS_ON_TABLE) return;
     this.coinTimer = COIN_SPAWN_INTERVAL / (1 + this.coinSpawn);
     const area = COIN_ZONES.reduce((sum, z) => sum + z.w * z.h, 0);
     for (let tries = 0; tries < 30; tries++) {

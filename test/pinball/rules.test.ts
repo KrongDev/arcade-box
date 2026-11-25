@@ -40,6 +40,19 @@ test('기본 점수와 판 규칙의 숫자는 정해진 값이다', () => {
   assert.deepEqual(MILESTONES, [{ score: 10000, coins: 10 }, { score: 30000, coins: 20 }, { score: 50000, coins: 30 }]);
 });
 
+test('판 위에는 동전이 4개까지 놓인다', () => {
+  const e = engineWith();
+  run(e, 40); // 공은 발사대에 있고 동전만 쌓인다
+  assert.equal(e.coins.length, 4);
+});
+
+test('새 장치의 점수는 균형을 맞춘 값이다', () => {
+  assert.deepEqual(
+    { spinner: POINTS.spinner, standup: POINTS.standup, standupBank: POINTS.standupBank, bonusSmall: POINTS.bonusSmall, bonusBig: POINTS.bonusBig, ramp: POINTS.ramp, atticBumper: POINTS.atticBumper, kicker: POINTS.kicker, atticTarget: POINTS.atticTarget, atticHole: POINTS.atticHole, atticJackpot: POINTS.atticJackpot },
+    { spinner: 250, standup: 500, standupBank: 3000, bonusSmall: 5000, bonusBig: 10000, ramp: 3000, atticBumper: 300, kicker: 50, atticTarget: 1500, atticHole: 3000, atticJackpot: 30000 },
+  );
+});
+
 test('위쪽 레인을 다 켜면 배율이 오르고, 새 배율이 곱해진 보너스 3,000점을 받는다', () => {
   const e = engineWith();
   const events = e.lanes.flatMap((_, i) => rollOver(e, i));

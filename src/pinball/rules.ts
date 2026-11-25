@@ -7,6 +7,8 @@ export const BALL_R = 9;
 export const BALLS_PER_GAME = 3;
 /** 판 위 동전 1개를 주웠을 때 받는 코인 */
 export const COIN_PICKUP_VALUE = 5;
+/** 판 위에 한꺼번에 놓이는 동전 수 — 판이 길어진 만큼 예전의 3개에서 늘렸다 (봇으로 잰 코인 수입이 예전 판과 같아지는 값) */
+export const MAX_COINS_ON_TABLE = 4;
 /** 한 판에 받을 수 있는 코인 상한 — 서버(server/src/domain.ts BOARDS의 pinball.maxCoinsPerRun)와 같다 */
 export const MAX_COINS_PER_RUN = 400;
 export const MAX_MULTIPLIER = 5;
@@ -15,7 +17,11 @@ export const MAX_SCORE = 5_000_000;
 /** 발사 뒤 이 시간 안에 공을 잃으면 한 번 돌려준다 */
 export const BALL_SAVE_TIME = 8;
 
-/** 기본 점수 — 보너스 배율과 멀티볼 2배가 곱해진다 */
+/**
+ * 기본 점수 — 보너스 배율과 멀티볼 2배가 곱해진다.
+ * 예전 판에도 있던 장치(범퍼부터 콤보까지)는 예전 값 그대로이고, 새 장치의 값은 봇으로 균형을 맞춘 결과다
+ * (test/pinball/balance.test.ts).
+ */
 export const POINTS = {
   bumper: 100,
   sling: 30,
@@ -28,21 +34,21 @@ export const POINTS = {
   coin: 500,
   comboPerHit: 100,
   /** 오른쪽 타깃 하나, 셋을 다 맞혔을 때 */
-  standup: 300,
-  standupBank: 2000,
+  standup: 500,
+  standupBank: 3000,
   /** 스피너가 한 번 돌 때 */
-  spinner: 100,
+  spinner: 250,
   /** 보너스 구멍의 점수 보상 두 가지 */
-  bonusSmall: 3000,
+  bonusSmall: 5000,
   bonusBig: 10000,
   /** 램프로 2층에 올라갔을 때 (연속으로 올리면 2배, 3배…) */
-  ramp: 2000,
+  ramp: 3000,
   /** 2층 다락: 범퍼, 자동 키커, 타깃, 불 꺼진 구멍, 잭팟 */
-  atticBumper: 200,
+  atticBumper: 300,
   kicker: 50,
-  atticTarget: 1000,
-  atticHole: 2000,
-  atticJackpot: 25000,
+  atticTarget: 1500,
+  atticHole: 3000,
+  atticJackpot: 30000,
 } as const;
 
 /** 점수 구간 보너스 코인 */
@@ -55,7 +61,7 @@ export const MILESTONES = [
 /**
  * 보너스 구멍이 주는 보상의 차례 — 들어갈 때마다 다음 것을 준다. 무작위가 아니다
  * (등급 신고와 스토어 설문에 "무작위로 아이템이 나오는 뽑기는 없다"고 적었다).
- *   small 3,000점 · coins 코인 10개 · big 10,000점 · save 공 살리기 다시 켜기 · lock 잠금 불 켜기
+ *   small 5,000점 · coins 코인 10개 · big 10,000점 · save 공 살리기 다시 켜기 · lock 잠금 불 켜기
  */
 export const BONUS_ORDER = ['small', 'coins', 'big', 'save', 'lock'] as const;
 export type BonusAward = (typeof BONUS_ORDER)[number];

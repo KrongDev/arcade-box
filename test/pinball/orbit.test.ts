@@ -14,7 +14,7 @@ function enterBonus(e: ReturnType<typeof engineWith>) {
   return bonus;
 }
 
-test('스피너를 빠르게 지나가면 여러 번 돌고, 한 번 돌 때마다 100점을 받는다', () => {
+test('스피너를 빠르게 지나가면 여러 번 돌고, 한 번 돌 때마다 250점을 받는다', () => {
   const e = engineWith();
   placeBall(e, { x: SPINNER.x, y: SPINNER.y + 12, vy: -900 });
   const spins = ofType(run(e, 1), 'spinner');
@@ -64,7 +64,7 @@ test('보너스 구멍은 들어갈 때마다 정해진 차례대로 보상을 �
   }
 });
 
-test('보너스 구멍의 보상: 3,000점, 코인 10개, 10,000점, 공 살리기, 잠금 불', () => {
+test('보너스 구멍의 보상: 5,000점, 코인 10개, 10,000점, 공 살리기, 잠금 불', () => {
   const e = engineWith();
   const small = enterBonus(e);
   assert.deepEqual([small.points, small.coins], [POINTS.bonusSmall, 0]);

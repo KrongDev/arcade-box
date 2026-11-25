@@ -65,7 +65,7 @@ test('공을 잃고 새 공을 받으면 킥백이 다시 켜진다', () => {
   assert.equal(e.kickbackLit, true);
 });
 
-test('오른쪽 타깃을 맞히면 불이 켜지고 300점을 받는다. 켜진 타깃은 또 맞혀도 점수가 없다', () => {
+test('오른쪽 타깃을 맞히면 불이 켜지고 500점을 받는다. 켜진 타깃은 또 맞혀도 점수가 없다', () => {
   const e = engineWith();
   const first = ofType(hitStandup(e, 0), 'standup');
   assert.equal(first.length, 1);
@@ -76,7 +76,7 @@ test('오른쪽 타깃을 맞히면 불이 켜지고 300점을 받는다. 켜진
   assert.equal(e.score, POINTS.standup);
 });
 
-test('오른쪽 타깃 셋을 다 맞히면 2,000점을 받고 킥백이 다시 켜진다', () => {
+test('오른쪽 타깃 셋을 다 맞히면 3,000점을 받고 킥백이 다시 켜진다', () => {
   const e = engineWith();
   e.kickbackLit = false;
   const events = e.standups.flatMap((_, i) => hitStandup(e, i));
@@ -107,4 +107,34 @@ test('정해진 길 위의 공은 다른 공과 부딪히지 않는다', () => {
   run(e, 0.15);
   assert.equal(other.vx, 0, '세워 둔 공이 옆으로 밀렸어요');
   assert.ok(rider.ride === null || rider.y < 1100, '길 위의 공이 막혔어요');
+});
+
+test('가운데로 빠진 공은 왼쪽으로 세게 튀어도 킥백을 받지 못한다', () => {
+  const e = engineWith();
+  // 플리퍼 사이로 빠진 공이 플리퍼 아래를 지나 왼쪽으로 날아가는 경우 (봇으로 돌린 판에서 실제로 나온 흐름)
+  placeBall(e, { x: 180, y: 1250, vx: -1000, vy: 200 });
+  const events = run(e, 2);
+  assert.equal(ofType(events, 'kickback').length, 0);
+  assert.equal(ofType(events, 'drain').length, 1);
+  assert.equal(e.kickbackLit, true);
+});
+
+test('왼쪽 바깥 길의 공은 옆으로 흘러도 킥백을 받는다', () => {
+  const e = engineWith();
+  // 나눔벽의 곧은 부분(y 1129)을 막 지난 공이 바깥벽에 튕겨 오른쪽으로 흐르는 경우
+  placeBall(e, { x: 24, y: 1140, vx: 200, vy: 300 });
+  const events = run(e, 2);
+  assert.equal(ofType(events, 'kickback').length, 1);
+  assert.equal(ofType(events, 'drain').length, 0);
+});
+
+test('가운데로 빠진 공은 오른쪽으로 세게 튀어도 오른쪽 바깥 길 자리로 넘어가지 않는다', () => {
+  const e = engineWith();
+  const ball = placeBall(e, { x: 180, y: 1250, vx: 1000, vy: 200 });
+  let maxX = ball.x;
+  for (let t = 0; t < 1; t += 1 / 120) {
+    e.step(1 / 120);
+    if (e.balls.includes(ball)) maxX = Math.max(maxX, ball.x);
+  }
+  assert.ok(maxX < 324, `공이 x=${maxX.toFixed(0)}까지 갔어요`);
 });

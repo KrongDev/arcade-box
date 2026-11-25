@@ -3,7 +3,7 @@ import { flipperTip, type Ball, type Flipper, type PinballEngine } from './engin
 import { withAlpha, type PinballFx } from './fx';
 import { FULL_H, LOW_H, LOW_W, P, PIXEL_FONT, Pix, lowCanvas, mix, type Pt } from './pixel';
 import { makeTrack, trackAt } from './path';
-import { BALL_R, BALL_SAVE_TIME, BONUS_ORDER, MAX_MULTIPLIER, MAX_RAMP_COMBO, type BonusAward } from './rules';
+import { BALL_R, BALL_SAVE_TIME, BONUS_COINS, BONUS_ORDER, MAX_MULTIPLIER, MAX_RAMP_COMBO, POINTS, type BonusAward } from './rules';
 import { ATTIC, BONUS_CHUTE, GATE, KICKBACK, LANE_X, MULT_INSERTS, PLUNGER_TOP, PULL_DISTANCE, RAIL, RAMP, RIGHT_X, SAUCERS, SAVE_INSERT, SPINNER, TABLE_H, VIEW_H, VIEW_W, WALLS, inPolygon, type Point } from './table';
 
 /**
@@ -24,7 +24,13 @@ const GAUGE_HEIGHT = 150;
 /** 레일 위의 공은 떠 있는 것처럼 그림자를 이만큼 더 멀리 떨어뜨린다 */
 const RAIL_LIFT = 6;
 /** 보너스 구멍 옆에 쓰는 보상 이름 */
-export const BONUS_LABELS: Record<BonusAward, string> = { small: '3,000점', coins: '코인 +10', big: '10,000점', save: '공 살리기', lock: '잠금 불' };
+export const BONUS_LABELS: Record<BonusAward, string> = {
+  small: `${POINTS.bonusSmall.toLocaleString()}점`,
+  coins: `코인 +${BONUS_COINS}`,
+  big: `${POINTS.bonusBig.toLocaleString()}점`,
+  save: '공 살리기',
+  lock: '잠금 불',
+};
 
 let low: { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D; pix: Pix } | null = null;
 /** 바뀌지 않는 그림은 판 전체 크기로 한 번만 그려 둔다(판 색이 바뀌면 다시): 바닥과 벽 한 장, 그 위에 올라가는 다락·램프 한 장 */
@@ -339,10 +345,11 @@ function drawLabels(ctx: CanvasRenderingContext2D, engine: PinballEngine, theme:
     ctx.fillStyle = Math.sin(t * 10) > 0 ? theme.bumperFlash : theme.bumper;
     ctx.fillText('잭팟', SAUCERS.attic.x, SAUCERS.attic.y + 28);
   }
-  // 보너스 구멍이 다음에 줄 보상
+  // 보너스 구멍이 다음에 줄 보상 — 왼쪽 돌아가는 길의 벽과 오른쪽 레일 사이에 들어가게 두 줄로 쓴다
   ctx.font = `700 12px ${PIXEL_FONT}`;
   ctx.fillStyle = withAlpha(theme.coin, 0.9);
-  ctx.fillText(`다음 ${BONUS_LABELS[BONUS_ORDER[engine.bonusIndex % BONUS_ORDER.length]]}`, SAUCERS.bonus.x + 16, SAUCERS.bonus.y - 26);
+  ctx.fillText('다음', SAUCERS.bonus.x + 4, SAUCERS.bonus.y - 40);
+  ctx.fillText(BONUS_LABELS[BONUS_ORDER[engine.bonusIndex % BONUS_ORDER.length]], SAUCERS.bonus.x + 4, SAUCERS.bonus.y - 26);
 }
 
 function drawLanes(pix: Pix, engine: PinballEngine, theme: TableTheme): void {
