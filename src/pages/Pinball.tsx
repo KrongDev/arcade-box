@@ -225,7 +225,7 @@ export default function Pinball({ onExit }: { onExit: () => void }) {
         break;
       case 'kickback':
         haptic('success', 0);
-        playSfx('ballSave');
+        playSfx('kickback');
         break;
       case 'standup':
         haptic('tap');
@@ -236,15 +236,15 @@ export default function Pinball({ onExit }: { onExit: () => void }) {
         playSfx('bank');
         break;
       case 'spinner':
-        playSfx('rollover');
+        playSfx('spinner');
         break;
       case 'bonus':
         haptic('basicMedium', 0);
-        playSfx('saucer');
+        playSfx('bonus');
         break;
       case 'ramp':
         haptic('success', 0);
-        playSfx('lanes');
+        playSfx('ramp');
         break;
       case 'atticTarget':
         haptic('tap');
@@ -260,10 +260,15 @@ export default function Pinball({ onExit }: { onExit: () => void }) {
         break;
       case 'rail':
         haptic('tickWeak');
-        playSfx('rollover');
+        playSfx('rail');
         break;
       case 'railEnd':
         break;
+      default: {
+        // 새 사건을 더하고 여기서 빠뜨리면 타입 검사에서 걸린다
+        const unhandled: never = ev;
+        return unhandled;
+      }
     }
   };
 

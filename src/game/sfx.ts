@@ -32,7 +32,12 @@ export type Sfx =
   | 'powerUp'
   | 'stageClear'
   | 'lockShake'
-  | 'unlock';
+  | 'unlock'
+  | 'spinner'
+  | 'ramp'
+  | 'rail'
+  | 'kickback'
+  | 'bonus';
 
 let enabled = true;
 let suspended = false;
@@ -106,7 +111,7 @@ function noise(ac: AudioContext, at: number, dur: number, gain: number) {
   src.start(at);
 }
 
-const MIN_GAP: Partial<Record<Sfx, number>> = { blast: 90, bumper: 45, open: 40, flip: 30, sling: 40, target: 30, rollover: 40, paddle: 40, brick: 35, brickTough: 35 };
+const MIN_GAP: Partial<Record<Sfx, number>> = { blast: 90, bumper: 45, open: 40, flip: 30, sling: 40, target: 30, rollover: 40, paddle: 40, brick: 35, brickTough: 35, spinner: 45 };
 
 export function playSfx(name: Sfx): void {
   if (!enabled || suspended || (typeof document !== 'undefined' && document.hidden)) return;
@@ -174,6 +179,28 @@ export function playSfx(name: Sfx): void {
       break;
     case 'combo':
       tone(ac, t, 1047, 0.07, 'square', 0.04, 1568);
+      break;
+    case 'spinner':
+      // 판이 한 번 돌 때마다 '틱'
+      tone(ac, t, 1480 + Math.random() * 180, 0.035, 'square', 0.035);
+      break;
+    case 'ramp':
+      // 올라가는 소리: 음이 미끄러지듯 높아진 뒤 맑게 울린다
+      tone(ac, t, 330, 0.28, 'triangle', 0.08, 1320);
+      tone(ac, t + 0.24, 1568, 0.22, 'sine', 0.07);
+      break;
+    case 'rail':
+      // 레일을 타고 내려가는 소리: 높은 데서 낮은 데로
+      tone(ac, t, 1175, 0.4, 'sine', 0.05, 392);
+      noise(ac, t, 0.3, 0.05);
+      break;
+    case 'kickback':
+      // 스프링이 공을 차 올린다
+      noise(ac, t, 0.06, 0.2);
+      tone(ac, t, 140, 0.16, 'sine', 0.18, 520);
+      break;
+    case 'bonus':
+      [988, 1319, 1760].forEach((f, i) => tone(ac, t + i * 0.07, f, 0.14, 'triangle', 0.07));
       break;
     case 'coin':
       tone(ac, t, 988, 0.08, 'square', 0.06);
