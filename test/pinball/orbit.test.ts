@@ -15,7 +15,7 @@ function enterBonus(e: ReturnType<typeof engineWith>) {
   return bonus;
 }
 
-test('스피너를 빠르게 지나가면 여러 번 돌고, 한 번 돌 때마다 400점을 받는다', () => {
+test('스피너를 빠르게 지나가면 여러 번 돌고, 한 번 돌 때마다 250점을 받는다', () => {
   const e = engineWith();
   placeBall(e, { x: SPINNER.x, y: SPINNER.y + 12, vy: -900 });
   const spins = ofType(run(e, 1), 'spinner');

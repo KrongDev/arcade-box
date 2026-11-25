@@ -40,28 +40,30 @@ test('기본 점수와 판 규칙의 숫자는 정해진 값이다', () => {
   assert.deepEqual(MILESTONES, [{ score: 10000, coins: 10 }, { score: 30000, coins: 20 }, { score: 50000, coins: 30 }]);
 });
 
-test('판 위에는 동전이 5개까지 놓인다', () => {
+test('판 위에는 동전이 3개까지 놓인다 (예전 판과 같다)', () => {
   const e = engineWith();
   run(e, 40); // 공은 발사대에 있고 동전만 쌓인다
-  assert.equal(e.coins.length, 5);
+  assert.equal(e.coins.length, 3);
 });
 
-test('동전은 처음 1.5초 뒤에, 그다음부터 2.8초마다 하나씩 생긴다', () => {
+test('동전은 처음 1.5초 뒤에, 그다음부터 3.5초마다 하나씩 생긴다 (예전 판과 같다)', () => {
   const e = engineWith();
   run(e, 1.4);
   assert.equal(e.coins.length, 0);
   run(e, 0.2); // 1.6초
   assert.equal(e.coins.length, 1);
-  run(e, 5.4); // 7.0초: 1.5, 4.3초에 하나씩
+  run(e, 3.3); // 4.9초: 아직 하나
+  assert.equal(e.coins.length, 1);
+  run(e, 0.2); // 5.1초: 5.0초에 하나 더
   assert.equal(e.coins.length, 2);
-  run(e, 0.3); // 7.3초: 7.1초에 하나 더
+  run(e, 3.5); // 8.6초: 8.5초에 하나 더
   assert.equal(e.coins.length, 3);
 });
 
 test('새 장치의 점수는 균형을 맞춘 값이다', () => {
   assert.deepEqual(
     { spinner: POINTS.spinner, standup: POINTS.standup, standupBank: POINTS.standupBank, bonusSmall: POINTS.bonusSmall, bonusBig: POINTS.bonusBig, ramp: POINTS.ramp, atticBumper: POINTS.atticBumper, kicker: POINTS.kicker, atticTarget: POINTS.atticTarget, atticHole: POINTS.atticHole, atticJackpot: POINTS.atticJackpot },
-    { spinner: 400, standup: 500, standupBank: 3000, bonusSmall: 5000, bonusBig: 10000, ramp: 3000, atticBumper: 300, kicker: 50, atticTarget: 1500, atticHole: 3000, atticJackpot: 30000 },
+    { spinner: 250, standup: 500, standupBank: 3000, bonusSmall: 5000, bonusBig: 10000, ramp: 3000, atticBumper: 300, kicker: 50, atticTarget: 1500, atticHole: 3000, atticJackpot: 30000 },
   );
 });
 
