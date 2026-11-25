@@ -4,7 +4,7 @@ import { withAlpha, type PinballFx } from './fx';
 import { FULL_H, LOW_H, LOW_W, P, PIXEL_FONT, Pix, lowCanvas, mix, type Pt } from './pixel';
 import { makeTrack, trackAt } from './path';
 import { BALL_R, BALL_SAVE_TIME, BONUS_COINS, BONUS_ORDER, MAX_MULTIPLIER, MAX_RAMP_COMBO, POINTS, type BonusAward } from './rules';
-import { ATTIC, BONUS_CHUTE, GATE, KICKBACK, LANE_X, MULT_INSERTS, PLUNGER_TOP, PULL_DISTANCE, RAIL, RAMP, RIGHT_X, SAUCERS, SAVE_INSERT, SPINNER, TABLE_H, VIEW_H, VIEW_W, WALLS, inPolygon, type Point } from './table';
+import { ATTIC, BONUS_CHUTE, GATE, KICKBACK, LANE_X, LOCK_CHUTE, MULT_INSERTS, PLUNGER_TOP, PULL_DISTANCE, RAIL, RAMP, RIGHT_X, SAUCERS, SAVE_INSERT, SPINNER, TABLE_H, VIEW_H, VIEW_W, WALLS, inPolygon, type Point } from './table';
 
 /**
  * 핀볼 판 그리기 — 픽셀 그림체.
@@ -141,11 +141,13 @@ function drawBase(theme: TableTheme): HTMLCanvasElement {
   const stage = mix(theme.tableGlow, theme.wall, 0.22);
   pix.ring(215, 250, 104, 1, stage);
   pix.ring(215, 250, 80, 1, stage);
-  // 보너스 구멍에서 왼쪽 안쪽 길로 내려가는 미끄럼길: 바닥에 점선으로 표시
-  const chute = BONUS_CHUTE.track;
-  for (let d = 22; d < chute.length - 8; d += 16) {
-    const at = trackAt(chute, d);
-    pix.rect(at.x - 1.5, at.y - 1.5, 3, 3, mix(theme.tableGlow, theme.coin, 0.35));
+  // 보너스 구멍과 잠금 구멍에서 안쪽 길로 내려가는 미끄럼길: 바닥에 점선으로 표시.
+  // 잠금 구멍 바로 아래에는 화살표와 글자가 있어서 그 아래부터 찍는다
+  for (const [chute, from] of [[BONUS_CHUTE.track, 22], [LOCK_CHUTE.track, 86]] as const) {
+    for (let d = from; d < chute.length - 8; d += 16) {
+      const at = trackAt(chute, d);
+      pix.rect(at.x - 1.5, at.y - 1.5, 3, 3, mix(theme.tableGlow, theme.coin, 0.35));
+    }
   }
   wallLines(pix, theme, false);
   return canvas;

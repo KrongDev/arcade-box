@@ -59,6 +59,7 @@ import {
   KICKBACK,
   LANES,
   LANE_X,
+  LOCK_CHUTE,
   PLUNGER_Y,
   PULL_DISTANCE,
   RAIL,
@@ -219,12 +220,12 @@ export interface Ball {
   onRamp: boolean;
   /** 2층에 머문 시간 */
   atticTime: number;
-  /** 정해진 길(레일·킥백)을 타는 중이면 그 길과 지나온 거리·속도. 타는 동안에는 아무것과도 부딪히지 않는다 */
+  /** 정해진 길(레일·킥백·구멍의 미끄럼길)을 타는 중이면 그 길과 지나온 거리·속도. 타는 동안에는 아무것과도 부딪히지 않는다 */
   ride: Ride | null;
 }
 
 export interface Ride {
-  track: 'kick' | 'rail' | 'chute';
+  track: 'kick' | 'rail' | 'chute' | 'lockChute';
   s: number;
   v: number;
 }
@@ -294,6 +295,7 @@ function createBumpers(): Bumper[] {
 const RIDES: Record<Ride['track'], RideDef> = {
   kick: KICKBACK.ride,
   chute: BONUS_CHUTE,
+  lockChute: LOCK_CHUTE,
   rail: RAIL.ride,
 };
 
@@ -644,8 +646,8 @@ export class PinballEngine {
           ball.vx = -260 - this.random() * 80;
           ball.vy = 80 + this.random() * 60;
         } else {
-          ball.vx = -470 - this.random() * 80;
-          ball.vy = -420 - this.random() * 60;
+          // 미끄럼길로 오른쪽 안쪽 길까지 내려 준다
+          ball.ride = { track: 'lockChute', s: 0, v: LOCK_CHUTE.startSpeed };
         }
         this.saucers[from].cooldown = SAUCER_COOLDOWN;
       }

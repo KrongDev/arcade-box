@@ -409,6 +409,23 @@ export const BONUS_CHUTE: RideDef = {
   release: { vx: 0, vy: 160 },
 };
 
+/**
+ * 잠금 구멍의 미끄럼길 — 구멍이 붙잡았던 공을 오른쪽 안쪽 길까지 내려 준다 (보너스 구멍과 좌우로 같은 모양).
+ * 옆으로 뱉으면 램프 난간에 맞고 돌아와서 구멍에 다시 빠지거나 플리퍼 사이로 떨어진다.
+ */
+export const LOCK_CHUTE: RideDef = {
+  track: makeTrack([
+    { x: SAUCERS.lock.x, y: SAUCERS.lock.y },
+    { x: 314, y: 960 },
+    { x: MIRROR - 51, y: 1052 },
+  ]),
+  startSpeed: 240,
+  minSpeed: 240,
+  maxSpeed: 520,
+  accel: 500,
+  release: { vx: 0, vy: 160 },
+};
+
 /** 바닥 표시등: 보너스 배율 ×2~×5, 공 살리기 */
 export const MULT_INSERTS: Point[] = [128, 161, 194, 227].map((x) => ({ x, y: 1000 }));
 export const SAVE_INSERT: Point = { x: 180, y: 1268 };

@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { BALL_SAVE_TIME, BONUS_COINS, BONUS_ORDER, MAX_COINS_PER_RUN, POINTS } from '../../src/pinball/rules.ts';
-import { FLIPPERS, SAUCERS, SPINNER, TABLE_H } from '../../src/pinball/table.ts';
-import { clearBalls, engineWith, ofType, placeBall, run, runUntil } from './helpers.ts';
+import { BALL_R } from '../../src/pinball/rules.ts';
+import { FLIPPERS, SAUCERS, SLINGS, SPINNER, TABLE_H } from '../../src/pinball/table.ts';
+import { clearBalls, engineWith, ofType, placeBall, run } from './helpers.ts';
 
 /** 돌아가는 길의 스피너와 보너스 구멍(정해진 차례대로 보상) */
 
@@ -111,25 +112,44 @@ test('보너스 구멍에 공이 있어도 잠금 구멍은 따로 공을 받는
   assert.deepEqual([a.heldBy, b.heldBy], ['bonus', 'lock']);
 });
 
-test('구멍이 뱉은 공은 플리퍼 사이 가운데나 바깥 길로 곧장 떨어지지 않는다', () => {
+/** 구멍에 넣은 공이 뱉어진 뒤 처음 플리퍼 높이에 닿을 때까지 지켜보고, 어떻게 됐는지 준다 */
+function watchEject(id: 'lock' | 'bonus', seed: number): string {
   const [left, right] = FLIPPERS;
-  for (const id of ['lock', 'bonus'] as const) {
-    for (const seed of [1, 2, 3, 4, 5]) {
-      const e = engineWith({}, seed);
-      const ball = placeBall(e, { x: SAUCERS[id].x, y: SAUCERS[id].y });
-      runUntil(e, () => false, 0.01);
-      assert.equal(ball.heldBy, id);
-      // 뱉을 때까지 기다린 뒤 1초 동안 지켜본다
-      for (let t = 0; t < 3 && ball.held > 0; t += 1 / 120) e.step(1 / 120);
-      for (let t = 0; t < 1; t += 1 / 120) {
-        e.step(1 / 120);
-        if (e.balls.length === 0) assert.fail(`${id} 씨앗 ${seed}: 뱉은 공을 1초 안에 잃었어요`);
-        if (ball.y > left.py - 20 && ball.y < left.py + 30) {
-          const overFlipper = (ball.x > left.px - 10 && ball.x < left.px + left.len - 4) || (ball.x < right.px + 10 && ball.x > right.px - right.len + 4);
-          assert.ok(overFlipper, `${id} 씨앗 ${seed}: 플리퍼가 없는 곳으로 떨어졌어요 (x=${ball.x.toFixed(0)})`);
-          break;
-        }
-      }
-    }
+  const e = engineWith({}, seed);
+  const ball = placeBall(e, { x: SAUCERS[id].x, y: SAUCERS[id].y });
+  run(e, 1 / 120);
+  if (ball.heldBy !== id) return '구멍이 공을 붙잡지 않았어요';
+  for (let t = 0; t < 3 && ball.held > 0; t += 1 / 120) e.step(1 / 120);
+  for (let t = 0; t < 8; t += 1 / 120) {
+    e.step(1 / 120);
+    if (!e.balls.includes(ball)) return '공을 잃었어요';
+    if (ball.held > 0) return `${ball.heldBy} 구멍에 다시 빠졌어요`;
+    if (ball.ride || ball.y <= left.py - 20) continue;
+    const overLeft = ball.x > left.px - 10 && ball.x < left.px + left.len - 4;
+    const overRight = ball.x < right.px + 10 && ball.x > right.px - right.len + 4;
+    return overLeft || overRight ? 'ok' : `플리퍼가 없는 곳으로 떨어졌어요 (x=${ball.x.toFixed(0)})`;
   }
+  return '8초가 지나도 플리퍼까지 내려오지 않았어요';
+}
+
+test('보너스 구멍이 내보낸 공은 왼쪽 플리퍼 위로 내려온다', () => {
+  for (let seed = 1; seed <= 40; seed++) assert.equal(watchEject('bonus', seed), 'ok', `씨앗 ${seed}`);
+});
+
+test('잠금 구멍이 뱉은 공은 구멍에 다시 빠지거나 가운데로 떨어지지 않고 플리퍼 위로 내려온다', () => {
+  for (let seed = 1; seed <= 40; seed++) assert.equal(watchEject('lock', seed), 'ok', `씨앗 ${seed}`);
+});
+
+test('잠금 구멍은 붙잡았던 공을 미끄럼길에 태워 오른쪽 안쪽 길에 내려놓는다', () => {
+  const e = engineWith();
+  const ball = placeBall(e, { x: SAUCERS.lock.x, y: SAUCERS.lock.y });
+  run(e, 1 / 120);
+  for (let t = 0; t < 3 && ball.held > 0; t += 1 / 120) e.step(1 / 120);
+  assert.equal(ball.ride?.track, 'lockChute');
+  for (let t = 0; t < 2 && ball.ride; t += 1 / 120) e.step(1 / 120);
+  assert.equal(ball.ride, null, '2초가 지나도 길이 끝나지 않았어요');
+  // 안쪽 길은 오른쪽 슬링샷의 바깥 벽과 나눔벽 사이(폭 30)다. 그 안에서 아래로 내려가고 있다
+  const sling = SLINGS.find((sl) => sl.side === 'right' && !sl.kicker)!;
+  assert.ok(ball.x > sling.top.x + BALL_R && ball.x < sling.top.x + 30 - BALL_R, `x=${ball.x.toFixed(1)}`);
+  assert.ok(ball.y > sling.top.y && ball.vy > 0, `y=${ball.y.toFixed(1)} vy=${ball.vy.toFixed(0)}`);
 });
