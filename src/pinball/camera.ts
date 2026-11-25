@@ -16,6 +16,12 @@ const ANCHOR = VIEW_H * 0.38;
 const LEAD = 0.3;
 const LEAD_UP = 140;
 const LEAD_DOWN = 330;
+/**
+ * 아래쪽을 미리 보여 주는 것은 공이 범퍼 구역을 벗어날 때부터 건다 (y 350에서 0, 550부터 전부).
+ * 범퍼 구역에서 아래로 차인 공은 대개 다시 범퍼에 맞는다 — 그때마다 화면을 끌어내리면 화면이 위아래로 출렁인다.
+ */
+const LEAD_FROM = 350;
+const LEAD_FULL = 550;
 /** 1초에 남은 거리의 몇 배로 따라가는지 (클수록 빨리 붙는다) */
 const FOLLOW_RATE = 12;
 /** 공이 화면 위·아래 끝에서 이만큼 안쪽을 벗어나려 하면 바로 따라붙는다 */
@@ -54,7 +60,8 @@ export function focusBall<T extends CameraBall>(balls: T[]): T | null {
 /** 그 공을 볼 때 화면이 가야 할 자리. 공이 없으면 맨 아래(발사대와 플리퍼) */
 export function cameraTarget(ball: { y: number; vy: number } | null): number {
   if (!ball) return MAX_CAM;
-  return clamp(ball.y - ANCHOR + clamp(ball.vy * LEAD, -LEAD_UP, LEAD_DOWN), 0, MAX_CAM);
+  const lead = ball.vy > 0 ? Math.min(ball.vy * LEAD, LEAD_DOWN) * clamp((ball.y - LEAD_FROM) / (LEAD_FULL - LEAD_FROM), 0, 1) : Math.max(ball.vy * LEAD, -LEAD_UP);
+  return clamp(ball.y - ANCHOR + lead, 0, MAX_CAM);
 }
 
 /** 한 프레임 뒤의 화면 자리. ballY를 주면 공이 화면 밖으로 나가지 않게 따라붙는다 (한 번에 건너뛰지는 않는다) */

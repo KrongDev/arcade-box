@@ -69,6 +69,13 @@ test('공이 판 아래쪽에 있으면 화면은 맨 아래에 붙는다', () =
 
 test('아래로 빠르게 내려오는 공은 아래쪽을 더 보여 준다', () => {
   assert.ok(cameraTarget({ y: 500, vy: 1000 }) > cameraTarget({ y: 500, vy: 0 }));
+  // 범퍼 구역을 다 벗어나면(y 550부터) 속도의 0.3배만큼 앞을 본다
+  assert.equal(cameraTarget({ y: 560, vy: 500 }) - cameraTarget({ y: 560, vy: 0 }), 150);
+});
+
+test('범퍼 구역에서 아래로 차인 공은 화면을 끌어내리지 않는다 (대개 다시 범퍼에 맞는다)', () => {
+  // 범퍼는 y 400 위에 있다. 그 구역에서는 공의 자리만 보고 따라간다
+  for (const y of [160, 250, 340]) assert.equal(cameraTarget({ y, vy: 800 }), cameraTarget({ y, vy: 0 }), `y=${y}`);
 });
 
 test('목표 위치는 범위를 벗어나지 않는다', () => {
