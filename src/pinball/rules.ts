@@ -27,6 +27,9 @@ export const POINTS = {
   jackpot: 20000,
   coin: 500,
   comboPerHit: 100,
+  /** 오른쪽 타깃 하나, 셋을 다 맞혔을 때 */
+  standup: 300,
+  standupBank: 2000,
 } as const;
 
 /** 점수 구간 보너스 코인 */

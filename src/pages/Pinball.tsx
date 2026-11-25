@@ -223,6 +223,18 @@ export default function Pinball({ onExit }: { onExit: () => void }) {
         break;
       case 'multiballEnd':
         break;
+      case 'kickback':
+        haptic('success', 0);
+        playSfx('ballSave');
+        break;
+      case 'standup':
+        haptic('tap');
+        playSfx('target');
+        break;
+      case 'standupBank':
+        haptic('success', 0);
+        playSfx('bank');
+        break;
     }
   };
 

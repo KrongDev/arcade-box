@@ -3,7 +3,7 @@ import { flipperTip, type Ball, type Flipper, type PinballEngine } from './engin
 import { withAlpha, type PinballFx } from './fx';
 import { FULL_H, LOW_H, LOW_W, P, PIXEL_FONT, Pix, lowCanvas, mix, type Pt } from './pixel';
 import { BALL_R, BALL_SAVE_TIME, MAX_MULTIPLIER } from './rules';
-import { GATE, LANE_X, MULT_INSERTS, PLUNGER_TOP, PULL_DISTANCE, RIGHT_X, SAUCER, SAVE_INSERT, TABLE_H, VIEW_H, VIEW_W, WALLS, type Point } from './table';
+import { GATE, KICKBACK, LANE_X, MULT_INSERTS, PLUNGER_TOP, PULL_DISTANCE, RIGHT_X, SAUCER, SAVE_INSERT, TABLE_H, VIEW_H, VIEW_W, WALLS, type Point } from './table';
 
 /**
  * 핀볼 판 그리기 — 픽셀 그림체.
@@ -18,6 +18,8 @@ export type TableTheme = PinballTableLook & BallLook;
 
 const SPRING_BOTTOM = TABLE_H - 2;
 const GAUGE_HEIGHT = 150;
+/** 정해진 길 위의 공은 떠 있는 것처럼 그림자를 이만큼 더 멀리 떨어뜨린다 */
+const RIDE_LIFT = 6;
 
 let low: { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D; pix: Pix } | null = null;
 /** 바뀌지 않는 바닥·벽은 한 번만 그려 둔다(판 색이 바뀌면 다시) */
@@ -46,6 +48,8 @@ export function drawTable(ctx: CanvasRenderingContext2D, engine: PinballEngine, 
   drawWallsLive(pix, engine, theme, fx.wallGlow());
   drawLanes(pix, engine, theme);
   drawTargets(pix, engine, theme);
+  drawStandups(pix, engine, theme);
+  drawKickback(pix, engine, theme);
   drawSaucer(pix, engine, theme, t);
   drawSlings(pix, engine, theme);
   drawBumpers(pix, engine, theme);
@@ -53,7 +57,7 @@ export function drawTable(ctx: CanvasRenderingContext2D, engine: PinballEngine, 
   drawCoins(pix, engine, theme);
   for (const f of engine.flippers) drawFlipper(pix, f, theme);
   fx.drawUnder(pix, theme, BALL_R);
-  for (const b of engine.balls) drawBall(pix, b, theme);
+  for (const b of engine.balls) drawBall(pix, b, theme, b.ride ? RIDE_LIFT : 0);
   const plunger = engine.plungerBall();
   if (plunger) drawBall(pix, plunger, theme);
   fx.drawOver(pix);
@@ -141,6 +145,7 @@ function drawInserts(pix: Pix, engine: PinballEngine, theme: TableTheme, t: numb
   engine.lanes.forEach((l) => arrow(pix, l.x, l.y + 38, -Math.PI / 2, 9, l.lit ? theme.coin : off));
   engine.targets.forEach((tg) => arrow(pix, tg.x + 28, (tg.y1 + tg.y2) / 2, Math.PI, 8, tg.down ? theme.coin : off));
   arrow(pix, SAUCER.x, SAUCER.y + 40, -Math.PI / 2, 11, engine.lockLit && blink ? theme.bumper : off);
+  engine.standups.forEach((tg) => arrow(pix, tg.x - 26, (tg.y1 + tg.y2) / 2, 0, 8, tg.lit ? theme.coin : off));
 
   for (let m = 2; m <= MAX_MULTIPLIER; m++) {
     const { x, y } = MULT_INSERTS[m - 2];
@@ -225,6 +230,31 @@ function drawTargets(pix: Pix, engine: PinballEngine, theme: TableTheme): void {
     pix.rect(tg.x - 4, tg.y1 - 1, 8, tg.y2 - tg.y1, theme.bumper);
     pix.rect(tg.x - 1, tg.y1 + 3, 3, tg.y2 - tg.y1 - 8, theme.bumperFlash);
   }
+}
+
+/** 오른쪽 타깃: 벽에 붙은 노란 막대. 켜지면 밝아진다 */
+function drawStandups(pix: Pix, engine: PinballEngine, theme: TableTheme): void {
+  for (const tg of engine.standups) {
+    const h = tg.y2 - tg.y1;
+    const face = tg.lit ? mix(theme.coin, theme.coinRing, tg.flash) : mix(theme.coin, theme.table, 0.55);
+    pix.rect(tg.x - 3, tg.y1 + 2, 7, h, mix(theme.coin, '#000000', tg.lit ? 0.4 : 0.6));
+    pix.rect(tg.x - 3, tg.y1 - 1, 7, h, face);
+    if (tg.lit) pix.rect(tg.x - 1, tg.y1 + 4, 3, h - 10, theme.coinRing);
+  }
+}
+
+/** 킥백: 왼쪽 바깥 길 바닥의 스프링 달린 머리. 켜져 있으면 밝고 위로 화살표가 보인다 */
+function drawKickback(pix: Pix, engine: PinballEngine, theme: TableTheme): void {
+  const { x, y } = KICKBACK.head;
+  const lit = engine.kickbackLit;
+  const kicking = engine.balls.some((b) => b.ride?.track === 'kick');
+  const color = lit || kicking ? theme.coin : mix(theme.table, theme.wall, 0.35);
+  const spring: Pt[] = [{ x, y: y + 6 }];
+  for (let i = 0; i < 5; i++) spring.push({ x: i % 2 ? x + 7 : x - 7, y: y + 12 + i * 8 });
+  pix.polyline(spring, 1, theme.plunger);
+  // 차는 순간에는 머리가 위로 튀어 오른다
+  pix.rect(x - 9, y - (kicking ? 14 : 0), 18, 6, color);
+  arrow(pix, x, y - 18, -Math.PI / 2, 8, lit ? theme.coin : mix(theme.tableGlow, theme.wall, 0.25));
 }
 
 function drawSaucer(pix: Pix, engine: PinballEngine, theme: TableTheme, t: number): void {
@@ -351,9 +381,9 @@ function drawFlipper(pix: Pix, f: Flipper, theme: TableTheme): void {
   pix.rect(f.px - 3, f.py - 3, 6, 6, theme.plunger);
 }
 
-function drawBall(pix: Pix, p: Point | Ball, theme: TableTheme): void {
+function drawBall(pix: Pix, p: Point | Ball, theme: TableTheme, lift = 0): void {
   const { x, y } = p;
-  pix.ellipse(x + 2, y + 5, BALL_R, BALL_R * 0.75, 'rgba(0, 0, 0, 0.3)');
+  pix.ellipse(x + 2 + lift * 0.5, y + 5 + lift, BALL_R, BALL_R * 0.75, 'rgba(0, 0, 0, 0.3)');
   pix.disc(x, y, BALL_R, theme.ballDark);
   pix.disc(x - 1.5, y - 1.5, BALL_R - 1.5, mix(theme.ballLight, theme.ballDark, 0.3));
   pix.rect(x - 5, y - 5, 3, 3, theme.ballLight);

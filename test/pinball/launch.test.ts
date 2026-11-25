@@ -61,9 +61,10 @@ test('살짝만 누른 발사는 짧게 튀었다가 2초 안에 발사대로 �
   assert.equal(e.plungerLoaded, true);
 });
 
-test('바깥 길로 들어간 공은 잃는다', () => {
+test('바깥 길로 들어간 공은 잃는다 (킥백이 꺼져 있을 때)', () => {
   for (const x of [22, 338]) {
     const e = engineWith();
+    e.kickbackLit = false;
     placeBall(e, { x, y: LEFT.py - 144 });
     const events = run(e, 2);
     assert.equal(ofType(events, 'drain').length, 1, `x=${x}`);

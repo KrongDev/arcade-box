@@ -1,3 +1,4 @@
+import { makeTrack, type Track } from './path.ts';
 import { BALL_R } from './rules.ts';
 
 /**
@@ -7,8 +8,8 @@ import { BALL_R } from './rules.ts';
  * 판은 화면보다 길다. 위에서부터
  *   꼭대기   위쪽 레인 4개
  *   위쪽     범퍼 5개
- *   가운데   왼쪽 드롭 타깃 3개, 오른쪽 잠금 구멍
- *   아래쪽   슬링샷 2개, 플리퍼 2개. 안쪽 길은 플리퍼로, 바깥 길은 판 밖으로 이어진다
+ *   가운데   오른쪽 벽 타깃 3개, 왼쪽 드롭 타깃 3개, 오른쪽 잠금 구멍
+ *   아래쪽   슬링샷 2개, 플리퍼 2개. 안쪽 길은 플리퍼로, 바깥 길은 판 밖으로 이어진다 (왼쪽에는 킥백)
  * 오른쪽 끝은 판 전체 높이의 발사 레인이다.
  */
 
@@ -194,6 +195,50 @@ export const DROP_TARGETS: { x: number; y1: number; y2: number }[] = [
   { x: 24, y1: 892, y2: 916 },
   { x: 24, y1: 922, y2: 946 },
 ];
+
+/** 오른쪽 타깃 — 발사 레인 벽에 붙은 세로 막대. 쓰러지지 않고 불만 켜진다 */
+export const STANDUPS: { x: number; y1: number; y2: number }[] = [
+  { x: 344, y1: 470, y2: 494 },
+  { x: 344, y1: 500, y2: 524 },
+  { x: 344, y1: 530, y2: 554 },
+];
+
+/** 공이 물리 대신 정해진 길을 따라가는 곳 */
+export interface RideDef {
+  track: Track;
+  /** 타기 시작할 때의 속도, 가장 느린·빠른 속도 */
+  startSpeed: number;
+  minSpeed: number;
+  maxSpeed: number;
+  /** 아래로 향할수록 빨라지는 정도 (길 방향의 세로 성분에 곱한다) */
+  accel: number;
+  /** 길 끝에서 공을 놓아줄 때의 속도 */
+  release: { vx: number; vy: number };
+}
+
+/**
+ * 킥백 — 왼쪽 바깥 길 바닥에 닿은 공을 한 번 살려 준다.
+ * 바깥 길을 거슬러 올라가 지붕 가이드와 나눔벽 사이 틈으로 나온 뒤, 왼쪽 슬링샷 위에서 놓아준다.
+ */
+export const KICKBACK = {
+  /** 이 안에 공이 들어오면 킥백이 반응한다 (바깥 길 바닥) */
+  sensor: { x: 10, y: 1196, w: 26, h: TABLE_H - 1196 } as Zone,
+  /** 킥백 머리(그림) */
+  head: { x: 22, y: 1212 } as Point,
+  ride: {
+    track: makeTrack([
+      { x: 22, y: 1202 },
+      { x: 22, y: 1045 },
+      { x: 36, y: 1010 },
+      { x: 58, y: 985 },
+    ]),
+    startSpeed: 900,
+    minSpeed: 900,
+    maxSpeed: 900,
+    accel: 0,
+    release: { vx: 240, vy: -420 },
+  } satisfies RideDef,
+};
 
 /** 바닥 표시등: 보너스 배율 ×2~×5, 공 살리기 */
 export const MULT_INSERTS: Point[] = [128, 161, 194, 227].map((x) => ({ x, y: 1000 }));

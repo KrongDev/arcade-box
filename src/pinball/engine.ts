@@ -11,6 +11,9 @@
  *                   멀티볼 중에 넣으면 잭팟
  *   슬링샷          플리퍼 위 삼각 튕김대. 맞으면 공을 가운데로 차 낸다
  *   바깥 길         옆으로 들어간 공은 판 밖으로 빠진다
+ *   킥백            왼쪽 바깥 길 바닥에 닿은 공을 한 번 살려 준다 (정해진 길을 따라 판 안으로 올려 보낸다).
+ *                   공을 새로 받으면 켜지고, 오른쪽 타깃을 다 맞혀도 다시 켜진다
+ *   오른쪽 타깃     맞히면 불이 켜진다. 셋 다 켜면 보너스와 함께 킥백이 다시 켜진다
  *   공 살리기       발사 뒤 BALL_SAVE_TIME초 안에 공을 잃으면 한 번 돌려준다
  *   콤보            짧은 간격으로 계속 맞히면 5번마다 보너스
  */
@@ -23,6 +26,7 @@ import {
   DROP_TARGETS,
   FLIPPERS,
   GATE,
+  KICKBACK,
   LANES,
   LANE_X,
   PLUNGER_Y,
@@ -31,13 +35,17 @@ import {
   REST_Y,
   SAUCER,
   SLINGS,
+  STANDUPS,
   TABLE_H,
   WALLS,
   WALL_R,
   launchSpeed,
   type Point,
+  type RideDef,
   type SlingShape,
+  type Zone,
 } from './table.ts';
+import { trackAt } from './path.ts';
 
 export * from './rules.ts';
 export * from './table.ts';
@@ -89,6 +97,15 @@ export interface DropTarget {
   y1: number;
   y2: number;
   down: boolean;
+  flash: number;
+}
+
+/** 오른쪽 타깃 — 쓰러지지 않고 불만 켜진다 */
+export interface Standup {
+  x: number;
+  y1: number;
+  y2: number;
+  lit: boolean;
   flash: number;
 }
 
@@ -166,7 +183,11 @@ export type PinballEvent =
   | { type: 'milestone'; score: number; coins: number }
   /** x는 마지막 공이 판 아래로 나간 가로 위치 */
   | { type: 'drain'; ballsLeft: number; x: number }
-  | { type: 'gameOver' };
+  | { type: 'gameOver' }
+  | { type: 'kickback'; x: number; y: number }
+  | { type: 'standup'; x: number; y: number; points: number }
+  /** relit은 꺼져 있던 킥백이 다시 켜졌을 때 true */
+  | { type: 'standupBank'; points: number; relit: boolean };
 
 function createSling(shape: SlingShape): Sling {
   // 차는 면(tip→top)의 법선 중 판 안쪽(toward)을 보는 쪽
@@ -186,6 +207,19 @@ function createSling(shape: SlingShape): Sling {
 
 function createBumpers(): Bumper[] {
   return BUMPERS.map((b) => ({ ...b, flash: 0, cooldown: 0 }));
+}
+
+/** 정해진 길 — 길 위의 공은 물리 계산을 하지 않는다 */
+const RIDES: Record<Ride['track'], RideDef> = {
+  kick: KICKBACK.ride,
+  // 레일은 다락과 함께 들어온다. 그때까지는 킥백 길을 가리켜 둔다
+  rail: KICKBACK.ride,
+};
+
+const inZone = (p: Point, z: Zone) => p.x >= z.x && p.x <= z.x + z.w && p.y >= z.y && p.y <= z.y + z.h;
+
+function createStandups(): Standup[] {
+  return STANDUPS.map((t) => ({ ...t, lit: false, flash: 0 }));
 }
 
 function createTargets(): DropTarget[] {
@@ -292,6 +326,9 @@ export class PinballEngine {
   bumpers: Bumper[] = createBumpers();
   slings: Sling[] = SLINGS.map(createSling);
   targets: DropTarget[] = createTargets();
+  standups: Standup[] = createStandups();
+  /** 킥백이 켜져 있는지 — 왼쪽 바깥 길의 공을 한 번 살려 준다 */
+  kickbackLit = true;
   lanes: RolloverLane[] = createLanes();
   flippers: Flipper[] = createFlippers();
   coins: CoinPickup[] = [];
@@ -306,6 +343,7 @@ export class PinballEngine {
   private comboTimer = 0;
   private bankReset = 0;
   private lanesReset = 0;
+  private standupReset = 0;
   private pendingLaunch = 0;
   private saucerCooldown = 0;
   private wasMultiball = false;
@@ -411,7 +449,11 @@ export class PinballEngine {
 
     for (let i = 0; i < SUBSTEPS; i++) {
       this.updateFlippers(h);
-      for (const ball of this.balls) if (ball.held <= 0) this.integrateBall(ball, h);
+      for (const ball of this.balls) {
+        if (ball.held > 0) continue;
+        if (ball.ride) this.advanceRide(ball, h);
+        else this.integrateBall(ball, h);
+      }
       this.collideBalls();
     }
 
@@ -437,6 +479,7 @@ export class PinballEngine {
       s.cooldown = Math.max(0, s.cooldown - frame);
     }
     for (const t of this.targets) t.flash = Math.max(0, t.flash - frame * 3);
+    for (const t of this.standups) t.flash = Math.max(0, t.flash - frame * 3);
     for (const l of this.lanes) {
       l.flash = Math.max(0, l.flash - frame * 2);
       l.cooldown = Math.max(0, l.cooldown - frame);
@@ -449,6 +492,10 @@ export class PinballEngine {
     if (this.bankReset > 0) {
       this.bankReset -= frame;
       if (this.bankReset <= 0) for (const t of this.targets) t.down = false;
+    }
+    if (this.standupReset > 0) {
+      this.standupReset -= frame;
+      if (this.standupReset <= 0) for (const t of this.standups) t.lit = false;
     }
     if (this.lanesReset > 0) {
       this.lanesReset -= frame;
@@ -505,6 +552,7 @@ export class PinballEngine {
 
     for (const s of this.slings) this.collideSling(ball, s);
     for (const t of this.targets) this.collideTarget(ball, t);
+    for (const t of this.standups) this.collideStandup(ball, t);
 
     for (const f of this.flippers) {
       const tip = flipperTip(f);
@@ -512,6 +560,7 @@ export class PinballEngine {
     }
 
     this.bumpers.forEach((b, i) => this.collideBumper(ball, b, i));
+    this.checkKickback(ball);
     this.checkLanes(ball);
     this.checkSaucer(ball);
 
@@ -530,6 +579,58 @@ export class PinballEngine {
     }
   }
 
+  /** 정해진 길 위의 공을 길 따라 옮긴다. 끝에 닿으면 놓아준다 */
+  private advanceRide(ball: Ball, h: number): void {
+    const ride = ball.ride;
+    if (!ride) return;
+    const def = RIDES[ride.track];
+    const here = trackAt(def.track, ride.s);
+    ride.v = Math.max(def.minSpeed, Math.min(def.maxSpeed, ride.v + def.accel * here.ty * h));
+    let s = ride.s + ride.v * h;
+    // 같은 길의 앞 공을 지나치지 않는다
+    for (const other of this.balls) {
+      if (other !== ball && other.ride && other.ride.track === ride.track && other.ride.s > ride.s) s = Math.min(s, other.ride.s - 2 * BALL_R);
+    }
+    ride.s = Math.max(ride.s, s);
+    const at = trackAt(def.track, ride.s);
+    ball.x = at.x;
+    ball.y = at.y;
+    ball.vx = at.tx * ride.v;
+    ball.vy = at.ty * ride.v;
+    if (ride.s >= def.track.length) {
+      ball.ride = null;
+      ball.vx = def.release.vx;
+      ball.vy = def.release.vy;
+    }
+  }
+
+  /** 왼쪽 바깥 길 바닥에 닿은 공: 킥백이 켜져 있으면 살려서 판 안으로 올려 보낸다 */
+  private checkKickback(ball: Ball): void {
+    if (!this.kickbackLit || !inZone(ball, KICKBACK.sensor)) return;
+    this.kickbackLit = false;
+    ball.ride = { track: 'kick', s: 0, v: KICKBACK.ride.startSpeed };
+    this.events.push({ type: 'kickback', x: ball.x, y: ball.y });
+  }
+
+  private collideStandup(ball: Ball, t: Standup): void {
+    const c = collideCapsule(ball, t.x, t.y1, t.x, t.y2, TARGET_R, 0.35);
+    // 켜진 타깃은 튕기기만 한다
+    if (!c || c.impact < TARGET_TRIGGER || t.lit) return;
+    t.lit = true;
+    t.flash = 1;
+    const y = (t.y1 + t.y2) / 2;
+    const points = this.award(POINTS.standup);
+    this.events.push({ type: 'standup', x: t.x, y, points });
+    this.hitCombo(t.x, y);
+    if (this.standups.every((x) => x.lit)) {
+      const bank = this.award(POINTS.standupBank);
+      const relit = !this.kickbackLit;
+      this.kickbackLit = true;
+      this.standupReset = 1.0;
+      this.events.push({ type: 'standupBank', points: bank, relit });
+    }
+  }
+
   /** 공끼리 부딪힘 (멀티볼) — 같은 무게의 탄성 충돌 */
   private collideBalls(): void {
     const balls = this.balls;
@@ -537,7 +638,7 @@ export class PinballEngine {
       for (let j = i + 1; j < balls.length; j++) {
         const a = balls[i];
         const b = balls[j];
-        if (a.held > 0 || b.held > 0) continue;
+        if (a.held > 0 || b.held > 0 || a.ride || b.ride) continue;
         const dx = b.x - a.x;
         const dy = b.y - a.y;
         const dist = Math.hypot(dx, dy);
@@ -717,7 +818,7 @@ export class PinballEngine {
     const holding = this.flippers.some((f) => f.pressed);
     for (let i = this.balls.length - 1; i >= 0; i--) {
       const ball = this.balls[i];
-      if (ball.held > 0) continue;
+      if (ball.held > 0 || ball.ride) continue;
 
       // 발사가 약해 레인으로 다시 떨어진 공은 잃지 않는다
       if (!this.gateClosed && ball.x > LANE_X && ball.y > PLUNGER_Y - 40 && Math.abs(ball.vy) < 40) {
@@ -776,6 +877,7 @@ export class PinballEngine {
     this.charging = false;
     this.charge = 0;
     this.gateClosed = false;
+    this.kickbackLit = true;
     this.events.push({ type: 'drain', ballsLeft: this.ballsLeft, x });
   }
 }
