@@ -14,51 +14,42 @@
  *   콤보            짧은 간격으로 계속 맞히면 5번마다 보너스
  */
 
-export const TABLE_W = 400;
-export const TABLE_H = 700;
-export const BALL_R = 9;
+import { BALL_R, BALL_SAVE_TIME, BALLS_PER_GAME, COIN_PICKUP_VALUE, MAX_COINS_PER_RUN, MAX_MULTIPLIER, MAX_SCORE, MILESTONES, POINTS } from './rules.ts';
+import {
+  BUMPERS,
+  CHARGE_TIME,
+  DROP_TARGETS,
+  FLIPPERS,
+  GATE,
+  LANES,
+  LANE_X,
+  LAUNCH_MAX,
+  LAUNCH_MIN,
+  PLUNGER_Y,
+  PULL_DISTANCE,
+  REST_X,
+  REST_Y,
+  SAUCER,
+  SLINGS,
+  TABLE_H,
+  WALLS,
+  WALL_R,
+  type Point,
+  type SlingShape,
+} from './table.ts';
+
+export * from './rules.ts';
+export * from './table.ts';
 
 const GRAVITY = 900;
 const MAX_SPEED = 1500;
 const SUBSTEPS = 8;
-const WALL_R = 2;
 const FLIPPER_R = 7;
 const TARGET_R = 3;
 
-export const BALLS_PER_GAME = 3;
-/** 판 위 동전 1개를 주웠을 때 받는 코인 */
-export const COIN_PICKUP_VALUE = 5;
-/** 한 판에 받을 수 있는 코인 상한 — 서버(server/src/domain.ts BOARDS의 pinball.maxCoinsPerRun)와 같다 */
-export const MAX_COINS_PER_RUN = 400;
 const COIN_SPAWN_INTERVAL = 3.5;
-export const MAX_MULTIPLIER = 5;
-/** 한 판 점수 상한 — 서버(server/src/domain.ts MAX_PINBALL_SCORE)와 같다. 넘으면 서버가 기록을 받지 않는다 */
-export const MAX_SCORE = 5_000_000;
-/** 발사 뒤 이 시간 안에 공을 잃으면 한 번 돌려준다 */
-export const BALL_SAVE_TIME = 8;
 const COMBO_WINDOW = 1.2;
 const COMBO_STEP = 5;
-
-/** 기본 점수 — 보너스 배율과 멀티볼 2배가 곱해진다 */
-export const POINTS = {
-  bumper: 100,
-  sling: 30,
-  target: 500,
-  bank: 5000,
-  rollover: 300,
-  lanes: 3000,
-  saucer: 2000,
-  jackpot: 20000,
-  coin: 500,
-  comboPerHit: 100,
-} as const;
-
-/** 점수 구간 보너스 코인 (밸런싱 단계에서 조정) */
-export const MILESTONES = [
-  { score: 10000, coins: 10 },
-  { score: 30000, coins: 20 },
-  { score: 50000, coins: 30 },
-] as const;
 
 const BUMPER_KICK = 720;
 const SLING_KICK = 760;
@@ -66,35 +57,9 @@ const SLING_KICK = 760;
 const SLING_TRIGGER = 90;
 const TARGET_TRIGGER = 40;
 
-export const LANE_X = 350;
-export const RIGHT_X = 392;
-const PLUNGER_Y = 610;
-const REST_X = (LANE_X + RIGHT_X) / 2;
-const REST_Y = PLUNGER_Y - BALL_R - WALL_R;
-/** 플리퍼 사이 가운데 — 왼쪽 장치를 오른쪽으로 비출 때 기준 */
-const MIRROR = 360;
-
-/** 발사대: 누르고 있는 동안 스프링이 당겨지고, 떼면 당긴 만큼의 힘으로 발사한다 */
-export const CHARGE_TIME = 1.0; // 끝까지 당기는 데 걸리는 시간(초) — 그 뒤로는 최대 힘에 머문다
-export const PULL_DISTANCE = 44; // 끝까지 당겼을 때 공이 내려가는 거리
-export const LAUNCH_MIN = 600; // 살짝 눌렀을 때 발사 속도
-export const LAUNCH_MAX = 1300; // 끝까지 당겼을 때 발사 속도
-export const PLUNGER_TOP = PLUNGER_Y;
-
-export interface Point {
-  x: number;
-  y: number;
-}
-
-export interface Wall {
-  ax: number;
-  ay: number;
-  bx: number;
-  by: number;
-  bounce: number;
-  /** 아래로 떨어지는 공만 막는다 (발사대 바닥: 당겼다 놓은 공은 위로 통과) */
-  oneWay?: boolean;
-}
+const SAUCER_CATCH = 11;
+const SAUCER_HOLD = 0.9;
+const SAUCER_LOCK_HOLD = 1.6;
 
 export interface Bumper {
   x: number;
@@ -164,6 +129,11 @@ export interface Ball {
   slow: number;
 }
 
+/** 공 하나를 만든다 (안 준 값은 멈춘 상태) */
+export function makeBall(init: Partial<Ball> & { x: number; y: number }): Ball {
+  return { id: 0, vx: 0, vy: 0, held: 0, slow: 0, ...init };
+}
+
 export type BallState = 'ready' | 'live';
 
 export type PinballEvent =
@@ -185,112 +155,36 @@ export type PinballEvent =
   | { type: 'drain'; ballsLeft: number }
   | { type: 'gameOver' };
 
-function polyline(points: [number, number][], bounce: number): Wall[] {
-  const walls: Wall[] = [];
-  for (let i = 0; i < points.length - 1; i++) {
-    const [ax, ay] = points[i];
-    const [bx, by] = points[i + 1];
-    walls.push({ ax, ay, bx, by, bounce });
-  }
-  return walls;
-}
-
-const mirror = (p: Point): Point => ({ x: MIRROR - p.x, y: p.y });
-
-/** 슬링샷 모양 — 왼쪽을 정하고 오른쪽은 비춰서 만든다 */
-const LEFT_SLING = { top: { x: 56, y: 440 }, corner: { x: 56, y: 508 }, tip: { x: 102, y: 556 } };
-
-function createSling(side: 'left' | 'right'): Sling {
-  const s = side === 'left' ? LEFT_SLING : { top: mirror(LEFT_SLING.top), corner: mirror(LEFT_SLING.corner), tip: mirror(LEFT_SLING.tip) };
-  // 차는 면(tip→top)의 법선 중 판 가운데를 보는 쪽
-  const ex = s.top.x - s.tip.x;
-  const ey = s.top.y - s.tip.y;
+function createSling(shape: SlingShape): Sling {
+  // 차는 면(tip→top)의 법선 중 판 안쪽(toward)을 보는 쪽
+  const ex = shape.top.x - shape.tip.x;
+  const ey = shape.top.y - shape.tip.y;
   const len = Math.hypot(ex, ey);
   let nx = -ey / len;
   let ny = ex / len;
-  const mx = (s.top.x + s.tip.x) / 2;
-  const my = (s.top.y + s.tip.y) / 2;
-  if (nx * (MIRROR / 2 - mx) + ny * (380 - my) < 0) {
+  const mx = (shape.top.x + shape.tip.x) / 2;
+  const my = (shape.top.y + shape.tip.y) / 2;
+  if (nx * (shape.toward.x - mx) + ny * (shape.toward.y - my) < 0) {
     nx = -nx;
     ny = -ny;
   }
-  return { side, ...s, nx, ny, flash: 0, cooldown: 0 };
+  return { side: shape.side, top: shape.top, corner: shape.corner, tip: shape.tip, nx, ny, flash: 0, cooldown: 0 };
 }
 
-/** 위쪽 레인 사이 기둥 */
-export const LANE_POSTS: Wall[] = [110, 160, 210, 260].map((x) => ({ ax: x, ay: 44, bx: x, by: 86, bounce: 0.4 }));
-
-export const WALLS: Wall[] = [
-  // 바깥 테두리: 왼쪽 → 위 → 오른쪽(발사 레인 바깥벽까지)
-  ...polyline(
-    [
-      [8, 700],
-      [8, 90],
-      [22, 50],
-      [50, 22],
-      [90, 8],
-      [310, 8],
-      [350, 16],
-      [378, 36],
-      [RIGHT_X, 64],
-      [RIGHT_X, 700],
-    ],
-    0.45,
-  ),
-  // 발사 레인 안쪽 벽
-  { ax: LANE_X, ay: 700, bx: LANE_X, by: 180, bounce: 0.3 },
-  // 발사대 바닥 (그림은 스프링으로 따로 그린다)
-  { ax: LANE_X, ay: PLUNGER_Y, bx: RIGHT_X, by: PLUNGER_Y, bounce: 0, oneWay: true },
-  // 플리퍼로 모아 주는 아래쪽 경사
-  { ax: 8, ay: 500, bx: 104, by: 598, bounce: 0.35 },
-  { ax: LANE_X, ay: 500, bx: 256, by: 598, bounce: 0.35 },
-  ...LANE_POSTS,
-];
-
-/** 공이 레인을 빠져나간 뒤 닫히는 문 — 공이 레인으로 다시 떨어지지 않게 한다 */
-export const GATE: Wall = { ax: LANE_X, ay: 180, bx: RIGHT_X, by: 140, bounce: 0.4 };
-
-/** 오른쪽 구멍(세이커) */
-export const SAUCER = { x: 322, y: 292, r: 13 };
-const SAUCER_CATCH = 11;
-const SAUCER_HOLD = 0.9;
-const SAUCER_LOCK_HOLD = 1.6;
-
 function createBumpers(): Bumper[] {
-  return [
-    { x: 135, y: 170, r: 22, flash: 0, cooldown: 0 },
-    { x: 235, y: 170, r: 22, flash: 0, cooldown: 0 },
-    { x: 185, y: 245, r: 22, flash: 0, cooldown: 0 },
-  ];
+  return BUMPERS.map((b) => ({ ...b, flash: 0, cooldown: 0 }));
 }
 
 function createTargets(): DropTarget[] {
-  return [
-    { x: 24, y1: 262, y2: 286, down: false, flash: 0 },
-    { x: 24, y1: 292, y2: 316, down: false, flash: 0 },
-    { x: 24, y1: 322, y2: 346, down: false, flash: 0 },
-  ];
+  return DROP_TARGETS.map((t) => ({ ...t, down: false, flash: 0 }));
 }
 
 function createLanes(): RolloverLane[] {
-  return [135, 185, 235].map((x) => ({ x, y: 66, lit: false, flash: 0, cooldown: 0 }));
+  return LANES.map((l) => ({ ...l, lit: false, flash: 0, cooldown: 0 }));
 }
 
 function createFlippers(): Flipper[] {
-  return [
-    { side: 'left', px: 110, py: 604, len: 58, rest: 0.5, up: -0.45, angle: 0.5, angVel: 0, pressed: false },
-    {
-      side: 'right',
-      px: 250,
-      py: 604,
-      len: 58,
-      rest: Math.PI - 0.5,
-      up: Math.PI + 0.45,
-      angle: Math.PI - 0.5,
-      angVel: 0,
-      pressed: false,
-    },
-  ];
+  return FLIPPERS.map((f) => ({ ...f, angle: f.rest, angVel: 0, pressed: false }));
 }
 
 export function flipperTip(f: Flipper): { x: number; y: number } {
@@ -383,7 +277,7 @@ export class PinballEngine {
   saveUsed = false;
   comboCount = 0;
   bumpers: Bumper[] = createBumpers();
-  slings: Sling[] = [createSling('left'), createSling('right')];
+  slings: Sling[] = SLINGS.map(createSling);
   targets: DropTarget[] = createTargets();
   lanes: RolloverLane[] = createLanes();
   flippers: Flipper[] = createFlippers();
