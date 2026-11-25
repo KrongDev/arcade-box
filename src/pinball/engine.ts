@@ -91,6 +91,12 @@ const SUBSTEPS = 8;
 const FLIPPER_R = 7;
 const TARGET_R = 3;
 
+/**
+ * 이보다 약하게 닿는 것은 부딪힌 게 아니라 면에 얹혀 있는 것으로 본다.
+ * 얹힌 공이 한 번 계산하는 동안 중력으로 면 쪽으로 얻는 속도는 많아야 6쯤이다 (가장 긴 프레임, 램프 위).
+ */
+const RESTING_IMPACT = 12;
+
 const COIN_SPAWN_INTERVAL = 3.5;
 const COMBO_WINDOW = 1.2;
 const COMBO_STEP = 5;
@@ -367,7 +373,9 @@ function collideCapsule(
     const ty = nx;
     const vt = rvx * tx + rvy * ty;
     const newVn = -vn * bounce;
-    const newVt = vt * 0.99;
+    // 세게 부딪히면 면을 따라가는 속도를 조금 잃는다. 면에 얹혀 미끄러질 때는 잃지 않는다 —
+    // 닿아 있는 동안 계속 깎으면 경사면에서 공이 빨라지지 못하고 일정한 속도로 기어 내려온다 (그 속도도 프레임 간격에 따라 달라진다)
+    const newVt = -vn > RESTING_IMPACT ? vt * 0.99 : vt;
     ball.vx = svx + nx * newVn + tx * newVt;
     ball.vy = svy + ny * newVn + ty * newVt;
   }
