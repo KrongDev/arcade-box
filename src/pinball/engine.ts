@@ -1,15 +1,16 @@
 /**
  * 핀볼 물리 엔진 — DOM에 의존하지 않는 순수 로직.
- * 좌표는 테이블 논리 단위(TABLE_W × TABLE_H), 시간은 초.
+ * 좌표는 판 논리 단위(TABLE_W × TABLE_H), 시간은 초. 판 배치는 table.ts, 점수 숫자는 rules.ts에 있다.
  *
- * 판 구성
- *   위쪽 레인 3개   공이 지나가면 불이 켜진다. 플리퍼를 누르면 켜진 불이 옆으로 옮겨 간다.
- *                   셋 다 켜면 보너스 배율 +1 (최대 5배, 공을 잃으면 1배로)
- *   팝 범퍼 3개     닿으면 공을 세게 차 낸다
- *   왼쪽 타깃 3개   맞으면 쓰러진다. 셋 다 쓰러뜨리면 오른쪽 구멍에 '잠금' 불이 켜진다
- *   오른쪽 구멍     공을 잠깐 붙잡았다 뱉는다. 잠금 불이 켜져 있으면 멀티볼(공 2개, 점수 2배),
+ * 규칙
+ *   위쪽 레인       공이 지나가면 불이 켜진다. 플리퍼를 누르면 켜진 불이 옆으로 옮겨 간다.
+ *                   다 켜면 보너스 배율 +1 (최대 5배, 공을 잃으면 1배로)
+ *   팝 범퍼         닿으면 공을 세게 차 낸다
+ *   드롭 타깃       맞으면 쓰러진다. 다 쓰러뜨리면 잠금 구멍에 '잠금' 불이 켜진다
+ *   잠금 구멍       공을 잠깐 붙잡았다 뱉는다. 잠금 불이 켜져 있으면 멀티볼(공 2개, 점수 2배),
  *                   멀티볼 중에 넣으면 잭팟
- *   슬링샷 2개      플리퍼 위 삼각 튕김대. 맞으면 공을 가운데로 차 낸다
+ *   슬링샷          플리퍼 위 삼각 튕김대. 맞으면 공을 가운데로 차 낸다
+ *   바깥 길         옆으로 들어간 공은 판 밖으로 빠진다
  *   공 살리기       발사 뒤 BALL_SAVE_TIME초 안에 공을 잃으면 한 번 돌려준다
  *   콤보            짧은 간격으로 계속 맞히면 5번마다 보너스
  */
@@ -18,13 +19,12 @@ import { BALL_R, BALL_SAVE_TIME, BALLS_PER_GAME, COIN_PICKUP_VALUE, MAX_COINS_PE
 import {
   BUMPERS,
   CHARGE_TIME,
+  COIN_ZONES,
   DROP_TARGETS,
   FLIPPERS,
   GATE,
   LANES,
   LANE_X,
-  LAUNCH_MAX,
-  LAUNCH_MIN,
   PLUNGER_Y,
   PULL_DISTANCE,
   REST_X,
@@ -34,6 +34,7 @@ import {
   TABLE_H,
   WALLS,
   WALL_R,
+  launchSpeed,
   type Point,
   type SlingShape,
 } from './table.ts';
@@ -42,7 +43,8 @@ export * from './rules.ts';
 export * from './table.ts';
 
 const GRAVITY = 900;
-const MAX_SPEED = 1500;
+/** 속도 상한 — 한 번 나눠 적분할 때 3.6쯤 움직여서 벽(공 반지름 9 + 벽 2)을 뚫지 못한다 */
+const MAX_SPEED = 1700;
 const SUBSTEPS = 8;
 const FLIPPER_R = 7;
 const TARGET_R = 3;
@@ -127,11 +129,21 @@ export interface Ball {
   /** 구멍에 붙잡혀 있는 남은 시간 (0이면 자유) */
   held: number;
   slow: number;
+  /** 0 = 1층, 1 = 2층 다락 */
+  level: 0 | 1;
+  /** 정해진 길(레일·킥백)을 타는 중이면 그 길과 지나온 거리·속도. 타는 동안에는 아무것과도 부딪히지 않는다 */
+  ride: Ride | null;
+}
+
+export interface Ride {
+  track: 'kick' | 'rail';
+  s: number;
+  v: number;
 }
 
 /** 공 하나를 만든다 (안 준 값은 멈춘 상태) */
 export function makeBall(init: Partial<Ball> & { x: number; y: number }): Ball {
-  return { id: 0, vx: 0, vy: 0, held: 0, slow: 0, ...init };
+  return { id: 0, vx: 0, vy: 0, held: 0, slow: 0, level: 0, ride: null, ...init };
 }
 
 export type BallState = 'ready' | 'live';
@@ -149,10 +161,11 @@ export type PinballEvent =
   | { type: 'multiball' }
   | { type: 'multiballEnd' }
   | { type: 'ballSaved' }
-  | { type: 'combo'; count: number; points: number }
+  | { type: 'combo'; count: number; points: number; x: number; y: number }
   | { type: 'coin'; x: number; y: number; coins: number; points: number }
   | { type: 'milestone'; score: number; coins: number }
-  | { type: 'drain'; ballsLeft: number }
+  /** x는 마지막 공이 판 아래로 나간 가로 위치 */
+  | { type: 'drain'; ballsLeft: number; x: number }
   | { type: 'gameOver' };
 
 function createSling(shape: SlingShape): Sling {
@@ -380,15 +393,7 @@ export class PinballEngine {
   /** 발사대 위치에서 공 하나를 위로 쏜다 */
   private spawnLaunchedBall(power: number, auto: boolean): void {
     this.gateClosed = false;
-    this.balls.push({
-      id: this.nextBallId++,
-      x: REST_X,
-      y: REST_Y + power * PULL_DISTANCE,
-      vx: 0,
-      vy: -(LAUNCH_MIN + (LAUNCH_MAX - LAUNCH_MIN) * power),
-      held: 0,
-      slow: 0,
-    });
+    this.balls.push(makeBall({ id: this.nextBallId++, x: REST_X, y: REST_Y + power * PULL_DISTANCE, vy: -launchSpeed(power) }));
     this.events.push({ type: 'launch', power, auto });
   }
 
@@ -569,7 +574,7 @@ export class PinballEngine {
     s.flash = 1;
     const points = this.award(POINTS.sling);
     this.events.push({ type: 'sling', x: ball.x, y: ball.y, points, nx: s.nx, ny: s.ny });
-    this.hitCombo();
+    this.hitCombo(ball.x, ball.y);
   }
 
   private collideTarget(ball: Ball, t: DropTarget): void {
@@ -580,7 +585,7 @@ export class PinballEngine {
     t.flash = 1;
     const points = this.award(POINTS.target);
     this.events.push({ type: 'target', x: t.x, y: (t.y1 + t.y2) / 2, points });
-    this.hitCombo();
+    this.hitCombo(t.x, (t.y1 + t.y2) / 2);
     if (this.targets.every((x) => x.down)) {
       const bank = this.award(POINTS.bank);
       this.lockLit = true;
@@ -614,7 +619,7 @@ export class PinballEngine {
       b.flash = 1;
       const points = this.award(POINTS.bumper);
       this.events.push({ type: 'bumper', x: b.x, y: b.y, points, index });
-      this.hitCombo();
+      this.hitCombo(b.x, b.y);
     }
   }
 
@@ -627,7 +632,7 @@ export class PinballEngine {
       l.lit = true;
       const points = this.award(POINTS.rollover);
       this.events.push({ type: 'rollover', x: l.x, y: l.y, points });
-      this.hitCombo();
+      this.hitCombo(l.x, l.y);
       if (!wasLit && this.lanes.every((x) => x.lit) && this.lanesReset <= 0) {
         this.multiplier = Math.min(MAX_MULTIPLIER, this.multiplier + 1);
         const bonus = this.award(POINTS.lanes);
@@ -660,16 +665,16 @@ export class PinballEngine {
       const points = this.award(jackpot ? POINTS.jackpot : POINTS.saucer);
       this.events.push({ type: 'saucer', x: SAUCER.x, y: SAUCER.y, points, jackpot });
     }
-    this.hitCombo();
+    this.hitCombo(SAUCER.x, SAUCER.y);
   }
 
   /** 짧은 간격으로 계속 맞히면 콤보가 쌓이고 COMBO_STEP번마다 보너스 */
-  private hitCombo(): void {
+  private hitCombo(x: number, y: number): void {
     this.comboCount = this.comboTimer > 0 ? this.comboCount + 1 : 1;
     this.comboTimer = COMBO_WINDOW;
     if (this.comboCount % COMBO_STEP === 0) {
       const points = this.award(this.comboCount * POINTS.comboPerHit);
-      this.events.push({ type: 'combo', count: this.comboCount, points });
+      this.events.push({ type: 'combo', count: this.comboCount, points, x, y });
     }
   }
 
@@ -691,9 +696,13 @@ export class PinballEngine {
     this.coinTimer -= frame;
     if (this.coinTimer > 0 || this.coins.length >= 3) return;
     this.coinTimer = COIN_SPAWN_INTERVAL / (1 + this.coinSpawn);
+    const area = COIN_ZONES.reduce((sum, z) => sum + z.w * z.h, 0);
     for (let tries = 0; tries < 30; tries++) {
-      const x = 60 + this.random() * 250;
-      const y = 110 + this.random() * 300;
+      // 넓이에 비례해 구역 하나를 고르고 그 안의 한 점을 잡는다
+      let pick = this.random() * area;
+      const zone = COIN_ZONES.find((z) => (pick -= z.w * z.h) < 0) ?? COIN_ZONES[0];
+      const x = zone.x + this.random() * zone.w;
+      const y = zone.y + this.random() * zone.h;
       const clearOfBumpers = this.bumpers.every((b) => Math.hypot(b.x - x, b.y - y) > b.r + 30);
       const clearOfSaucer = Math.hypot(SAUCER.x - x, SAUCER.y - y) > 40;
       const clearOfCoins = this.coins.every((c) => Math.hypot(c.x - x, c.y - y) > 50);
@@ -726,7 +735,7 @@ export class PinballEngine {
 
       if (ball.y > TABLE_H + 30) {
         this.balls.splice(i, 1);
-        if (this.balls.length === 0 && this.pendingLaunch <= 0) this.loseBall();
+        if (this.balls.length === 0 && this.pendingLaunch <= 0) this.loseBall(ball.x);
         continue;
       }
 
@@ -741,8 +750,8 @@ export class PinballEngine {
     }
   }
 
-  /** 판 위의 마지막 공이 빠졌을 때 */
-  private loseBall(): void {
+  /** 판 위의 마지막 공이 빠졌을 때 (x는 공이 나간 가로 위치) */
+  private loseBall(x: number): void {
     if (this.saveTimer > 0 && !this.saveUsed) {
       this.saveUsed = true;
       this.saveTimer = 0;
@@ -759,7 +768,7 @@ export class PinballEngine {
     if (this.ballsLeft <= 0) {
       this.ballsLeft = 0;
       this.over = true;
-      this.events.push({ type: 'drain', ballsLeft: 0 });
+      this.events.push({ type: 'drain', ballsLeft: 0, x });
       this.events.push({ type: 'gameOver' });
       return;
     }
@@ -767,6 +776,6 @@ export class PinballEngine {
     this.charging = false;
     this.charge = 0;
     this.gateClosed = false;
-    this.events.push({ type: 'drain', ballsLeft: this.ballsLeft });
+    this.events.push({ type: 'drain', ballsLeft: this.ballsLeft, x });
   }
 }

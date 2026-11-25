@@ -3,10 +3,20 @@ import { BALL_R } from './rules.ts';
 /**
  * 핀볼 판 배치 — 판 크기, 벽, 장치가 놓이는 자리. 물리와 규칙은 engine.ts가 맡는다.
  * 좌표는 판 논리 단위(TABLE_W × TABLE_H)이고 왼쪽 위가 (0, 0)이다.
+ *
+ * 판은 화면보다 길다. 위에서부터
+ *   꼭대기   위쪽 레인 4개
+ *   위쪽     범퍼 5개
+ *   가운데   왼쪽 드롭 타깃 3개, 오른쪽 잠금 구멍
+ *   아래쪽   슬링샷 2개, 플리퍼 2개. 안쪽 길은 플리퍼로, 바깥 길은 판 밖으로 이어진다
+ * 오른쪽 끝은 판 전체 높이의 발사 레인이다.
  */
 
 export const TABLE_W = 400;
-export const TABLE_H = 700;
+export const TABLE_H = 1300;
+/** 화면에 한 번에 보이는 범위 — 화면이 공을 따라 세로로 움직인다 (camera.ts) */
+export const VIEW_W = 400;
+export const VIEW_H = 700;
 
 /** 벽의 두께(반지름) — 벽은 두께 있는 선분(캡슐)이다 */
 export const WALL_R = 2;
@@ -46,20 +56,43 @@ export interface FlipperShape {
   up: number;
 }
 
+export interface Zone {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export const LANE_X = 350;
 export const RIGHT_X = 392;
-export const PLUNGER_Y = 610;
+/** 플리퍼 축의 높이 */
+export const FLIPPER_Y = 1204;
+export const PLUNGER_Y = 1210;
 /** 발사대 위에서 기다리는 공의 자리 */
 export const REST_X = (LANE_X + RIGHT_X) / 2;
 export const REST_Y = PLUNGER_Y - BALL_R - WALL_R;
 /** 플리퍼 사이 가운데의 두 배 — 왼쪽 장치를 오른쪽으로 비출 때 쓴다 */
 const MIRROR = 360;
 
-/** 발사대: 누르고 있는 동안 스프링이 당겨지고, 떼면 당긴 만큼의 힘으로 발사한다 */
+/**
+ * 발사대: 누르고 있는 동안 스프링이 당겨지고, 떼면 당긴 만큼의 힘으로 발사한다.
+ * 레인이 판 전체 높이라서 꼭대기 아치까지 가려면 1,440쯤의 속도가 필요하다.
+ *   3분의 1 넘게 당기면   레인을 빠져나간다. 세게 쏠수록 꼭대기에 빠르게 도착해서 더 왼쪽 레인까지 간다
+ *   그보다 약하면          짧게 튀었다가 발사대로 돌아온다 (긴 레인을 다 올라갔다 내려오면 3초나 걸려서)
+ */
 export const CHARGE_TIME = 1.0; // 끝까지 당기는 데 걸리는 시간(초) — 그 뒤로는 최대 힘에 머문다
 export const PULL_DISTANCE = 44; // 끝까지 당겼을 때 공이 내려가는 거리
-export const LAUNCH_MIN = 600; // 살짝 눌렀을 때 발사 속도
-export const LAUNCH_MAX = 1300; // 끝까지 당겼을 때 발사 속도
+/** 이만큼(0~1) 넘게 당겨야 레인을 빠져나간다 */
+export const LAUNCH_EXIT_AT = 1 / 3;
+export const LAUNCH_MIN = 1460; // 레인을 빠져나가는 가장 약한 발사 속도
+export const LAUNCH_MAX = 1700; // 끝까지 당겼을 때 발사 속도
+
+/** 당긴 정도(0~1)에 따른 발사 속도 */
+export function launchSpeed(power: number): number {
+  const p = Math.max(0, Math.min(1, power));
+  if (p < LAUNCH_EXIT_AT) return 520 + 1500 * p;
+  return LAUNCH_MIN + ((LAUNCH_MAX - LAUNCH_MIN) * (p - LAUNCH_EXIT_AT)) / (1 - LAUNCH_EXIT_AT);
+}
 export const PLUNGER_TOP = PLUNGER_Y;
 
 function polyline(points: [number, number][], bounce: number): Wall[] {
@@ -73,24 +106,51 @@ function polyline(points: [number, number][], bounce: number): Wall[] {
 }
 
 const mirror = (p: Point): Point => ({ x: MIRROR - p.x, y: p.y });
+const mirrorXY = ([x, y]: [number, number]): [number, number] => [MIRROR - x, y];
 
 /** 슬링샷 — 왼쪽을 정하고 오른쪽은 비춰서 만든다 */
-const LEFT_SLING = { top: { x: 56, y: 440 }, corner: { x: 56, y: 508 }, tip: { x: 102, y: 556 } };
-const SLING_TOWARD: Point = { x: MIRROR / 2, y: 380 };
+const LEFT_SLING = { top: { x: 66, y: 1040 }, corner: { x: 66, y: 1108 }, tip: { x: 102, y: 1156 } };
+const SLING_TOWARD: Point = { x: MIRROR / 2, y: 980 };
 
 export const SLINGS: SlingShape[] = [
   { side: 'left', ...LEFT_SLING, toward: SLING_TOWARD },
   { side: 'right', top: mirror(LEFT_SLING.top), corner: mirror(LEFT_SLING.corner), tip: mirror(LEFT_SLING.tip), toward: SLING_TOWARD },
 ];
 
-/** 위쪽 레인 사이 기둥 */
-export const LANE_POSTS: Wall[] = [110, 160, 210, 260].map((x) => ({ ax: x, ay: 44, bx: x, by: 86, bounce: 0.4 }));
+export const FLIPPERS: FlipperShape[] = [
+  { side: 'left', px: 110, py: FLIPPER_Y, len: 58, rest: 0.5, up: -0.45 },
+  { side: 'right', px: 250, py: FLIPPER_Y, len: 58, rest: Math.PI - 0.5, up: Math.PI + 0.45 },
+];
+
+/** 위쪽 레인의 불과 그 사이 기둥 */
+export const LANES: Point[] = [105, 155, 205, 255].map((x) => ({ x, y: 66 }));
+export const LANE_POSTS: Wall[] = [80, 130, 180, 230, 280].map((x) => ({ ax: x, ay: 44, bx: x, by: 86, bounce: 0.4 }));
+
+/**
+ * 아래쪽 길 (왼쪽 기준, 오른쪽은 대칭).
+ * 나눔벽 왼쪽이 바깥 길(판 밖으로 빠짐), 오른쪽이 안쪽 길(경사를 타고 플리퍼로)이다.
+ * 지붕 가이드는 벽을 타고 내려온 공을 안쪽 길로 보낸다 — 바깥 길에는 지붕 끝과 나눔벽 꼭대기 사이 틈으로,
+ * 옆에서 튕겨 온 공만 들어간다.
+ */
+const LEFT_DIVIDER: [number, number][] = [
+  [36, 1030],
+  [36, 1129],
+  [104, 1198],
+];
+const LEFT_ROOF: [number, number][] = [
+  [8, 950],
+  [34, 990],
+];
+const RIGHT_ROOF: [number, number][] = [
+  [LANE_X, 950],
+  [326, 990],
+];
 
 export const WALLS: Wall[] = [
   // 바깥 테두리: 왼쪽 → 위 → 오른쪽(발사 레인 바깥벽까지)
   ...polyline(
     [
-      [8, 700],
+      [8, TABLE_H],
       [8, 90],
       [22, 50],
       [50, 22],
@@ -99,43 +159,50 @@ export const WALLS: Wall[] = [
       [350, 16],
       [378, 36],
       [RIGHT_X, 64],
-      [RIGHT_X, 700],
+      [RIGHT_X, TABLE_H],
     ],
     0.45,
   ),
   // 발사 레인 안쪽 벽
-  { ax: LANE_X, ay: 700, bx: LANE_X, by: 180, bounce: 0.3 },
+  { ax: LANE_X, ay: TABLE_H, bx: LANE_X, by: 180, bounce: 0.3 },
   // 발사대 바닥 (그림은 스프링으로 따로 그린다)
   { ax: LANE_X, ay: PLUNGER_Y, bx: RIGHT_X, by: PLUNGER_Y, bounce: 0, oneWay: true },
-  // 플리퍼로 모아 주는 아래쪽 경사
-  { ax: 8, ay: 500, bx: 104, by: 598, bounce: 0.35 },
-  { ax: LANE_X, ay: 500, bx: 256, by: 598, bounce: 0.35 },
+  ...polyline(LEFT_DIVIDER, 0.35),
+  ...polyline(LEFT_DIVIDER.map(mirrorXY), 0.35),
+  ...polyline(LEFT_ROOF, 0.35),
+  ...polyline(RIGHT_ROOF, 0.35),
   ...LANE_POSTS,
 ];
 
 /** 공이 레인을 빠져나간 뒤 닫히는 문 — 공이 레인으로 다시 떨어지지 않게 한다 */
 export const GATE: Wall = { ax: LANE_X, ay: 180, bx: RIGHT_X, by: 140, bounce: 0.4 };
 
-/** 오른쪽 구멍(세이커) */
-export const SAUCER = { x: 322, y: 292, r: 13 };
+/** 오른쪽 잠금 구멍(세이커) */
+export const SAUCER = { x: 322, y: 892, r: 13 };
 
 export const BUMPERS: { x: number; y: number; r: number }[] = [
-  { x: 135, y: 170, r: 22 },
-  { x: 235, y: 170, r: 22 },
-  { x: 185, y: 245, r: 22 },
+  { x: 118, y: 190, r: 22 },
+  { x: 196, y: 160, r: 22 },
+  { x: 274, y: 196, r: 22 },
+  { x: 298, y: 300, r: 20 },
+  { x: 262, y: 400, r: 20 },
 ];
 
 /** 드롭 타깃 — 왼쪽 벽 앞의 세로 막대 */
 export const DROP_TARGETS: { x: number; y1: number; y2: number }[] = [
-  { x: 24, y1: 262, y2: 286 },
-  { x: 24, y1: 292, y2: 316 },
-  { x: 24, y1: 322, y2: 346 },
+  { x: 24, y1: 862, y2: 886 },
+  { x: 24, y1: 892, y2: 916 },
+  { x: 24, y1: 922, y2: 946 },
 ];
 
-/** 위쪽 레인의 불 */
-export const LANES: Point[] = [135, 185, 235].map((x) => ({ x, y: 66 }));
+/** 바닥 표시등: 보너스 배율 ×2~×5, 공 살리기 */
+export const MULT_INSERTS: Point[] = [128, 161, 194, 227].map((x) => ({ x, y: 1000 }));
+export const SAVE_INSERT: Point = { x: 180, y: 1268 };
 
-export const FLIPPERS: FlipperShape[] = [
-  { side: 'left', px: 110, py: 604, len: 58, rest: 0.5, up: -0.45 },
-  { side: 'right', px: 250, py: 604, len: 58, rest: Math.PI - 0.5, up: Math.PI + 0.45 },
+/** 판 위 동전이 생기는 빈 자리 (1층의 열린 곳만) */
+export const COIN_ZONES: Zone[] = [
+  { x: 70, y: 110, w: 260, h: 200 },
+  { x: 235, y: 440, w: 95, h: 400 },
+  { x: 70, y: 840, w: 230, h: 130 },
+  { x: 70, y: 650, w: 110, h: 140 },
 ];

@@ -1,30 +1,18 @@
 import type { BallLook, PinballTableLook } from '../game/catalog';
-import {
-  BALL_R,
-  BALL_SAVE_TIME,
-  GATE,
-  LANE_X,
-  MAX_MULTIPLIER,
-  PLUNGER_TOP,
-  PULL_DISTANCE,
-  RIGHT_X,
-  SAUCER,
-  TABLE_H,
-  TABLE_W,
-  WALLS,
-  flipperTip,
-  type Flipper,
-  type PinballEngine,
-  type Point,
-} from './engine';
+import { flipperTip, type Ball, type Flipper, type PinballEngine } from './engine';
 import { withAlpha, type PinballFx } from './fx';
-import { LOW_H, LOW_W, P, PIXEL_FONT, Pix, lowCanvas, mix, type Pt } from './pixel';
+import { FULL_H, LOW_H, LOW_W, P, PIXEL_FONT, Pix, lowCanvas, mix, type Pt } from './pixel';
+import { BALL_R, BALL_SAVE_TIME, MAX_MULTIPLIER } from './rules';
+import { GATE, LANE_X, MULT_INSERTS, PLUNGER_TOP, PULL_DISTANCE, RIGHT_X, SAUCER, SAVE_INSERT, TABLE_H, VIEW_H, VIEW_W, WALLS, type Point } from './table';
 
 /**
  * 핀볼 판 그리기 — 픽셀 그림체.
  * 판과 장치는 낮은 해상도 캔버스(한 칸 = 판 좌표 3)에 칸 단위로 칠하고, 흐림 없이 키워서 화면에 올린다.
  * 점수 팝업·큰 알림·배율 글자만 원래 해상도에서 픽셀 글꼴로 쓴다(작은 칸으로는 읽히지 않아서).
  * 판·공 색은 상점 카탈로그(장착한 코스튬)에서 온다.
+ *
+ * 판이 화면보다 길어서 화면에는 cameraY부터 VIEW_H만큼만 보인다. 낮은 해상도 캔버스는 보이는 범위 크기이고,
+ * 판 좌표로 그리는 것들은 세로로 cameraY만큼 밀어서 그린다. cameraY는 3의 배수여야 한다(snapCamera).
  */
 export type TableTheme = PinballTableLook & BallLook;
 
@@ -35,7 +23,7 @@ let low: { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D; pix: Pix } 
 /** 바뀌지 않는 바닥·벽은 한 번만 그려 둔다(판 색이 바뀌면 다시) */
 let base: { canvas: HTMLCanvasElement; key: string } | null = null;
 
-export function drawTable(ctx: CanvasRenderingContext2D, engine: PinballEngine, theme: TableTheme, fx: PinballFx): void {
+export function drawTable(ctx: CanvasRenderingContext2D, engine: PinballEngine, theme: TableTheme, fx: PinballFx, cameraY: number): void {
   if (!low) {
     const c = lowCanvas();
     low = { ...c, pix: new Pix(c.ctx) };
@@ -46,8 +34,12 @@ export function drawTable(ctx: CanvasRenderingContext2D, engine: PinballEngine, 
   const t = engine.time;
   const l = low.ctx;
   const pix = low.pix;
+  const camCells = Math.round(cameraY / P);
+  l.setTransform(1, 0, 0, 1, 0, 0);
   l.globalCompositeOperation = 'source-over';
-  l.drawImage(base.canvas, 0, 0);
+  l.drawImage(base.canvas, 0, -camCells);
+  // 여기부터는 판 좌표로 그린다
+  l.setTransform(1, 0, 0, 1, 0, -camCells);
 
   fx.drawBackground(pix);
   drawInserts(pix, engine, theme, t);
@@ -65,34 +57,61 @@ export function drawTable(ctx: CanvasRenderingContext2D, engine: PinballEngine, 
   const plunger = engine.plungerBall();
   if (plunger) drawBall(pix, plunger, theme);
   fx.drawOver(pix);
+  l.setTransform(1, 0, 0, 1, 0, 0);
+  drawOffscreenBalls(pix, engine, theme, cameraY);
 
   // 화면에 올리기: 칸을 흐림 없이 키운다
   ctx.fillStyle = theme.page;
-  ctx.fillRect(0, 0, TABLE_W, TABLE_H);
+  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
   const shake = fx.shakeOffset();
   ctx.save();
   ctx.translate(Math.round(shake.x / P) * P, Math.round(shake.y / P) * P);
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(low.canvas, 0, 0, LOW_W * P, LOW_H * P);
+  ctx.save();
+  ctx.translate(0, -cameraY);
   drawLabels(ctx, engine, theme, t);
-  fx.drawText(ctx, TABLE_W, TABLE_H);
   ctx.restore();
+  fx.drawText(ctx, VIEW_W, VIEW_H, cameraY);
+  ctx.restore();
+}
+
+/** 화면 밖(위나 아래)에 있는 공은 그쪽 가장자리에 작은 화살표로 알려 준다 — 멀티볼에서 다른 공이 어디 있는지 */
+function drawOffscreenBalls(pix: Pix, engine: PinballEngine, theme: TableTheme, cameraY: number): void {
+  for (const b of engine.balls) {
+    const above = b.y < cameraY - BALL_R;
+    const below = b.y > cameraY + VIEW_H + BALL_R;
+    if (!above && !below) continue;
+    const cx = Math.round(b.x / P);
+    const dir = above ? 1 : -1;
+    const tip = above ? 1 : LOW_H - 2;
+    // 가장자리를 가리키는 세모 (끝 한 칸, 그 뒤로 세 칸, 다섯 칸) + 어두운 테
+    for (let row = 0; row < 3; row++) pix.cells(cx - row - 1, tip + dir * row, row * 2 + 3, 1, 'rgba(0, 0, 0, 0.55)');
+    for (let row = 0; row < 3; row++) pix.cells(cx - row, tip + dir * row, row * 2 + 1, 1, row === 0 ? theme.ballLight : mix(theme.ballLight, theme.ballDark, 0.35));
+  }
 }
 
 /** 바닥(계단처럼 밝아지는 가운데 빛, 점 무늬, 범퍼 무대 원)과 벽 */
 function drawBase(theme: TableTheme): HTMLCanvasElement {
-  const { canvas, ctx } = lowCanvas();
+  const { canvas, ctx } = lowCanvas(LOW_W, FULL_H);
   const pix = new Pix(ctx);
   ctx.fillStyle = theme.table;
-  ctx.fillRect(0, 0, LOW_W, LOW_H);
-  pix.disc(200, 260, 330, mix(theme.table, theme.tableGlow, 0.35));
-  pix.disc(200, 240, 240, mix(theme.table, theme.tableGlow, 0.7));
-  pix.disc(195, 220, 150, theme.tableGlow);
+  ctx.fillRect(0, 0, LOW_W, FULL_H);
+  // 빛은 위쪽(범퍼 둘레)과 아래쪽(플리퍼 위) 두 곳. 옅은 것부터 칠해서 진한 것이 위에 오게 한다
+  const glows: [number, number, number, number][] = [
+    [200, 250, 300, 0.35],
+    [200, 900, 330, 0.35],
+    [205, 230, 210, 0.7],
+    [200, 880, 240, 0.7],
+    [215, 215, 130, 1],
+    [195, 860, 150, 1],
+  ];
+  for (const [x, y, r, k] of glows) pix.disc(x, y, r, mix(theme.table, theme.tableGlow, k));
   const dot = mix(theme.table, theme.wall, 0.14);
-  for (let y = 4; y < LOW_H; y += 8) for (let x = (y / 8) % 2 ? 2 : 6; x < LOW_W; x += 8) pix.cells(x, y, 1, 1, dot);
+  for (let y = 4; y < FULL_H; y += 8) for (let x = (y / 8) % 2 ? 2 : 6; x < LOW_W; x += 8) pix.cells(x, y, 1, 1, dot);
   const stage = mix(theme.tableGlow, theme.wall, 0.22);
-  pix.ring(185, 200, 92, 1, stage);
-  pix.ring(185, 200, 70, 1, stage);
+  pix.ring(215, 250, 104, 1, stage);
+  pix.ring(215, 250, 80, 1, stage);
   wallLines(pix, theme, false);
   return canvas;
 }
@@ -119,13 +138,12 @@ function drawWallsLive(pix: Pix, engine: PinballEngine, theme: TableTheme, glow:
 function drawInserts(pix: Pix, engine: PinballEngine, theme: TableTheme, t: number): void {
   const blink = Math.sin(t * 10) > 0;
   const off = mix(theme.tableGlow, theme.wall, 0.25);
-  engine.lanes.forEach((l) => arrow(pix, l.x, 104, -Math.PI / 2, 9, l.lit ? theme.coin : off));
-  engine.targets.forEach((tg) => arrow(pix, 52, (tg.y1 + tg.y2) / 2, Math.PI, 8, tg.down ? theme.coin : off));
+  engine.lanes.forEach((l) => arrow(pix, l.x, l.y + 38, -Math.PI / 2, 9, l.lit ? theme.coin : off));
+  engine.targets.forEach((tg) => arrow(pix, tg.x + 28, (tg.y1 + tg.y2) / 2, Math.PI, 8, tg.down ? theme.coin : off));
   arrow(pix, SAUCER.x, SAUCER.y + 40, -Math.PI / 2, 11, engine.lockLit && blink ? theme.bumper : off);
 
   for (let m = 2; m <= MAX_MULTIPLIER; m++) {
-    const x = 128 + (m - 2) * 33;
-    const y = 400;
+    const { x, y } = MULT_INSERTS[m - 2];
     if (engine.multiplier >= m) {
       pix.disc(x, y + P, 13, mix(theme.coin, '#000000', 0.25));
       pix.disc(x, y, 13, theme.coin);
@@ -137,7 +155,7 @@ function drawInserts(pix: Pix, engine: PinballEngine, theme: TableTheme, t: numb
 
   const saving = engine.saveTimer > 0 && !engine.saveUsed;
   const on = saving && (engine.saveTimer > BALL_SAVE_TIME - 2 || blink);
-  shield(pix, 180, 668, on ? theme.wall : off);
+  shield(pix, SAVE_INSERT.x, SAVE_INSERT.y, on ? theme.wall : off);
 }
 
 function arrow(pix: Pix, x: number, y: number, angle: number, size: number, color: string): void {
@@ -174,9 +192,9 @@ function drawLabels(ctx: CanvasRenderingContext2D, engine: PinballEngine, theme:
   ctx.textBaseline = 'middle';
   ctx.font = `700 12px ${PIXEL_FONT}`;
   for (let m = 2; m <= MAX_MULTIPLIER; m++) {
-    const x = 128 + (m - 2) * 33;
+    const { x, y } = MULT_INSERTS[m - 2];
     ctx.fillStyle = engine.multiplier >= m ? theme.table : withAlpha(theme.wall, 0.7);
-    ctx.fillText(`×${m}`, x, 401);
+    ctx.fillText(`×${m}`, x, y + 1);
   }
   if (engine.lockLit) {
     ctx.font = `700 13px ${PIXEL_FONT}`;
@@ -333,7 +351,7 @@ function drawFlipper(pix: Pix, f: Flipper, theme: TableTheme): void {
   pix.rect(f.px - 3, f.py - 3, 6, 6, theme.plunger);
 }
 
-function drawBall(pix: Pix, p: Point, theme: TableTheme): void {
+function drawBall(pix: Pix, p: Point | Ball, theme: TableTheme): void {
   const { x, y } = p;
   pix.ellipse(x + 2, y + 5, BALL_R, BALL_R * 0.75, 'rgba(0, 0, 0, 0.3)');
   pix.disc(x, y, BALL_R, theme.ballDark);

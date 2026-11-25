@@ -80,7 +80,7 @@ test('드롭 타깃을 다 쓰러뜨리면 잠금 불이 켜지고, 구멍에 �
 
 test('멀티볼 중에 구멍에 넣으면 잭팟 20,000점의 2배를 받는다', () => {
   const e = engineWith();
-  placeBall(e, { x: 200, y: 300, vy: -10 });
+  placeBall(e, { x: 300, y: 600, vy: -10 });
   placeBall(e, { x: SAUCER.x, y: SAUCER.y });
   const [saucer] = ofType(run(e, 1 / 120), 'saucer');
   assert.equal(saucer.jackpot, true);
@@ -137,8 +137,8 @@ test('점수는 상한을 넘지 않는다', () => {
 test('한 판 코인은 상한 400개를 넘지 않는다', () => {
   const e = engineWith();
   e.coinsEarned = MAX_COINS_PER_RUN - 2;
-  e.coins.push({ id: 1, x: 200, y: 420, r: 10, age: 1 });
-  placeBall(e, { x: 200, y: 420 });
+  e.coins.push({ id: 1, x: 150, y: 900, r: 10, age: 1 });
+  placeBall(e, { x: 150, y: 900 });
   const [coin] = ofType(run(e, 1 / 120), 'coin');
   assert.equal(coin.coins, 2);
   assert.equal(e.coinsEarned, MAX_COINS_PER_RUN);

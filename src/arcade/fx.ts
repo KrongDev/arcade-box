@@ -118,20 +118,27 @@ export class ArcadeFx {
     ctx.restore();
 
     if (this.flash > 0 && !this.reduced) {
+      // 번쩍임은 캔버스 전체에 — 판을 밀어서 그리는 게임(핀볼)에서도 화면을 다 덮게 변환을 잠깐 푼다
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.fillStyle = withAlpha(this.flashColor, this.flash * 0.22);
       ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      ctx.restore();
     }
   }
 
-  /** 글자(원래 해상도, 픽셀 글꼴): 점수 팝업과 큰 알림 */
-  drawText(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+  /**
+   * 글자(원래 해상도, 픽셀 글꼴): 점수 팝업과 큰 알림.
+   * offsetY는 화면이 세로로 움직인 만큼이다 — 팝업은 게임 좌표에 붙어 있어서 그만큼 옮겨 그리고, 큰 알림은 늘 화면 가운데다.
+   */
+  drawText(ctx: CanvasRenderingContext2D, width: number, height: number, offsetY = 0): void {
     const P = this.cell;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     for (const p of this.popups) {
       const a = Math.min(1, p.life / p.max / 0.5);
       ctx.font = `700 ${p.size}px ${PIXEL_FONT}`;
-      const y = Math.round(p.y / P) * P;
+      const y = Math.round((p.y - offsetY) / P) * P;
       ctx.fillStyle = `rgba(0, 0, 0, ${0.7 * a})`;
       ctx.fillText(p.text, p.x + 2, y + 2);
       ctx.fillStyle = withAlpha(p.color, a);

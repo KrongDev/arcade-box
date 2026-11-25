@@ -12,9 +12,11 @@ import { useGameControls } from '../game/useGameControls';
 import { useScoreRun, useShareScore, type ScoreRunResult } from '../game/useScoreRun';
 import { useSave } from '../game/save-context';
 import { NAV_BAR_OFFSET, useSafeArea } from '../game/useSafeArea';
-import { BALLS_PER_GAME, PinballEngine, TABLE_H, TABLE_W, type PinballEvent } from '../pinball/engine';
+import { cameraTarget, focusBall, snapCamera, stepCamera } from '../pinball/camera';
+import { BALLS_PER_GAME, PinballEngine, type PinballEvent } from '../pinball/engine';
 import { PinballFx } from '../pinball/fx';
 import { drawTable, type TableTheme } from '../pinball/render';
+import { VIEW_H, VIEW_W } from '../pinball/table';
 import '../styles/action-game.css';
 
 type Phase = 'playing' | 'paused' | 'over';
@@ -62,6 +64,8 @@ export default function Pinball({ onExit }: { onExit: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef(initial.engine);
   const fxRef = useRef(initial.fx);
+  /** 화면에 보이는 범위의 위쪽 끝 — 판이 화면보다 길어서 공을 따라 움직인다. 공이 없으면 맨 아래(발사대) */
+  const cameraRef = useRef(cameraTarget(null));
   const phaseRef = useRef<Phase>('playing');
   const pointers = useRef(new Map<number, Side>());
   const keys = useRef(new Set<Side>());
@@ -120,6 +124,7 @@ export default function Pinball({ onExit }: { onExit: () => void }) {
     engineRef.current = new PinballEngine(Math.random, gearRef.current);
     fxRef.current = new PinballFx(prefersReducedMotion());
     fxRef.current.setSkin(gearRef.current.effect);
+    cameraRef.current = cameraTarget(null);
     resetRun();
     releaseAll();
     setResult(null);
@@ -222,7 +227,7 @@ export default function Pinball({ onExit }: { onExit: () => void }) {
   };
 
   // 게임 루프
-  useCanvasLoop(stageRef, canvasRef, TABLE_W, TABLE_H, (dt, ctx) => {
+  useCanvasLoop(stageRef, canvasRef, VIEW_W, VIEW_H, (dt, ctx) => {
     const e = engineRef.current;
     const fx = fxRef.current;
     if (phaseRef.current === 'playing') {
@@ -237,8 +242,10 @@ export default function Pinball({ onExit }: { onExit: () => void }) {
       }
       fx.trackBalls(e.balls);
       fx.update(dt);
+      const focus = focusBall(e.balls);
+      cameraRef.current = stepCamera(cameraRef.current, cameraTarget(focus), focus ? focus.y : null, dt);
     }
-    drawTable(ctx, e, themeRef.current, fx);
+    drawTable(ctx, e, themeRef.current, fx, snapCamera(cameraRef.current));
 
     hudClock.current += dt;
     if (hudClock.current >= 0.1) {

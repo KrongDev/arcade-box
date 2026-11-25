@@ -4,6 +4,7 @@ import type { Effect } from '../game/catalog';
 import type { Ball, PinballEvent } from './engine';
 import { P, type Pix } from './pixel';
 import type { TableTheme } from './render';
+import { LANES, TABLE_H } from './table';
 
 export { withAlpha } from '../arcade/pixel';
 
@@ -32,8 +33,9 @@ export class PinballFx extends ArcadeFx {
     this.skin = effect;
     this.stars = [];
     if (effect.table === 'stars') {
-      for (let i = 0; i < 46; i++) {
-        this.stars.push({ x: 14 + Math.random() * 330, y: 14 + Math.random() * 640, r: 0.6 + Math.random() * 1.3, ph: Math.random() * Math.PI * 2 });
+      // 별은 판 전체 높이에 뿌린다
+      for (let i = 0; i < 86; i++) {
+        this.stars.push({ x: 14 + Math.random() * 330, y: 14 + Math.random() * (TABLE_H - 60), r: 0.6 + Math.random() * 1.3, ph: Math.random() * Math.PI * 2 });
       }
     }
   }
@@ -72,7 +74,7 @@ export class PinballFx extends ArcadeFx {
         this.popup(ev.x, ev.y + 22, `+${ev.points.toLocaleString()}`, theme.coinRing);
         break;
       case 'lanes':
-        for (const x of [135, 185, 235]) this.ring(x, 66, theme.coin, 30);
+        for (const l of LANES) this.ring(l.x, l.y, theme.coin, 30);
         this.show(`보너스 ×${ev.multiplier}`, `+${ev.points.toLocaleString()}`, theme.coin);
         this.kick(3);
         break;
@@ -98,7 +100,7 @@ export class PinballFx extends ArcadeFx {
         this.show('공을 살렸어요', '한 번 더 쏘세요', theme.wall);
         break;
       case 'combo':
-        this.popup(180, 360, `콤보 ${ev.count}  +${ev.points.toLocaleString()}`, theme.bumperFlash, 20);
+        this.popup(Math.max(90, Math.min(310, ev.x)), ev.y - 34, `콤보 ${ev.count}  +${ev.points.toLocaleString()}`, theme.bumperFlash, 20);
         break;
       case 'coin':
         this.burst(ev.x, ev.y, 10, [theme.coin, theme.coinRing], 200);
@@ -170,7 +172,7 @@ export class PinballFx extends ArcadeFx {
       this.shootingTimer -= t;
       if (this.shootingTimer <= 0) {
         this.shootingTimer = 3 + Math.random() * 4;
-        this.shooting = { x: 20 + Math.random() * 200, y: 20 + Math.random() * 120, life: 0.9 };
+        this.shooting = { x: 20 + Math.random() * 200, y: 20 + Math.random() * (TABLE_H - 300), life: 0.9 };
       }
       if (this.shooting) {
         this.shooting.x += 260 * t;
