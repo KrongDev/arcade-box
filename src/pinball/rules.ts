@@ -7,8 +7,13 @@ export const BALL_R = 9;
 export const BALLS_PER_GAME = 3;
 /** 판 위 동전 1개를 주웠을 때 받는 코인 */
 export const COIN_PICKUP_VALUE = 5;
-/** 판 위에 한꺼번에 놓이는 동전 수 — 판이 길어진 만큼 예전의 3개에서 늘렸다 (봇으로 잰 코인 수입이 예전 판과 같아지는 값) */
-export const MAX_COINS_ON_TABLE = 4;
+/**
+ * 판 위에 한꺼번에 놓이는 동전 수와 새 동전이 생기는 간격(초).
+ * 예전 판(3개, 3.5초)보다 판이 길어져서, 봇으로 잰 코인 수입이 예전 판과 같아지는 값으로 늘렸다.
+ * 판 스킨의 "동전 더 자주" 능력은 이 간격을 줄인다.
+ */
+export const MAX_COINS_ON_TABLE = 5;
+export const COIN_SPAWN_INTERVAL = 2.8;
 /** 한 판에 받을 수 있는 코인 상한 — 서버(server/src/domain.ts BOARDS의 pinball.maxCoinsPerRun)와 같다 */
 export const MAX_COINS_PER_RUN = 400;
 export const MAX_MULTIPLIER = 5;
@@ -37,7 +42,7 @@ export const POINTS = {
   standup: 500,
   standupBank: 3000,
   /** 스피너가 한 번 돌 때 */
-  spinner: 250,
+  spinner: 400,
   /** 보너스 구멍의 점수 보상 두 가지 */
   bonusSmall: 5000,
   bonusBig: 10000,
