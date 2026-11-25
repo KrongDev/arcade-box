@@ -27,7 +27,7 @@
 1. 탭이 뒤로 갔다 돌아와 프레임 간격이 아주 길 때 — 공이 벽을 뚫거나 화면이 튀지 않아야 한다. (Task 2: 긴 dt 테스트)
 2. 멀티볼에서 한 공은 레일 위, 한 공은 아래로 빠질 때 — 공을 잃은 것으로 세지 않고, 남은 공으로 판이 이어져야 한다. (Task 6)
 3. 공이 다락이나 구멍, 레일 위에 있는 채로 일시정지·다시 시작·나가기 — 점수와 코인이 한 번만 저장되고 새 판이 깨끗해야 한다. (Task 7: 새 엔진으로 다시 시작하는 지금 방식 유지 확인)
-4. 점수가 상한에 닿은 뒤의 보상(다락 잭팟, 뽑기 코인) — 점수·코인이 상한을 넘지 않아야 한다. (Task 5, Task 4)
+4. 점수가 상한에 닿은 뒤의 보상(다락 잭팟, 보너스 구멍 코인) — 점수·코인이 상한을 넘지 않아야 한다. (Task 5, Task 4)
 5. 스킨 6종 모두에서 다락·램프·레일이 바닥과 구별돼 보여야 한다. (Task 7: 스킨별 화면 확인)
 
 ---
@@ -117,6 +117,8 @@
   - `40%만 당겨도 레인을 빠져나간다`
   - `아주 약하게 쏘면 발사대로 돌아온다` — `launch(0)` 뒤 `plungerLoaded === true`, `ballsLeft === 3`.
   - `바깥 길로 들어간 공은 잃는다` — 왼쪽 바깥 길 안 `(22, 1060)`에 공을 놓으면 `drain`.
+  - `쉬는 플리퍼 사이로 떨어진 공은 빠진다` — 플리퍼 사이 가운데 위 `(180, 1100)`에 멈춘 공을 놓으면 `drain` (스펙 5.2 "초안에서 꼭 고쳐야 하는 곳").
+  - `안쪽 길로 들어온 공은 플리퍼까지 굴러간다` — 왼쪽·오른쪽 안쪽 길 입구에 멈춘 공을 놓으면 2초 안에 그쪽 플리퍼 위(축에서 끝 쪽으로)를 지난다.
   - `벽을 타고 내려온 공은 지붕 가이드를 따라 안쪽 길로 간다` — `(20, 900)`에 멈춘 공을 놓으면 왼쪽 플리퍼 근처(`x` 100~170, `y` > 1150)에 닿고 `drain`이 나지 않는다 (2초 안, 플리퍼는 쉬는 상태로 공이 굴러 지나가기 전까지).
   - `프레임 간격이 아주 길어도 공이 판 밖으로 나가지 않는다` — `step(5)`를 여러 번.
 - [ ] **Step 5:** `rules.test.ts`의 좌표를 새 판에 맞게 고친다 (`table.ts`의 값을 읽어 쓰게 한다).
@@ -159,32 +161,32 @@
 
 ---
 
-### Task 4: 돌아가는 길과 스피너, 뽑기 구멍
+### Task 4: 돌아가는 길과 스피너, 보너스 구멍
 
 **Files:**
 - Create: `test/pinball/orbit.test.ts`
 - Modify: `rules.ts`, `table.ts`, `engine.ts`, `render.ts`, `fx.ts`, `test/pinball/rules.test.ts`
 
 **Interfaces:**
-- Produces (`table.ts`): 돌아가는 길 안쪽 벽 `(48,772)-(48,340)`. `SPINNER = { x: 29, y: 744, half: 17 }`. `SAUCERS = { lock: {…}, mystery: { x: 150, y: 726, r: 12, catchR: 11, hold: 0.9 } }` — 각 구멍에 뱉는 속도 `eject(random): { vx: number; vy: number }`.
-- Produces (`rules.ts`): `POINTS.spinner = 100`, `POINTS.mysterySmall = 3000`, `POINTS.mysteryBig = 10000`, `MYSTERY_COINS = 10`, `MYSTERY = [['small', 40], ['big', 20], ['coins', 20], ['save', 10], ['lock', 10]] as const`.
+- Produces (`table.ts`): 돌아가는 길 안쪽 벽 `(48,772)-(48,340)`. `SPINNER = { x: 29, y: 744, half: 17 }`. `SAUCERS = { lock: {…}, bonus: { x: 150, y: 726, r: 12, catchR: 11, hold: 0.9 } }` — 각 구멍에 뱉는 속도 `eject(random): { vx: number; vy: number }`.
+- Produces (`rules.ts`): `POINTS.spinner = 100`, `POINTS.bonusSmall = 3000`, `POINTS.bonusBig = 10000`, `BONUS_COINS = 10`, `BONUS_ORDER = ['small', 'coins', 'big', 'save', 'lock'] as const`.
 - Produces (`engine.ts`):
-  - `Ball.heldBy: 'lock' | 'mystery' | 'attic' | null`. 구멍마다 한 번에 공 하나. `saucers: Record<SaucerId, { flash: number; cooldown: number }>`.
+  - `Ball.heldBy: 'lock' | 'bonus' | 'attic' | null`. 구멍마다 한 번에 공 하나. `saucers: Record<SaucerId, { flash: number; cooldown: number }>`.
   - `spinner: { angle: number; speed: number; pending: number; flash: number }`. 공이 스피너 선을 지나면 `pending += clamp(round(|vy| / 180), 1, 8)`. 0.06초마다 한 번씩 `pending`을 줄이며 100점. 콤보에는 넣지 않는다.
-  - 뽑기: `random()`으로 `MYSTERY`에서 무게대로 고른다. `save`는 `saveTimer = BALL_SAVE_TIME; saveUsed = false`, `lock`은 `lockLit = true`, `coins`는 상한 안에서 10개(능력 영향 없음).
-  - 사건: `{ type: 'spinner'; x; y; points }`, `{ type: 'mystery'; x; y; award: 'small' | 'big' | 'coins' | 'save' | 'lock'; points: number; coins: number }`.
+  - 보너스 구멍: `bonusIndex`(0부터)가 가리키는 `BONUS_ORDER`의 보상을 주고 다음으로 넘긴다. 난수를 쓰지 않는다 (스펙 5.4). `save`는 `saveTimer = BALL_SAVE_TIME; saveUsed = false`, `lock`은 `lockLit = true`, `coins`는 상한 안에서 10개(능력 영향 없음). `bonusIndex`는 판이 끝날 때까지 이어진다.
+  - 사건: `{ type: 'spinner'; x; y; points }`, `{ type: 'bonus'; x; y; award: 'small' | 'coins' | 'big' | 'save' | 'lock'; points: number; coins: number }`.
   - 구멍에 들어가는 것은 지금처럼 콤보에 넣는다.
 
 - [ ] **Step 1: 테스트**
   - `스피너를 빠르게 지나가면 여러 번 돌고, 한 번에 100점씩 받는다` — `vy = -900`이면 5번.
   - `스피너는 콤보에 들어가지 않는다`
-  - `뽑기 구멍은 난수에 따라 보상을 준다` — 난수를 0.1 / 0.5 / 0.7 / 0.85 / 0.95로 고정하면 차례로 `small` / `big` / `coins` / `save` / `lock`.
-  - `뽑기 코인은 한 판 상한을 넘지 않는다` — `coinsEarned = 395`에서 5개만.
-  - `뽑기 구멍에 공이 있어도 잠금 구멍은 따로 받는다`
+  - `보너스 구멍은 들어갈 때마다 정해진 차례대로 보상을 준다` — 여섯 번 넣으면 `small` / `coins` / `big` / `save` / `lock` / `small`. 난수 씨앗을 바꿔도 같다.
+  - `보너스 구멍 코인은 한 판 상한을 넘지 않는다` — `coinsEarned = 395`에서 5개만.
+  - `보너스 구멍에 공이 있어도 잠금 구멍은 따로 받는다`
   - `구멍이 뱉은 공은 곧장 가운데로 떨어지지 않는다` — 세 구멍 모두, 뱉은 뒤 1초 동안 공이 `y < 1150`에 있다 (다락 구멍은 Task 5에서 더한다).
 - [ ] **Step 2:** 실패 확인 → 구현 → 통과 확인. `soak.test.ts`도 다시 돌린다.
-- [ ] **Step 3:** 그리기: 스피너(도는 동안 판 폭이 변함), 뽑기 구멍(노란 테), 길 표시 화살표. 연출: 뽑기 결과 큰 알림 ("뽑기! 10,000점", "뽑기! 코인 +10", "뽑기! 공 살리기", "뽑기! 잠금 불").
-- [ ] **Step 4:** `npm test && npx tsc -b && npm run lint`, 커밋 `핀볼: 돌아가는 길과 스피너, 뽑기 구멍`.
+- [ ] **Step 3:** 그리기: 스피너(도는 동안 판 폭이 변함), 보너스 구멍(노란 테)과 다음 보상을 알려 주는 불 5개, 길 표시 화살표. 연출: 보상 큰 알림 ("보너스! 10,000점", "보너스! 코인 +10", "보너스! 공 살리기", "보너스! 잠금 불"). 화면 문구에 "뽑기"라는 말은 쓰지 않는다.
+- [ ] **Step 4:** `npm test && npx tsc -b && npm run lint`, 커밋 `핀볼: 돌아가는 길과 스피너, 보너스 구멍`.
 
 ---
 
@@ -259,9 +261,9 @@
 - Modify: `src/game/sfx.ts`, `src/pages/Pinball.tsx`, `src/pinball/fx.ts`, `src/pinball/render.ts`
 
 **Interfaces:**
-- Produces (`sfx.ts`): `'spinner' | 'ramp' | 'rail' | 'kickback' | 'mystery'`를 `Sfx`에 더하고 지금 소리들과 같은 방식(짧은 합성음)으로 만든다. 타깃·구멍·잭팟은 있는 소리를 쓴다.
+- Produces (`sfx.ts`): `'spinner' | 'ramp' | 'rail' | 'kickback' | 'bonus'`를 `Sfx`에 더하고 지금 소리들과 같은 방식(짧은 합성음)으로 만든다. 타깃·구멍·잭팟은 있는 소리를 쓴다.
 
-- [ ] **Step 1:** `Pinball.tsx`의 사건 처리에 새 사건을 더한다: `ramp`(소리 `ramp`, 진동 `success`), `rail`(`rail`), `kickback`(`kickback`, `success`), `spinner`(`spinner`, 진동 없음), `standup`·`atticTarget`(`target`, `tap`), `standupBank`·`jackpotLit`(`bank`, `success`), `mystery`(`mystery`, `basicMedium`), `atticHole`(잭팟이면 `jackpot`·`confetti`, 아니면 `saucer`). `switch`가 모든 사건을 다루는지 타입으로 확인한다.
+- [ ] **Step 1:** `Pinball.tsx`의 사건 처리에 새 사건을 더한다: `ramp`(소리 `ramp`, 진동 `success`), `rail`(`rail`), `kickback`(`kickback`, `success`), `spinner`(`spinner`, 진동 없음), `standup`·`atticTarget`(`target`, `tap`), `standupBank`·`jackpotLit`(`bank`, `success`), `bonus`(`bonus`, `basicMedium`), `atticHole`(잭팟이면 `jackpot`·`confetti`, 아니면 `saucer`). `switch`가 모든 사건을 다루는지 타입으로 확인한다.
 - [ ] **Step 2:** 불이 켜진 상태를 그린다: 킥백, 잭팟 구멍(깜빡임), 램프 연속(램프 앞 화살표가 `rampCombo`만큼 밝게), 오른쪽 타깃.
 - [ ] **Step 3:** 스킨 6종으로 화면을 찍어 다락·램프·레일이 바닥과 구별되는지 본다. 구별이 안 되는 스킨이 있으면 섞는 비율을 고친다.
 - [ ] **Step 4:** 일시정지 → 이어 하기, 다시 하기, 나가기를 공이 다락·구멍·레일에 있을 때 각각 해 본다.
@@ -276,10 +278,11 @@
 - Modify: `rules.ts`, `table.ts` (값만)
 
 - [ ] **Step 1: 테스트** (`balance.test.ts`) — 봇으로 각각 200판.
-  - `무작위 봇의 점수 중앙값이 25,000~62,000이다`
-  - `반응 봇의 점수 중앙값이 500만에 닿지 않는다`
-  - `바깥 길로 잃는 공이 전체의 3분의 1을 넘지 않는다` — 무작위 봇 기준.
+  - `무작위 봇의 점수 중앙값이 25,000~62,000이고 코인 중앙값이 30~90이다`
+  - `무작위 봇이 바깥 길로 잃는 공은 전체의 3분의 1을 넘지 않는다`
+  - `반응 봇의 점수 중앙값이 500만에 닿지 않고 한 판 길이 중앙값이 2~8분이다`
   - `어느 판도 점수 500만, 코인 400을 넘지 않는다`
+  - 공을 잃은 것과 잃은 곳을 세는 법은 스펙 6.2를 따른다.
 - [ ] **Step 2:** 통과할 때까지 점수, 지붕 가이드 틈, 범퍼·키커의 차는 힘, 발사 세기를 다듬는다. 스펙 5.4의 점수표에서 달라진 값은 스펙에도 고쳐 적는다.
 - [ ] **Step 3:** `npm test && npx tsc -b && npm run lint`, 커밋 `핀볼: 봇으로 균형을 맞춤`.
 
@@ -292,5 +295,5 @@
 
 - [ ] **Step 1:** `README.md`의 핀볼 설명(기능 목록, "직접 만든 핀볼 물리", 픽셀 그림 칸 수, 폴더 설명)을 새 판에 맞게 고친다.
 - [ ] **Step 2:** `npm test`, `(cd server && npm test)`, `npx tsc -b`, `npm run lint`, `npm run build`, `npm run build:android`가 모두 통과하는지 본다.
-- [ ] **Step 3:** 브라우저에서 한 판을 끝까지 한다: 발사, 램프, 다락 잭팟, 레일, 킥백, 뽑기, 멀티볼, 결과 창.
+- [ ] **Step 3:** 브라우저에서 한 판을 끝까지 한다: 발사, 램프, 다락 잭팟, 레일, 킥백, 보너스 구멍, 멀티볼, 결과 창.
 - [ ] **Step 4:** 커밋 `핀볼: README를 새 판에 맞게 고침`. 사용자에게 폰 확인을 부탁하고, 푸시·배포는 확인을 받은 뒤에 한다.
