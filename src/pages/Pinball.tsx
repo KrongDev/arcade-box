@@ -263,6 +263,7 @@ export default function Pinball({ onExit }: { onExit: () => void }) {
         playSfx('rail');
         break;
       case 'railEnd':
+      case 'nudge':
         break;
       default: {
         // 새 사건을 더하고 여기서 빠뜨리면 타입 검사에서 걸린다

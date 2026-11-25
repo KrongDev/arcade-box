@@ -112,7 +112,7 @@ export interface GameStats {
   over: boolean;
   /** 공을 잃은 곳 (남은 공 수가 줄어든 것만 센다) */
   losses: { center: number; left: number; right: number };
-  /** 있으면 안 되는 일: 숫자가 깨짐, 공이 판 밖으로 샘, 공이 오래 멈춤 */
+  /** 있으면 안 되는 일: 숫자가 깨짐, 공이 판 밖으로 샘, 공이 끼어서 엔진이 튕겨 줌 */
   problems: string[];
 }
 
@@ -121,7 +121,6 @@ export function playGame(e: PinballEngine, bot: Bot, maxSeconds: number, tableW 
   const dt = 1 / 60;
   const losses = { center: 0, left: 0, right: 0 };
   const problems: string[] = [];
-  const still = new Map<number, number>();
   let t = 0;
   while (!e.over && t < maxSeconds) {
     bot(e, dt);
@@ -129,18 +128,12 @@ export function playGame(e: PinballEngine, bot: Bot, maxSeconds: number, tableW 
     t += dt;
     for (const ev of e.drainEvents()) {
       if (ev.type === 'drain') losses[ev.x < 60 ? 'left' : ev.x > 300 ? 'right' : 'center']++;
+      // 공이 2.5초 넘게 멈춰 있어서 엔진이 튕겨 준 것 — 그 자리에 공이 낀다는 뜻이다
+      if (ev.type === 'nudge') problems.push(`끼어서 튕겨 줌 (${ev.x.toFixed(0)}, ${ev.y.toFixed(0)}) t=${t.toFixed(1)}`);
     }
-    const pressed = e.flippers.some((f) => f.pressed);
-    const flipperY = Math.min(...e.flippers.map((f) => f.py));
     for (const b of e.balls) {
       if (!Number.isFinite(b.x) || !Number.isFinite(b.y) || !Number.isFinite(b.vx) || !Number.isFinite(b.vy)) problems.push(`숫자가 깨짐 t=${t.toFixed(1)}`);
       else if (b.x < 0 || b.x > tableW || b.y < -5) problems.push(`판 밖 (${b.x.toFixed(0)}, ${b.y.toFixed(0)}) t=${t.toFixed(1)}`);
-      // 올린 플리퍼 위에 받쳐 둔 공은 멈춘 것으로 세지 않는다
-      const cradled = pressed && b.y > flipperY - 60;
-      const stuck = b.held <= 0 && !b.ride && !cradled && Math.hypot(b.vx, b.vy) < 15;
-      const time = stuck ? (still.get(b.id) ?? 0) + dt : 0;
-      still.set(b.id, time);
-      if (time > 5 && time - dt <= 5) problems.push(`5초 넘게 멈춤 (${b.x.toFixed(0)}, ${b.y.toFixed(0)}) t=${t.toFixed(1)}`);
     }
     if (problems.length > 5) break;
   }

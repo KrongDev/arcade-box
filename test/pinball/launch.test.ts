@@ -127,14 +127,19 @@ test('플리퍼를 계속 눌러도, 플리퍼에서 먼 곳에 멈춘 공은 3�
     const e = engineWith();
     const ball = placeBall(e, { x: 280, y: 685 });
     let nudged = false;
+    const events = [];
     for (let t = 0; t < 3.5; t += 1 / 120) {
       // 연타하는 사람처럼 0.3초마다 눌렀다 뗀다
       e.setFlipper('left', Math.floor(t / 0.3) % 2 === 0);
       e.step(1 / 120);
-      e.drainEvents();
+      events.push(...e.drainEvents());
       if (ball.vy < -200) nudged = true;
     }
     assert.equal(nudged, true, '멈춘 공을 튕겨 주지 않았어요');
+    // 튕겨 준 일과 그 자리를 알린다 — 봇 테스트가 공이 끼는 자리를 찾는 데 쓴다
+    const [nudge] = ofType(events, 'nudge');
+    assert.ok(nudge, '튕겨 준 일을 알리지 않았어요');
+    assert.ok(Math.abs(nudge.x - 280) < 25 && Math.abs(nudge.y - 689) < 6, `(${nudge.x}, ${nudge.y})`);
   } finally {
     WALLS.splice(WALLS.length - cup.length, cup.length);
   }

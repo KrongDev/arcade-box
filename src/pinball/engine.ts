@@ -270,7 +270,9 @@ export type PinballEvent =
   | { type: 'atticHole'; x: number; y: number; points: number; jackpot: boolean }
   /** 다락 출구에서 레일을 타기 시작함 / 레일 끝에서 내려옴 */
   | { type: 'rail'; x: number; y: number }
-  | { type: 'railEnd'; x: number; y: number };
+  | { type: 'railEnd'; x: number; y: number }
+  /** 어딘가에 끼어 멈춘 공을 튕겨 줬다 (그 자리). 화면에는 쓰지 않고, 봇 테스트가 끼는 자리를 찾는 데 쓴다 */
+  | { type: 'nudge'; x: number; y: number };
 
 function createSling(shape: SlingShape): Sling {
   // 차는 면(tip→top)의 법선 중 판 안쪽(toward)을 보는 쪽
@@ -1117,6 +1119,7 @@ export class PinballEngine {
       ball.slow = speed < 15 && !cradled ? ball.slow + frame : 0;
       if (ball.slow > 2.5) {
         ball.slow = 0;
+        this.events.push({ type: 'nudge', x: ball.x, y: ball.y });
         ball.vy = -420;
         ball.vx = (this.random() - 0.5) * 300;
       }
