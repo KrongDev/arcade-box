@@ -77,3 +77,8 @@ export async function storeIcon(dataDir: string, sourcePath: string): Promise<st
 export function iconUrl(name: string | null): string | null {
   return name === null ? null : `/v2/assets/${name}`;
 }
+
+/** `storeIcon`이 준 이름의 모양인지 (게임·상품에 아이콘 이름을 달 때 확인한다) */
+export function isIconName(name: string): boolean {
+  return ICON_NAME.test(name);
+}

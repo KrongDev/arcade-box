@@ -5,6 +5,7 @@
 import { userInfo } from 'node:os';
 import { createInterface } from 'node:readline';
 import { commands as adminCommands } from './admin/index.ts';
+import { commands as gameCommands } from './game/index.ts';
 import { runCli, type CliIo, type Command } from './shared/cli/index.ts';
 import { loadConfig } from './shared/config.ts';
 import { connectPg } from './shared/db/index.ts';
@@ -44,7 +45,11 @@ try {
   const { db, close } = connectPg(config.databaseUrl);
   try {
     const actor = actorName();
-    const commands: Command[] = [...adminCommands(db, actor), ...walletCommands(db, actor)];
+    const commands: Command[] = [
+      ...adminCommands(db, actor),
+      ...walletCommands(db, actor),
+      ...gameCommands(db, actor, { dataDir: config.dataDir, publicKey: config.bundlePublicKey }),
+    ];
     code = await runCli(process.argv.slice(2), commands, io);
   } finally {
     await close();

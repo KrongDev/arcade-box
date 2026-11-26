@@ -3,4 +3,4 @@
  * 다른 도메인은 이 파일로만 가져온다.
  */
 export { routes, type AssetDeps } from './routes.ts';
-export { iconUrl, MAX_ICON_BYTES, storeIcon } from './store.ts';
+export { iconUrl, isIconName, MAX_ICON_BYTES, storeIcon } from './store.ts';
