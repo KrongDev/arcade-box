@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { adminActions } from '../src/admin/schema.ts';
 import { getGame, updateGame } from '../src/game/index.ts';
 import { listBoards } from '../src/play/index.ts';
-import { activePrice, getProduct, setPrice, updateProduct } from '../src/product/index.ts';
+import { activePrice, getProduct, listCatalogProducts, setPrice, updateProduct } from '../src/product/index.ts';
 import { products } from '../src/product/schema.ts';
 import { seed, seedCommand } from '../src/seed.ts';
 import { SEED } from '../src/seed-data.ts';
@@ -131,6 +131,15 @@ test('seed 뒤: 게임 3, 순위표 5, 유료 아이템 8개는 hidden이고 KRW
       }
     }
     assert.equal(paid, 8);
+
+    // 목록의 순서: 게임 상품 셋이 먼저, 그 뒤에 아이템이 v1 ITEMS 순서로 (유료 8개는 hidden이라 빠진다)
+    const onSale = (await listCatalogProducts(db)).map((p) => p.id);
+    assert.deepEqual(onSale, [
+      'game.pinball',
+      'game.minesweeper',
+      'game.breakout',
+      ...ITEMS.filter(([, price]) => price === 'free' || 'coin' in price).map(([id]) => id),
+    ]);
     assert.equal(SEED.products.filter((p) => p.kind === 'item').length, ITEMS.length);
   } finally {
     await close();

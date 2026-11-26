@@ -261,6 +261,11 @@ export async function listBoards(q: Q, gameId: string): Promise<Board[]> {
   return readBoards(q, gameId);
 }
 
+/** 모든 게임의 순위표를 한 번에 (게임 ID → 순서 → ID 순서). 목록(`/v2/catalog`)이 게임마다 묻지 않고 한 쿼리로 읽는다 */
+export async function listAllBoards(q: Q): Promise<Board[]> {
+  return readBoards(q);
+}
+
 // ── 순위표 만들기·고치기 (운영 명령) ───────────────────────────────────
 
 export interface NewBoard {

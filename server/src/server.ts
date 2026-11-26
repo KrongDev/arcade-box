@@ -5,7 +5,7 @@
  * 도메인끼리 서로 가져오지 않고 여기서 그 함수를 넣어 준다.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { findSession, routes as accountRoutes, type DeletionPolicy, type IdTokenVerifier, type Summarize } from './account/index.ts';
+import { devVerifier, findSession, googleVerifier, routes as accountRoutes, type DeletionPolicy, type IdTokenVerifier, type Summarize } from './account/index.ts';
 import { routes as assetRoutes } from './asset/index.ts';
 import { countOwnedGames, purgeUser as purgeEntitlements, routes as entitlementRoutes } from './entitlement/index.ts';
 import { hasMoneyOrders, purgeUser as purgeOrders, routes as orderRoutes } from './order/index.ts';
@@ -23,8 +23,16 @@ export interface ServerDeps {
   db: Db;
   config: Config;
   now: Clock;
-  /** ID 토큰 확인기. 운영은 `googleVerifier`, `config.devAuth`일 때만 `devVerifier` (부르는 쪽이 고른다) */
+  /** ID 토큰 확인기. 서버를 띄울 때는 `chooseVerifier(config)`, 테스트는 가짜를 넣는다 */
   verify: IdTokenVerifier;
+}
+
+/**
+ * 설정에 맞는 ID 토큰 확인기. 개발용 확인기(서명을 보지 않는다)는 `config.devAuth`일 때만 고른다.
+ * 그 밖에는 언제나 구글 공개 키로 확인한다 (`NODE_ENV`가 빠진 채 띄워도 마찬가지다).
+ */
+export function chooseVerifier(config: Config): IdTokenVerifier {
+  return config.devAuth ? devVerifier() : googleVerifier(config.googleClientIds);
 }
 
 /** 연결 충돌 때 양쪽에 보여 줄 요약: 통일 지갑의 잔액과 가진 게임 수 (스펙 5.4) */

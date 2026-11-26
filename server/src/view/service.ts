@@ -2,7 +2,7 @@ import { getSettings, getUser, listProviders, type Provider, type Settings } fro
 import { iconUrl } from '../asset/index.ts';
 import { listEquipped, listOwned } from '../entitlement/index.ts';
 import { listLiveGames, type LiveVersion } from '../game/index.ts';
-import { boardStats, listBoards, runCoinStatus, type Ordering } from '../play/index.ts';
+import { boardStats, listAllBoards, runCoinStatus, type Board, type Ordering } from '../play/index.ts';
 import { listCatalogProducts, type Currency, type ProductAccess, type ProductKind } from '../product/index.ts';
 import { rewardStatus } from '../reward/index.ts';
 import type { Db, Q } from '../shared/db/index.ts';
@@ -50,12 +50,15 @@ export async function catalog(q: Q, now: Date): Promise<Catalog> {
   const live = new Set(liveGames.map((g) => g.id));
   const onSale = (await listCatalogProducts(q)).filter((p) => p.gameId === null || live.has(p.gameId));
 
-  const games: CatalogGame[] = [];
-  for (const g of liveGames) {
+  // 순위표는 한 쿼리로 읽어 게임별로 나눈다 (게임 수만큼 쿼리를 보내지 않게)
+  const boardsByGame = new Map<string, Board[]>();
+  for (const b of await listAllBoards(q)) boardsByGame.set(b.gameId, [...(boardsByGame.get(b.gameId) ?? []), b]);
+
+  const games: CatalogGame[] = liveGames.map((g) => {
     const product = onSale.find((p) => p.kind === 'game' && p.gameId === g.id);
     const coin = product?.prices.find((p) => p.currency === 'COIN');
-    const boards = await listBoards(q, g.id);
-    games.push({
+    const boards = boardsByGame.get(g.id) ?? [];
+    return {
       id: g.id,
       name: g.name,
       description: g.description,
@@ -64,8 +67,8 @@ export async function catalog(q: Q, now: Date): Promise<Catalog> {
       product: product ? { id: product.id, access: product.access, price: coin ? { currency: 'COIN', amount: coin.amount } : null } : null,
       liveVersion: g.liveVersion,
       boards: boards.map((b) => ({ id: b.id, label: b.label, ordering: b.ordering })),
-    });
-  }
+    };
+  });
 
   const products: CatalogProduct[] = onSale.map((p) => ({
     id: p.id,

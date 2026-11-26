@@ -1,14 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { eq, sql } from 'drizzle-orm';
-import { deleteAccount, getUser, type DeletionPolicy } from '../../src/account/index.ts';
-import { grant, purgeUser as purgeEntitlements } from '../../src/entitlement/index.ts';
+import { deleteAccount, getUser } from '../../src/account/index.ts';
+import { grant } from '../../src/entitlement/index.ts';
 import { hasMoneyOrders, listOrders, purgeExpired, purgeUser, retentionCutoff } from '../../src/order/index.ts';
 import { orderEvents, orders } from '../../src/order/schema.ts';
-import { purgeUser as purgePlay } from '../../src/play/index.ts';
-import { purgeUser as purgeRewards } from '../../src/reward/index.ts';
 import type { Db } from '../../src/shared/db/index.ts';
-import { applyCoins, purgeUser as purgeWallet, verifyWallets } from '../../src/wallet/index.ts';
+import { deletionPolicy as policy } from '../../src/server.ts';
+import { applyCoins, verifyWallets } from '../../src/wallet/index.ts';
 import { loginGuest } from '../account/helpers.ts';
 import { testDb } from '../helpers/db.ts';
 import { tablesContaining } from '../helpers/scan.ts';
@@ -24,8 +23,7 @@ async function withShop(run: (db: Db) => Promise<void>): Promise<void> {
   }
 }
 
-/** 서버 조립(Task 13)이 계정 삭제에 넣는 것과 같은 방침: 현금 주문이 있으면 사용자 행을 남기고, order → reward → play → entitlement → wallet 순서로 지운다 */
-const policy: DeletionPolicy = { mustKeepUserRow: hasMoneyOrders, purge: [purgeUser, purgeRewards, purgePlay, purgeEntitlements, purgeWallet] };
+// 계정 삭제의 방침은 서버 조립(`server.ts`)이 쓰는 것 그대로다: 현금 주문이 있으면 사용자 행을 남기고, order → reward → play → entitlement → wallet 순서로 지운다
 
 /** `now`에서 달력으로 `years`년 전 (UTC) */
 function yearsBefore(now: Date, years: number): Date {

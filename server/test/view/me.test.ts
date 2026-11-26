@@ -1,16 +1,22 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { updateSettings } from '../../src/account/index.ts';
+import { deleteAccount, getUser, updateSettings } from '../../src/account/index.ts';
 import { setNumber } from '../../src/admin/index.ts';
 import { equip } from '../../src/entitlement/index.ts';
 import { purchaseWithCoins } from '../../src/order/index.ts';
 import { submitRun } from '../../src/play/index.ts';
 import { claimAdReward, claimAttendance } from '../../src/reward/index.ts';
+import { seed } from '../../src/seed.ts';
+import { deletionPolicy } from '../../src/server.ts';
+import { RuleError } from '../../src/shared/errors.ts';
+import { me as readMe } from '../../src/view/index.ts';
 import { applyCoins } from '../../src/wallet/index.ts';
 import { loginGuest } from '../account/helpers.ts';
 import { gameKit } from '../game/helpers.ts';
 import { fakeClock } from '../helpers/clock.ts';
+import { testDb } from '../helpers/db.ts';
 import { call } from '../helpers/http.ts';
+import { insertMoneyOrder } from '../order/helpers.ts';
 import { NOW, seedView, viewHandler } from './helpers.ts';
 
 test('새 손님의 /v2/me: 잔액 0, owned는 비고, providers는 ["guest"], 광고 3번 남음', async () => {
@@ -101,5 +107,23 @@ test('/v2/me는 로그인이 필요하다', async () => {
     assert.equal(wrong.status, 401);
   } finally {
     await kit.close();
+  }
+});
+
+test('없는 사용자와 계정을 지워 deleted로만 남은 사용자에게는 401 unauthorized다 (세션 확인과 읽기 사이에 지워진 경우)', async () => {
+  const { db, close } = await testDb();
+  const unauthorized = (err: unknown) => err instanceof RuleError && err.status === 401 && err.code === 'unauthorized';
+  try {
+    await assert.rejects(readMe(db, '00000000-0000-4000-8000-000000000000', NOW), unauthorized);
+
+    // 현금 주문이 있어 사용자 행이 deleted로 남는다 (주문의 상품은 처음 자료의 pinball.ball.gold)
+    await seed(db);
+    const gone = await loginGuest(db, NOW);
+    await insertMoneyOrder(db, gone.userId, NOW);
+    await deleteAccount(db, gone.userId, deletionPolicy, NOW);
+    assert.equal((await getUser(db, gone.userId))?.status, 'deleted');
+    await assert.rejects(readMe(db, gone.userId, NOW), unauthorized);
+  } finally {
+    await close();
   }
 });

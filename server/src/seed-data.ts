@@ -122,10 +122,13 @@ const ITEMS: Array<[id: string, name: string, price: ItemPrice]> = [
   ['breakout.bricks.gem', '보석 벽돌', coin(3000)],
 ];
 
+/** 아이템의 순서는 게임 상품(1~3) 뒤에 오게 100부터 매긴다 (목록의 products가 게임 상품 → 아이템 순서로 나온다) */
+const ITEM_SORT_START = 100;
+
 /** 아이템 ID는 `<게임>.<자리>.<이름>`이다 */
 function itemProduct([id, name, price]: (typeof ITEMS)[number], index: number): SeedProduct {
   const [gameId, slot] = id.split('.');
-  const base = { id, kind: 'item' as const, name, gameId, slot, sortOrder: index + 1 };
+  const base = { id, kind: 'item' as const, name, gameId, slot, sortOrder: ITEM_SORT_START + index };
   if ('free' in price) return { ...base, access: 'everyone', status: 'on_sale', prices: {} };
   if ('coin' in price) return { ...base, access: 'purchase', status: 'on_sale', prices: { COIN: price.coin } };
   return { ...base, description: price.description, access: 'purchase', status: 'hidden', prices: { KRW: price.krw } };
