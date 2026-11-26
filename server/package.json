@@ -9,15 +9,22 @@
   "scripts": {
     "start": "node src/index.ts",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "node --test test/*.test.ts",
+    "test": "node --test 'test/**/*.test.ts'",
+    "test:pg": "node --test 'test-pg/**/*.test.ts'",
+    "db:generate": "drizzle-kit generate",
+    "cli": "node src/cli.ts",
     "legal": "node scripts/build-legal.ts"
   },
   "dependencies": {
-    "pg": "^8.23.1"
+    "drizzle-orm": "0.45.4",
+    "jose": "6.2.18",
+    "pg": "8.23.1"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.6.0",
     "@types/node": "^24.19.2",
     "@types/pg": "^8.23.1",
+    "drizzle-kit": "0.31.11",
     "typescript": "^7.0.2"
   }
 }
