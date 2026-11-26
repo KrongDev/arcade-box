@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { test } from 'node:test';
 import { users } from '../../src/account/schema.ts';
-import { leaderboard, nickname } from '../../src/play/index.ts';
+import { createGame, updateGame } from '../../src/game/index.ts';
+import { createBoard, leaderboard, nickname } from '../../src/play/index.ts';
 import { boardRecords } from '../../src/play/schema.ts';
 import type { Db } from '../../src/shared/db/index.ts';
 import { loginGuest } from '../account/helpers.ts';
@@ -192,6 +193,31 @@ test('없는 순위표는 404 unknown_board', async () => {
     await assert.rejects(leaderboard(db, 'pin\u0000ball', 50, null), rule(404, 'unknown_board'));
     // 사용자 ID 모양이 아니면 로그인하지 않은 것처럼 보여 준다 (쿼리 오류가 나지 않는다)
     assert.equal((await leaderboard(db, 'pinball', 50, 'not-a-uuid')).mine, null);
+  } finally {
+    await close();
+  }
+});
+
+test('아직 내보내지 않은(draft) 게임의 순위표는 없는 것으로 답한다', async () => {
+  const { db, close } = await setup();
+  try {
+    const handler = playHandler(db, fakeClock(NOW.toISOString()));
+    await db.transaction(async (tx) => {
+      await createGame(tx, { id: 'secret', name: '출시 전 비밀 게임', description: '' });
+      await createBoard(tx, { id: 'secret', gameId: 'secret', label: '출시 전 비밀 게임', ordering: 'higher', minValue: 0, maxValue: 100, maxCoinsPerRun: 1 });
+    });
+    const hidden = await call(handler, 'GET', '/v2/leaderboards/secret');
+    assert.equal(hidden.status, 404);
+    assert.equal((hidden.body as { error: { code: string } }).error.code, 'unknown_board');
+    assert.equal(hidden.raw.toString('utf8').includes('비밀'), false, '순위표의 이름이 나가지 않는다');
+    assert.deepEqual(hidden.body, (await call(handler, 'GET', '/v2/leaderboards/nope')).body, '없는 순위표와 같은 답이다');
+    await assert.rejects(leaderboard(db, 'secret', 5, null), rule(404, 'unknown_board'));
+
+    // 내보내면 보이고, 내린(retired) 게임의 순위표는 계속 보인다 (쌓인 기록을 볼 수 있게)
+    await db.transaction((tx) => updateGame(tx, 'secret', { status: 'live' }));
+    assert.equal((await leaderboard(db, 'secret', 5, null)).board.label, '출시 전 비밀 게임');
+    await db.transaction((tx) => updateGame(tx, 'secret', { status: 'retired' }));
+    assert.equal((await call(handler, 'GET', '/v2/leaderboards/secret')).status, 200);
   } finally {
     await close();
   }

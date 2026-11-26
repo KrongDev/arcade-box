@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { deleteAccount, type DeletionPolicy } from '../../src/account/index.ts';
 import { revoke } from '../../src/entitlement/index.ts';
 import { createGame, updateGame } from '../../src/game/index.ts';
-import { boardStats, createBoard, listBoards, purgeUser } from '../../src/play/index.ts';
+import { boardStats, createBoard, leaderboard, listBoards, purgeUser, updateBoard } from '../../src/play/index.ts';
 import { createProduct } from '../../src/product/index.ts';
 import type { Db } from '../../src/shared/db/index.ts';
 import { applyCoins, getBalance, purgeUser as purgeWallet, verifyWallets } from '../../src/wallet/index.ts';
@@ -331,6 +331,111 @@ test('코인이 0인 판도 같은 idempotency 키로 다시 보내면 판이 �
   }
 });
 
+test('다시 보낸 판의 답은 그 판을 낼 때의 것이다: 시간 순위표, 코인 0인 판의 잔액, 순위표가 다른 같은 값', async () => {
+  const { db, close } = await setup();
+  try {
+    const me = await loginGuest(db, NOW);
+    await own(db, me.userId, 'breakout');
+    const t = ticking();
+
+    // 시간 순위표(lower): 60초, 40초를 낸 뒤의 50초는 최고 기록이 아니다. 다시 보내도 아니다 (작을수록 좋다)
+    await send(db, me.userId, { boardId: 'pinball.sprint', won: true, seconds: 60, coins: 0 }, t.now());
+    await send(db, me.userId, { boardId: 'pinball.sprint', won: true, seconds: 40, coins: 0 }, t.next());
+    const slow = { boardId: 'pinball.sprint', won: true, seconds: 50, coins: 0, idempotencyKey: 'sprint-run-50s' };
+    const slowFirst = await send(db, me.userId, slow, t.next());
+    assert.deepEqual(slowFirst, { boardId: 'pinball.sprint', recordValue: 50, isBest: false, firstClear: false, coins: 0, balance: 0, replayed: false });
+    assert.deepEqual(await send(db, me.userId, slow, t.now()), { ...slowFirst, replayed: true });
+    // 그때 최고였던 30초는 뒤에 20초를 내도 다시 보내면 최고 기록이었다고 답한다
+    const fast = { boardId: 'pinball.sprint', won: true, seconds: 30, coins: 0, idempotencyKey: 'sprint-run-30s' };
+    const fastFirst = await send(db, me.userId, fast, t.next());
+    assert.equal(fastFirst.isBest, true);
+    await send(db, me.userId, { boardId: 'pinball.sprint', won: true, seconds: 20, coins: 0 }, t.next());
+    assert.deepEqual(await send(db, me.userId, fast, t.now()), { ...fastFirst, replayed: true });
+    assert.deepEqual(await send(db, me.userId, slow, t.now()), { ...slowFirst, replayed: true });
+
+    // 코인이 0이었던 판: 잔액이 있는 사용자는 그 잔액을 받는다 (0이 아니다)
+    await db.transaction((tx) => applyCoins(tx, { userId: me.userId, delta: 30, reason: 'grant', now: NOW }));
+    const zero = { boardId: 'pinball', score: 500, coins: 0, idempotencyKey: 'zero-coins-30' };
+    const zeroFirst = await send(db, me.userId, zero, t.next());
+    assert.deepEqual(zeroFirst, { boardId: 'pinball', recordValue: 500, isBest: true, firstClear: false, coins: 0, balance: 30, replayed: false });
+    assert.deepEqual(await send(db, me.userId, zero, t.now()), { ...zeroFirst, replayed: true });
+    // 코인이 0이었던 판은 가리키는 코인 기록이 없다: 그 뒤에 잔액이 변했으면 지금 잔액을 준다 (그 판은 잔액을 바꾸지 않았다)
+    await db.transaction((tx) => applyCoins(tx, { userId: me.userId, delta: 12, reason: 'grant', now: NOW }));
+    assert.deepEqual(await send(db, me.userId, zero, t.now()), { ...zeroFirst, balance: 42, replayed: true });
+
+    // 같은 키로 순위표만 바꿔 보낸 것: 점수와 코인이 같아도 다른 내용이다
+    const pinball = { boardId: 'pinball', score: 700, coins: 5, idempotencyKey: 'same-values-01' };
+    const first = await send(db, me.userId, pinball, t.next());
+    assert.deepEqual([first.boardId, first.recordValue, first.balance], ['pinball', 700, 47]);
+    const before = await counts(db, me.userId);
+    await assert.rejects(send(db, me.userId, { ...pinball, boardId: 'breakout' }, t.next()), rule(409, 'idempotency_mismatch'));
+    assert.deepEqual(await counts(db, me.userId), before, '판도 코인도 늘지 않았다');
+    assert.deepEqual(await boardStats(db, me.userId).then((b) => b.breakout), undefined, '벽돌깨기에 기록이 생기지 않았다');
+  } finally {
+    await close();
+  }
+});
+
+test('다시 보낸 판은 순위표의 지금 상한·범위로 다시 재지 않는다 (그사이 운영자가 순위표를 고쳐도 처음 답을 받는다)', async () => {
+  const { db, close } = await setup();
+  try {
+    const me = await loginGuest(db, NOW);
+    const t = ticking();
+    const run = { boardId: 'pinball', score: 31000, coins: 300, idempotencyKey: 'before-update-1' };
+    const first = await send(db, me.userId, run, t.now());
+    assert.equal(first.balance, 300);
+    const sprint = { boardId: 'pinball.sprint', won: true, seconds: 50, coins: 40, idempotencyKey: 'before-update-2' };
+    const sprintFirst = await send(db, me.userId, sprint, t.next());
+
+    // 판당 코인 상한과 값의 범위를 처음 판보다 좁게 고친다
+    await db.transaction(async (tx) => {
+      await updateBoard(tx, 'pinball', { maxCoinsPerRun: 100, maxValue: 1000 });
+      await updateBoard(tx, 'pinball.sprint', { maxCoinsPerRun: 10, minValue: 100 });
+    });
+    assert.deepEqual(await send(db, me.userId, run, t.now()), { ...first, replayed: true });
+    assert.deepEqual(await send(db, me.userId, sprint, t.now()), { ...sprintFirst, replayed: true });
+    assert.deepEqual(await counts(db, me.userId), { runs: 2, records: 2, ledger: 2, balance: 340 });
+
+    // 내용이 다르면 여전히 거절한다. 새 판은 고친 상한을 따른다
+    await assert.rejects(send(db, me.userId, { ...run, coins: 301 }, t.now()), rule(409, 'idempotency_mismatch'));
+    await assert.rejects(send(db, me.userId, { ...run, coins: '300' }, t.now()), rule(409, 'idempotency_mismatch'));
+    await assert.rejects(send(db, me.userId, { ...run, score: 31001 }, t.now()), rule(409, 'idempotency_mismatch'));
+    await assert.rejects(send(db, me.userId, { ...run, score: 1.5 }, t.now()), rule(400, 'invalid_score'), '모양이 틀린 값은 그대로 400이다');
+    await assert.rejects(send(db, me.userId, { boardId: 'pinball', score: 500, coins: 300 }, t.next()), rule(400, 'invalid_coins'));
+    await assert.rejects(send(db, me.userId, { boardId: 'pinball', score: 31000, coins: 0 }, t.next()), rule(400, 'invalid_score'));
+  } finally {
+    await close();
+  }
+});
+
+test('같은 키가 이미 다른 코인 기록에 쓰였으면 판을 반영하지 않고, 판과 코인 기록이 어긋나 있으면 코인을 또 주지 않는다', async () => {
+  const { db, close } = await setup();
+  try {
+    const me = await loginGuest(db, NOW);
+    const t = ticking();
+    // 같은 키·같은 코인의 'run' 기록이 판 없이 먼저 있다 (판을 거치지 않은 쓰기): 코인이 들어가지 않으니 판도 남기지 않는다
+    await db.transaction((tx) => applyCoins(tx, { userId: me.userId, delta: 45, reason: 'run', idempotencyKey: 'ledger-only-key', now: NOW }));
+    await assert.rejects(send(db, me.userId, { boardId: 'pinball', score: 100, coins: 45, idempotencyKey: 'ledger-only-key' }, t.now()), rule(409, 'idempotency_mismatch'));
+    // 같은 키를 다른 까닭(구매 등)이나 다른 코인으로 쓴 경우는 wallet이 거절한다
+    await db.transaction((tx) => applyCoins(tx, { userId: me.userId, delta: -10, reason: 'purchase', idempotencyKey: 'purchase-key-01', now: NOW }));
+    await assert.rejects(send(db, me.userId, { boardId: 'pinball', score: 100, coins: 45, idempotencyKey: 'purchase-key-01' }, t.now()), rule(409, 'idempotency_mismatch'));
+    assert.deepEqual(await counts(db, me.userId), { runs: 0, records: 0, ledger: 2, balance: 35 });
+
+    // 판이 가리키는 코인 기록을 SQL로 다른 줄로 바꿔 놓는다: 다시 보낸 판은 실패하고(500) 코인이 또 들어가지 않는다
+    const run = { boardId: 'pinball', score: 100, coins: 20, idempotencyKey: 'tampered-run-1' };
+    assert.equal((await send(db, me.userId, run, t.now())).balance, 55);
+    await db.execute(sql`update app.runs set ledger_id = (select min(id) from app.coin_ledger where user_id = ${me.userId}) where idempotency_key = 'tampered-run-1'`);
+    await assert.rejects(send(db, me.userId, run, t.now()), /어긋났어요/);
+    // 코인 기록의 키를 지워 놓으면 applyCoins가 새로 넣으려 한다: 그것도 되돌린다
+    await db.execute(sql`update app.coin_ledger set idempotency_key = null where idempotency_key = 'tampered-run-1'`);
+    await assert.rejects(send(db, me.userId, run, t.now()), /어긋났어요/);
+    assert.deepEqual(await counts(db, me.userId), { runs: 1, records: 1, ledger: 3, balance: 55 });
+    assert.deepEqual(await verifyWallets(db), []);
+  } finally {
+    await close();
+  }
+});
+
 test('코인 반영이 실패하면 판도 기록도 남지 않는다', async () => {
   const { db, close } = await setup();
   try {
@@ -530,6 +635,19 @@ test('purgeUser는 그 사용자의 판과 기록만 지우고, 계정 삭제는
     await deleteAccount(db, me.userId, policy, t.next());
     assert.deepEqual(await counts(db, me.userId), { runs: 0, records: 0, ledger: 0, balance: null });
     assert.deepEqual(await counts(db, other.userId), { runs: 1, records: 1, ledger: 1, balance: 50 }, '다른 사용자의 것은 그대로다');
+
+    assert.deepEqual((await leaderboard(db, 'pinball', 50, null)).top.map((r) => r.value), [200], '지운 사용자의 기록이 순위표에서 빠진다');
+
+    // 현금 주문 때문에 사용자 행이 deleted로 남는 삭제도 판과 기록을 지우고 순위표에서 빠진다
+    const kept = await loginGuest(db, NOW);
+    await send(db, kept.userId, { boardId: 'pinball', score: 900, coins: 10 }, t.next());
+    assert.deepEqual((await leaderboard(db, 'pinball', 50, null)).top.map((r) => r.value), [900, 200]);
+    await deleteAccount(db, kept.userId, { mustKeepUserRow: async () => true, purge: [purgeUser, purgeWallet] }, t.next());
+    assert.deepEqual(await counts(db, kept.userId), { runs: 0, records: 0, ledger: 0, balance: null });
+    assert.deepEqual((await leaderboard(db, 'pinball', 50, kept.userId)).top.map((r) => r.value), [200]);
+    assert.equal((await leaderboard(db, 'pinball', 50, kept.userId)).mine, null);
+    assert.deepEqual(await boardStats(db, kept.userId), {});
+    await assert.rejects(send(db, kept.userId, { boardId: 'pinball', score: 100, coins: 40 }, t.next()), rule(401, 'unauthorized'), '행만 남은 사용자도 판을 낼 수 없다');
 
     // 지워진 사용자의 세션으로 온 판 결과는 401이고 아무것도 붙지 않는다
     await assert.rejects(send(db, me.userId, { boardId: 'pinball', score: 100, coins: 40 }, t.next()), rule(401, 'unauthorized'));

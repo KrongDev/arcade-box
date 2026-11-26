@@ -5,6 +5,7 @@ import { RuleError } from '../shared/errors.ts';
 import { idempotencyKey as checkKey, obj } from '../shared/validate.ts';
 import { applyCoins, lockWallet } from '../wallet/index.ts';
 import {
+  boardsRequiring,
   countBetter,
   deleteUserRows,
   findRunByKey,
@@ -47,7 +48,7 @@ import {
   type RunResult,
   type Standing,
 } from './rules.ts';
-import { checkValidatorParams, findValidator } from './validators.ts';
+import { canBeCleared, checkValidatorParams, findValidator } from './validators.ts';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -78,26 +79,33 @@ function readRun(board: Board, body: Record<string, unknown>): { coins: number; 
  * 같은 키로 다시 온 판: 새로 반영하지 않고 처음 답을 다시 만들어 준다 (Review Focus 2).
  * 내용이 처음과 다르면 `409 idempotency_mismatch`. 견주는 것은 판에 남긴 값이다: 순위표, 코인, 값·시간·깼는지, 게임 버전.
  *
+ * 처음 보낼 때 이미 통과한 판이라 순위표의 지금 상한과 범위(`max_coins_per_run`, `min_value`~`max_value`)로 다시 재지 않는다:
+ * 그사이 운영자가 순위표를 고쳤어도 처음 답을 받는다 (코인은 이미 들어갔는데 앱이 실패로 알게 되지 않게).
+ * 값의 모양(정수인지, 판이 말이 되는지)은 검증기가 그대로 본다. 지뢰찾기의 판 크기(`validator_params`)를 그사이 고쳤다면
+ * 다시 계산한 점수가 달라져 거절될 수 있다 — 판에 원문을 남기지 않아서 이것까지는 되살리지 못한다.
+ *
  * 처음 답은 저장해 두지 않고 다시 계산한다: `isBest`·`firstClear`는 그 판보다 앞선 판들에서
  * (`standingBefore`), 잔액은 그 판의 코인 기록에서 (`applyCoins`가 같은 키에 처음 결과를 준다). 그 뒤에 더 좋은 기록을 냈거나
  * 코인이 변했어도 처음과 같다. 코인이 0이었던 판은 가리키는 코인 기록이 없어서 지금 잔액을 준다 (그 판은 잔액을 바꾸지 않았다).
  */
 async function replay(tx: Tx, a: { userId: string; board: Board; first: RunRow; body: Record<string, unknown>; key: string; balance: number; now: Date }): Promise<RunOutcome> {
   const { userId, board, first } = a;
-  if (first.boardId !== board.id) throw idempotencyMismatch();
-  const { coins, result, gameVersion } = readRun(board, a.body);
-  if (coins !== first.coins || result.value !== first.value || result.seconds !== first.seconds || result.won !== first.won || gameVersion !== first.gameVersion) {
+  if (first.boardId !== board.id || a.body.coins !== first.coins) throw idempotencyMismatch();
+  const validator = findValidator(board.validator);
+  if (!validator) throw boardUnavailable();
+  const result = validator({ ...board, minValue: Number.NEGATIVE_INFINITY, maxValue: Number.POSITIVE_INFINITY }, a.body);
+  if (result.value !== first.value || result.seconds !== first.seconds || result.won !== first.won || checkGameVersion(a.body.gameVersion) !== first.gameVersion) {
     throw idempotencyMismatch();
   }
   const { isBest, firstClear } = applyResult(board.ordering, await standingBefore(tx, userId, board.id, board.ordering, first.id), result);
   let balance = a.balance;
   if (first.ledgerId !== null) {
-    const paid = await applyCoins(tx, { userId, delta: coins, reason: 'run', idempotencyKey: a.key, now: a.now });
+    const paid = await applyCoins(tx, { userId, delta: first.coins, reason: 'run', idempotencyKey: a.key, now: a.now });
     // 판이 가리키는 코인 기록이 그 키의 기록이 아니면 자료가 어긋난 것이다. 던져서 방금 한 일을 되돌린다 (코인을 또 주지 않는다)
     if (!paid.replayed || paid.ledgerId !== first.ledgerId) throw new Error('판과 코인 기록이 어긋났어요');
     balance = paid.balance;
   }
-  return { boardId: board.id, recordValue: first.value, isBest, firstClear, coins, balance, replayed: true };
+  return { boardId: board.id, recordValue: first.value, isBest, firstClear, coins: first.coins, balance, replayed: true };
 }
 
 /**
@@ -177,12 +185,15 @@ export interface Leaderboard {
 /**
  * 순위표 (스펙 5.9 `GET /v2/leaderboards/:boardId`, 표 K16): 위쪽 `limit`명(1~100)과, 로그인했으면 내 순위.
  * 같은 값이면 먼저 낸 사람이 앞이고 등수는 같다. 이름은 사용자 ID로 만든 가명이고 사용자 ID는 내보내지 않는다.
- * 없는 순위표는 `404 unknown_board`, `limit`이 범위 밖이면 `400 invalid_limit`.
+ * 없는 순위표와 아직 내보내지 않은(draft) 게임의 순위표는 `404 unknown_board`, `limit`이 범위 밖이면 `400 invalid_limit`.
  */
 export async function leaderboard(db: Db, boardId: string, limit: number, userId: string | null): Promise<Leaderboard> {
   const n = checkLimit(limit);
   const board = isBoardId(boardId) ? await readBoard(db, boardId) : null;
   if (!board) throw unknownBoard(404);
+  // 아직 내보내지 않은(draft) 게임의 순위표는 없는 것이다: 목록과 묶음처럼 출시 전의 것을 내보이지 않는다.
+  // 내린(retired) 게임의 순위표는 쌓인 기록을 볼 수 있게 그대로 보여 준다
+  if ((await getGame(db, board.gameId))?.status === 'draft') throw unknownBoard(404);
   const top = ranked(await topRecords(db, board.id, board.ordering, n)).map((r) => ({ rank: r.rank, name: nickname(r.userId), value: r.value, me: r.userId === userId }));
   let mine: Leaderboard['mine'] = null;
   if (userId !== null && UUID.test(userId)) {
@@ -246,7 +257,10 @@ export function checkBoard(b: Board): Board {
   return { ...shape, validator: b.validator, validatorParams: checkValidatorParams(b.validator, b.validatorParams) };
 }
 
-/** 앞 단계가 있는 같은 게임의 순위표인지, 따라가다 자기에게 돌아오지 않는지 */
+/**
+ * 앞 단계가 있는 같은 게임의 순위표인지, 깰 수 있는 순위표인지, 따라가다 자기에게 돌아오지 않는지.
+ * 단계는 앞 순위표를 깬 적이 있어야 열리므로(`cleared_at`), 깰 수 없는 순위표를 앞 단계로 두면 영영 열리지 않는다.
+ */
 async function checkRequires(tx: Tx, board: Board): Promise<void> {
   let next = board.requiresBoardId;
   for (let depth = 0; next !== null; depth++) {
@@ -254,14 +268,26 @@ async function checkRequires(tx: Tx, board: Board): Promise<void> {
     if (!found) throw noBoard();
     if (found.gameId !== board.gameId) throw invalidRequires('앞 단계는 같은 게임의 순위표여야 해요');
     if (found.id === board.id || depth > 100) throw invalidRequires('앞 단계가 돌고 돌아요');
+    if (depth === 0 && !canBeCleared(found)) {
+      throw invalidRequires(`앞 단계는 깰 수 있는 순위표여야 해요 (지뢰찾기 검증기이거나 시간 순위표). ${found.id}은 점수만 재서 깬다는 것이 없고, 앞 단계로 두면 이 단계가 열리지 않아요`);
+    }
     next = found.requiresBoardId;
+  }
+}
+
+/** 깰 수 없는 순위표가 되는데 다른 순위표가 이것을 앞 단계로 두고 있으면 그 단계들이 막힌다: `409 required_by_boards` */
+async function checkStillClearable(tx: Tx, board: Board): Promise<void> {
+  if (canBeCleared(board)) return;
+  const blocked = await boardsRequiring(tx, board.id);
+  if (blocked.length > 0) {
+    throw new RuleError(409, 'required_by_boards', `${blocked.join(', ')}이 이 순위표를 앞 단계로 두고 있어요. 깰 수 없는 순위표로 바꾸면 그 단계가 열리지 않아요. 먼저 그 순위표의 앞 단계를 바꿔 주세요`);
   }
 }
 
 /**
  * 순위표를 만든다 (`board add`). 칸이 틀리면 `400 invalid_<칸>`, 모르는 검증기면 `400 unknown_validator`,
  * 검증기 설정이 틀리면 `400 invalid_validator_params`, 없는 게임이나 없는 앞 단계면 `404 not_found`,
- * 앞 단계가 다른 게임의 것이면 `400 invalid_requires`, 같은 ID가 있으면 `409 already_exists`.
+ * 앞 단계가 다른 게임의 것이거나 깰 수 없는 순위표면 `400 invalid_requires`, 같은 ID가 있으면 `409 already_exists`.
  */
 export async function createBoard(tx: Tx, input: NewBoard): Promise<void> {
   const board = checkBoard({
@@ -287,7 +313,8 @@ const PATCH_KEYS = ['label', 'minValue', 'maxValue', 'maxCoinsPerRun', 'requires
 /**
  * 순위표를 고친다 (`board update`). 적은 것만 바꾸고, 바꾼 뒤의 한 줄 전체를 다시 확인한다
  * (범위, 검증기와 그 설정의 짝, 앞 단계). 고칠 것이 없으면 `400 nothing_to_update`, `id`·`gameId`·`ordering`을
- * 바꾸려 하면 `400 not_updatable`, 없는 순위표면 `404 not_found`. 그 밖의 거절은 `createBoard`와 같다.
+ * 바꾸려 하면 `400 not_updatable`, 없는 순위표면 `404 not_found`, 다른 순위표가 앞 단계로 둔 순위표를 깰 수 없는 검증기로
+ * 바꾸려 하면 `409 required_by_boards`. 그 밖의 거절은 `createBoard`와 같다.
  */
 export async function updateBoard(tx: Tx, id: string, patch: BoardPatch): Promise<void> {
   const boardId = checkBoardId(id);
@@ -302,6 +329,7 @@ export async function updateBoard(tx: Tx, id: string, patch: BoardPatch): Promis
   if (!current) throw noBoard();
   const board = checkBoard({ ...current, ...changes } as Board);
   await checkRequires(tx, board);
+  await checkStillClearable(tx, board);
   await writeBoard(tx, board);
 }
 

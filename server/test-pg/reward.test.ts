@@ -55,7 +55,7 @@ test('같은 날 출석을 동시에 5번 보내면 하나만 성공한다', { s
       const out = await together(times(5, () => claimAttendance(db, me.userId, NOON)));
       assert.equal(out.ok.length, 1, `${round}번째: ${JSON.stringify(out.failed)}`);
       assert.deepEqual(out.failed, ['409 already_claimed', '409 already_claimed', '409 already_claimed', '409 already_claimed'], `${round}번째: 500이 아니라 이미 받았다는 거절이다`);
-      assert.deepEqual(out.ok[0], { coins: 50, balance: 50 });
+      assert.deepEqual(out.ok[0], { coins: 50, balance: 50, replayed: false });
       assert.deepEqual(await counts(db, me.userId), { claims: 1, ledger: 1, balance: 50 }, `${round}번째: 코인은 한 번만 들어갔다`);
     }
     assert.deepEqual(await verifyWallets(db), []);
@@ -141,6 +141,33 @@ test('차례를 서지 않은 쓰기와 겹쳐 유일 제약에 걸리면 500이
       assert.equal(failure((settled as PromiseRejectedResult).reason), kind === 'attendance' ? '409 already_claimed' : '429 daily_limit', kind);
       assert.deepEqual(await counts(db, me.userId), { claims: 1, ledger: 0, balance: null }, `${kind}: 코인이 들어가지 않았다`);
     }
+    assert.deepEqual(await verifyWallets(db), []);
+  } finally {
+    await close();
+  }
+});
+
+test('같은 키의 광고 보상을 동시에 5번 보내면 한 번만 반영된다', { skip: SKIP }, async () => {
+  const { db, close } = await pgTestDb();
+  try {
+    for (let round = 0; round < 8; round++) {
+      const me = await loginGuest(db, NOON);
+      // 홀수 번째는 두 번을 먼저 받아 둔다: 마지막 한 번을 같은 키로 5번 보내도 한도 오류 없이 모두 그 성공을 받는다
+      const already = round % 2 === 1 ? 2 : 0;
+      for (let i = 0; i < already; i++) await claimAdReward(db, me.userId, NOON);
+      const out = await together(times(5, () => claimAdReward(db, me.userId, NOON, { idempotencyKey: `same-ad-key-${round}` })));
+      assert.deepEqual(out.failed, [], `${round}번째: 다시 보낸 요청은 거절되지 않는다`);
+      assert.equal(out.ok.filter((r) => !r.replayed).length, 1, `${round}번째: 처음 반영된 것은 하나다`);
+      for (const r of out.ok) assert.deepEqual({ ...r, replayed: false }, { coins: 50, balance: 50 * (already + 1), left: 2 - already, replayed: false }, `${round}번째: 모두 같은 답이다`);
+      assert.deepEqual(await counts(db, me.userId), { claims: already + 1, ledger: already + 1, balance: 50 * (already + 1) }, `${round}번째`);
+      assert.equal((await rewardStatus(db, me.userId, NOON)).adRewardsLeft, 2 - already);
+    }
+    // 출석도 같다
+    const me = await loginGuest(db, NOON);
+    const out = await together(times(5, () => claimAttendance(db, me.userId, NOON, { idempotencyKey: 'same-attendance-key' })));
+    assert.deepEqual(out.failed, []);
+    assert.equal(out.ok.filter((r) => !r.replayed).length, 1);
+    assert.deepEqual(await counts(db, me.userId), { claims: 1, ledger: 1, balance: 50 });
     assert.deepEqual(await verifyWallets(db), []);
   } finally {
     await close();

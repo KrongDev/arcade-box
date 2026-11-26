@@ -39,6 +39,12 @@ export async function readBoards(q: Q, gameId?: string): Promise<Board[]> {
     .orderBy(asc(boards.gameId), asc(boards.sortOrder), asc(boards.id));
 }
 
+/** 이 순위표를 앞 단계로 둔 순위표의 ID (ID 순서) */
+export async function boardsRequiring(q: Q, id: string): Promise<string[]> {
+  const rows = await q.select({ id: boards.id }).from(boards).where(eq(boards.requiresBoardId, id)).orderBy(asc(boards.id));
+  return rows.map((r) => r.id);
+}
+
 /** 순위표를 넣는다. 같은 ID가 있으면 넣지 않고 거짓 */
 export async function insertBoard(tx: Tx, board: Board): Promise<boolean> {
   const created = await tx.insert(boards).values(board).onConflictDoNothing().returning({ id: boards.id });

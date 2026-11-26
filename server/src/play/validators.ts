@@ -138,6 +138,16 @@ export function findValidator(name: string): Validator | null {
   return Object.hasOwn(VALIDATORS, name) ? VALIDATORS[name] : null;
 }
 
+/**
+ * 이 순위표에 "깬다"가 있는가: 판의 `won`이 참이 될 수 있는가. 다음 단계(`requires_board_id`)는 앞 단계를 깨야 열리므로
+ * 깰 수 없는 순위표를 앞 단계로 두면 그 단계가 영영 열리지 않는다.
+ * 지뢰찾기는 깰 수 있고, `caps`는 시간 순위표(lower)만 깰 수 있다 (점수만 재는 higher에는 깬다는 것이 없다). 모르는 검증기는 알 수 없으니 아니다.
+ */
+export function canBeCleared(board: Pick<Board, 'validator' | 'ordering'>): boolean {
+  if (board.validator === 'minesweeper') return true;
+  return board.validator === 'caps' && board.ordering === 'lower';
+}
+
 const invalidParams = (message: string) => new RuleError(400, 'invalid_validator_params', message);
 
 /**

@@ -162,7 +162,7 @@
 
 | 테이블 | 열 | 제약 |
 |---|---|---|
-| `reward_claims` | `id` bigint PK · `user_id` → users · `kind` ('attendance', 'ad_reward') · `claim_date` date (한국 날짜) · `seq` int · `ledger_id` → coin_ledger · `created_at` | UNIQUE(user_id, kind, claim_date, seq) |
+| `reward_claims` | `id` bigint PK · `user_id` → users · `kind` ('attendance', 'ad_reward') · `claim_date` date (한국 날짜) · `seq` int · `ledger_id`? → coin_ledger · `idempotency_key`? · `created_at` | UNIQUE(user_id, kind, claim_date, seq) · UNIQUE(user_id, idempotency_key) |
 | `app_config` | `key` PK · `value` jsonb · `updated_at` | |
 | `admin_actions` | `id` bigint PK · `actor` · `action` · `target_user_id`? uuid · `target_ref`? · `params` jsonb · `reason` · `created_at` | 외래 키를 걸지 않아요 (사용자가 지워져도 기록은 남아요) |
 
@@ -432,6 +432,7 @@ server/test/        src와 같은 이름의 디렉토리
 - 코인으로 산 것도 주문으로 남겨요.
 - 게임 묶음은 로그인한 사용자에게 서버가 직접 내려 주고, 운영자 컴퓨터의 키로 서명해요. 아이콘은 서버가 따로 내려 줘요.
 - 출석·광고 보상 숫자는 설정 테이블에 두고, 새 게임의 검증은 범위 확인(caps)으로 해요.
+- 보상 코인 설정이 0이면 코인 기록 없이 받은 것으로만 적어요.
 - v1 테이블은 지우지 않고 두고, v1 API와 토스 연결 코드는 지워요.
 - 안드로이드 테스터의 예전 기기 저장은 가져오지 않아요 (지어낸 저장으로 코인과 게임을 얻을 수 있어서). 보상은 운영자 지급으로 해요.
 - 계정을 지울 때 현금 주문만 5년 남겨요.

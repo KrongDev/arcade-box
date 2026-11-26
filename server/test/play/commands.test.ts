@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { adminActions } from '../../src/admin/schema.ts';
-import { commands, listBoards } from '../../src/play/index.ts';
+import { commands, listBoards, updateBoard } from '../../src/play/index.ts';
 import { boards } from '../../src/play/schema.ts';
 import { runCli } from '../../src/shared/cli/index.ts';
 import type { Db } from '../../src/shared/db/index.ts';
@@ -157,9 +157,9 @@ test('board update는 적은 것만 고치고 admin_actions에 남는다', async
     // 판 크기만 바꾼다
     assert.equal((await run(db, ['board', 'update', 'minesweeper.easy', '--params', '{"safe":71,"mines":9,"par":180}', '--reason', '판 크기', '--yes'])).code, 0);
     assert.deepEqual((await row('minesweeper.easy')).validatorParams, { safe: 71, mines: 9, par: 180 });
-    // 검증기를 caps로 바꾸면 설정도 함께 비운다
-    assert.equal((await run(db, ['board', 'update', 'minesweeper.easy', '--validator', 'caps', '--params', 'none', '--reason', '범위만', '--yes'])).code, 0);
-    assert.deepEqual([(await row('minesweeper.easy')).validator, (await row('minesweeper.easy')).validatorParams], ['caps', null]);
+    // 검증기를 caps로 바꾸면 설정도 함께 비운다 (중급은 이제 아무도 앞 단계로 두지 않는다)
+    assert.equal((await run(db, ['board', 'update', 'minesweeper.normal', '--validator', 'caps', '--params', 'none', '--reason', '범위만', '--yes'])).code, 0);
+    assert.deepEqual([(await row('minesweeper.normal')).validator, (await row('minesweeper.normal')).validatorParams], ['caps', null]);
     assert.equal((await actions(db)).length, 5);
 
     const bad: Array<[string, string[]]> = [
@@ -178,6 +178,16 @@ test('board update는 적은 것만 고치고 admin_actions에 남는다', async
       ['게임은 못 바꿈', ['board', 'update', 'pinball', '--game', 'breakout', '--reason', 'x', '--yes']],
     ];
     for (const [why, argv] of bad) assert.equal((await run(db, argv)).code, 1, why);
+    // 못 바꾸는 칸은 다른 것과 함께 적어도 조용히 버리지 않고 통째로 거절한다
+    for (const fixed of [['--ordering', 'lower'], ['--game', 'breakout']]) {
+      const out = await run(db, ['board', 'update', 'pinball', ...fixed, '--label', '몰래 바꾼 이름', '--reason', 'x', '--yes']);
+      assert.equal(out.code, 1, fixed[0]);
+      assert.match(out.text, /바꿀 수 없어요/, fixed[0]);
+      assert.deepEqual(out.questions, []);
+    }
+    assert.equal((await row('pinball')).label, '핀볼 점수', '이름도 바뀌지 않았다');
+    await assert.rejects(db.transaction((tx) => updateBoard(tx, 'pinball', { label: 'x', ordering: 'lower' } as never)), rule(400, 'not_updatable'));
+    await assert.rejects(db.transaction((tx) => updateBoard(tx, 'pinball', { label: 'x', gameId: 'breakout' } as never)), rule(400, 'not_updatable'));
     assert.equal((await actions(db)).length, 5, '거절된 명령은 운영 기록을 남기지 않는다');
     assert.deepEqual([(await row('pinball')).minValue, (await row('pinball')).maxValue, (await row('pinball')).ordering, (await row('pinball')).gameId], [0, 5_000_000, 'higher', 'pinball']);
   } finally {
@@ -202,6 +212,48 @@ test('board list는 읽기만 하고 운영 기록을 남기지 않는다', asyn
     assert.equal((await run(db, ['board', 'list', '../x'])).code, 1);
     assert.deepEqual(await actions(db), []);
     assert.deepEqual(all.questions, [], '확인을 묻지 않는다');
+  } finally {
+    await close();
+  }
+});
+
+test('앞 단계는 깰 수 있는 순위표여야 한다: 깰 수 없는 순위표를 앞 단계로 두면 그 단계가 영영 열리지 않는다', async () => {
+  const { db, close } = await setup();
+  try {
+    const row = async (id: string) => (await boardRows(db)).find((b) => b.id === id);
+    const add = (id: string, requires: string, more: string[] = []) =>
+      run(db, ['board', 'add', id, '--game', 'pinball', '--label', '2단계', '--ordering', 'higher', '--min', '0', '--max', '100', '--max-coins', '10', '--requires', requires, ...more, '--reason', '단계', '--yes']);
+
+    // 점수만 재는 순위표(caps·higher)에는 "깬다"가 없다: 앞 단계로 둘 수 없다
+    const stuck = await add('pinball.stage2', 'pinball');
+    assert.equal(stuck.code, 1);
+    assert.match(stuck.text, /깰 수 있는 순위표/);
+    assert.equal(await row('pinball.stage2'), undefined);
+    await assert.rejects(
+      db.transaction((tx) => updateBoard(tx, 'breakout', { requiresBoardId: 'breakout' })),
+      rule(400, 'invalid_requires'),
+    );
+    const viaUpdate = await run(db, ['board', 'update', 'pinball.sprint', '--requires', 'pinball', '--reason', 'x', '--yes']);
+    assert.equal(viaUpdate.code, 1);
+    assert.match(viaUpdate.text, /깰 수 있는 순위표/);
+
+    // 시간 순위표(caps·lower)와 지뢰찾기는 깰 수 있다: 깨면 다음 단계가 열린다
+    assert.equal((await add('pinball.stage2', 'pinball.sprint')).code, 0);
+    const me = await loginGuest(db, NOW);
+    await assert.rejects(send(db, me.userId, { boardId: 'pinball.stage2', score: 1, coins: 0 }, NOW), rule(403, 'stage_locked'));
+    await send(db, me.userId, { boardId: 'pinball.sprint', won: true, seconds: 30, coins: 0 }, NOW);
+    assert.equal((await send(db, me.userId, { boardId: 'pinball.stage2', score: 1, coins: 0 }, new Date(NOW.getTime() + 5000))).recordValue, 1);
+
+    // 다른 순위표가 앞 단계로 둔 순위표는 깰 수 없는 검증기로 바꿀 수 없다 (뒤 단계가 막힌다)
+    const toCaps = await run(db, ['board', 'update', 'minesweeper.easy', '--validator', 'caps', '--params', 'none', '--reason', 'x', '--yes']);
+    assert.equal(toCaps.code, 1);
+    assert.match(toCaps.text, /minesweeper\.normal/, '어느 순위표가 막히는지 알려 준다');
+    assert.equal((await row('minesweeper.easy'))?.validator, 'minesweeper');
+    await assert.rejects(db.transaction((tx) => updateBoard(tx, 'minesweeper.normal', { validator: 'caps', validatorParams: null })), rule(409, 'required_by_boards'));
+    // 아무도 앞 단계로 두지 않은 순위표와, 깰 수 있는 채로 남는 변경은 된다
+    assert.equal((await run(db, ['board', 'update', 'minesweeper.hard', '--validator', 'caps', '--params', 'none', '--reason', 'x', '--yes'])).code, 0);
+    assert.equal((await run(db, ['board', 'update', 'minesweeper.easy', '--params', '{"safe":71,"mines":9,"par":180}', '--reason', 'x', '--yes'])).code, 0);
+    assert.equal((await run(db, ['board', 'update', 'pinball.sprint', '--max', '3600', '--reason', 'x', '--yes'])).code, 0);
   } finally {
     await close();
   }
