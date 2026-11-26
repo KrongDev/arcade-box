@@ -1,7 +1,7 @@
 import { requireActiveUser } from '../account/index.ts';
 import type { Db, Q, Tx } from '../shared/db/index.ts';
 import { idempotencyKey as checkKey } from '../shared/validate.ts';
-import { deleteCoins, findByKey, insertEntry, lockWallet, readBalance, selectEntries, selectMismatched, setBalance, type Mismatch } from './repo.ts';
+import { deleteCoins, findByKey, insertEntry, lockWallet as lockWalletRow, readBalance, selectEntries, selectMismatched, setBalance, type Mismatch } from './repo.ts';
 import { checkDelta, checkLedgerPage, idempotencyMismatch, nextBalance, sameRequest, type LedgerPage, type LedgerReason } from './rules.ts';
 
 /**
@@ -33,7 +33,7 @@ export async function applyCoins(
 
   // 계정 삭제와 겹치면 삭제가 끝나기를 기다렸다가 401로 끝난다. 잡지 않으면 지워진 사용자에 지갑이 붙는다
   await requireActiveUser(tx, userId);
-  const balance = await lockWallet(tx, userId, now);
+  const balance = await lockWalletRow(tx, userId, now);
 
   // 같은 키의 기록은 지갑을 잠근 뒤에 찾는다. 같은 키가 동시에 두 번 와도 뒤의 요청은 앞의 요청이 끝난 뒤
   // 여기에 오므로 앞에서 넣은 줄을 본다 (유일 제약에 부딪혀 500이 나는 일이 없다)
@@ -49,6 +49,21 @@ export async function applyCoins(
   const ledgerId = await insertEntry(tx, { userId, delta, balanceAfter: next, reason, adminActionId: input.adminActionId ?? null, idempotencyKey: key, now });
   await setBalance(tx, userId, next, now);
   return { ledgerId, balance: next, replayed: false };
+}
+
+/**
+ * 이 사용자의 지갑 행을 잠그고 지금 잔액을 준다. 코인은 바꾸지 않는다.
+ *
+ * 한 사용자의 요청을 차례로 세울 때 쓴다 (판 결과의 3초 간격, 보상의 하루 한도): 확인을 시작하기 전에 이것을 부르면
+ * 같은 사용자의 다른 요청은 이 트랜잭션이 끝날 때까지 여기서 기다린다. 코인이 0이라 `applyCoins`를 부르지 않는 요청도
+ * 같은 줄에 선다. 잠그는 순서는 `applyCoins`와 같다: 사용자 행 → 지갑 행 → 그 밖. 뒤에서 `applyCoins`를 불러도 된다.
+ *
+ * 지갑이 없으면 잔액 0인 지갑이 생긴다 (잠글 행이 있어야 해서). 코인 기록은 생기지 않고, 부른 쪽이 실패하면 지갑도 남지 않는다.
+ * `now`는 새로 생기는 지갑에 남는 시각이다. 없거나 지워진 사용자면 `401 unauthorized`.
+ */
+export async function lockWallet(tx: Tx, userId: string, now?: Date): Promise<number> {
+  await requireActiveUser(tx, userId);
+  return lockWalletRow(tx, userId, now);
 }
 
 /** 지금 잔액. 지갑이 없으면(코인을 받은 적이 없으면) 0 */

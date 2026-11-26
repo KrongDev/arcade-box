@@ -5,4 +5,4 @@
 export { commands } from './commands.ts';
 export { routes, type WalletDeps } from './routes.ts';
 export { MAX_BALANCE, type LedgerReason } from './rules.ts';
-export { applyCoins, getBalance, listLedger, purgeUser, verifyWallets, type LedgerEntry } from './service.ts';
+export { applyCoins, getBalance, listLedger, lockWallet, purgeUser, verifyWallets, type LedgerEntry } from './service.ts';

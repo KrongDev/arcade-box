@@ -16,7 +16,7 @@ const coins = (name: string) => bigint(name, { mode: 'number' });
 /**
  * 지갑: 사용자의 지금 잔액. 코인 기록 `delta`의 합을 일부러 중복해 둔 값이다 (스펙 5.3).
  * 코인을 처음 받을 때 행이 생긴다. 행이 없으면 잔액은 0이다.
- * 이 테이블과 `coin_ledger`에 쓰는 코드는 `applyCoins` 하나뿐이다.
+ * 이 테이블과 `coin_ledger`에 쓰는 코드는 `applyCoins` 하나뿐이다 (`lockWallet`은 잠글 행이 없을 때 잔액 0인 빈 지갑만 만든다).
  */
 export const wallets = app.table(
   'wallets',

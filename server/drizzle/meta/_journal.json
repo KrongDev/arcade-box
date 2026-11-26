@@ -50,6 +50,13 @@
       "when": 1795679951389,
       "tag": "0006_entitlement",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1795682663743,
+      "tag": "0007_play",
+      "breakpoints": true
     }
   ]
 }
