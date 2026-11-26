@@ -113,6 +113,8 @@ async function sendFile(res: ServerResponse, reply: FileReply) {
 function readBody(req: IncomingMessage): Promise<Buffer> {
   const tooLarge = () => new RuleError(413, 'body_too_large', '요청이 너무 커요');
   if (Number(req.headers['content-length'] ?? 0) > MAX_BODY) return Promise.reject(tooLarge());
+  const aborted = () => new RuleError(400, 'request_aborted', '요청이 중간에 끊겼어요');
+  if (req.destroyed) return Promise.reject(aborted());
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     let size = 0;
@@ -129,18 +131,21 @@ function readBody(req: IncomingMessage): Promise<Buffer> {
       done();
       resolve(Buffer.concat(chunks));
     };
-    const onError = (err: Error) => {
+    // 보내는 쪽이 중간에 끊었다. 답을 받을 곳이 없으니 조용히 끝낸다 (서버 잘못이 아니라 500으로 기록하지 않는다)
+    const onAbort = () => {
       done();
-      reject(err);
+      reject(aborted());
     };
     const done = () => {
       req.off('data', onData);
       req.off('end', onEnd);
-      req.off('error', onError);
+      req.off('error', onAbort);
+      req.off('close', onAbort);
     };
     req.on('data', onData);
     req.on('end', onEnd);
-    req.on('error', onError);
+    req.on('error', onAbort);
+    req.on('close', onAbort);
   });
 }
 
@@ -252,8 +257,12 @@ export function createHandler(routes: Route[], opts: HandlerOptions): (req: Inco
       return;
     }
 
-    const url = new URL(req.url ?? '/', 'http://localhost');
-    const parts = url.pathname.split('/');
+    // 주소는 `/경로?물음`만 받는다. URL로 풀지 않고 그대로 자른다 (`//`나 `..`을 고쳐 읽지 않으니 경로 표와 글자 그대로 견준다)
+    const target = req.url ?? '/';
+    const cut = target.indexOf('?');
+    const path = cut === -1 ? target : target.slice(0, cut);
+    const query = new URLSearchParams(cut === -1 ? '' : target.slice(cut + 1));
+    const parts = path.split('/');
     let found: { route: Route; params: Record<string, string> } | null = null;
     for (const entry of table) {
       if (entry.route.method !== method) continue;
@@ -281,8 +290,8 @@ export function createHandler(routes: Route[], opts: HandlerOptions): (req: Inco
     let body: Promise<unknown> | null = null;
     const result = await route.handle({
       method,
-      path: url.pathname,
-      query: url.searchParams,
+      path,
+      query,
       params,
       session: login?.session ?? null,
       tokenHash: login?.tokenHash ?? null,

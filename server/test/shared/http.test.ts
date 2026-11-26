@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import http, { type IncomingMessage, type ServerResponse } from 'node:http';
+import net, { type AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
@@ -104,6 +105,45 @@ test('없는 경로는 404 not_found', async () => {
     assert.equal(r.status, 404, `${method} ${path}`);
     assert.equal(errorOf(r.body).code, 'not_found');
     assert.match(errorOf(r.body).message, /요$/);
+  }
+});
+
+test('이상하게 생긴 요청 주소도 500이 아니라 4xx로 답한다', async (t) => {
+  const logged = t.mock.method(console, 'error', () => {});
+  const { handler, hits } = make();
+  for (const path of ['//', '///', '//evil.example.com/v2/open', '/v2//open', '/%', '/v2/open%00', '/v2/open/../open', '/v2/games/%2e%2e/versions/1/..']) {
+    const r = await call(handler, 'GET', path);
+    assert.equal(r.status, 404, path);
+    assert.equal(errorOf(r.body).code, 'not_found', path);
+  }
+  assert.deepEqual(hits, {});
+  // 물음표 뒤가 깨져 있어도 경로는 찾는다
+  assert.equal((await call(handler, 'GET', '/v2/open?x=%E0%A4%A&&=&y')).status, 200);
+  assert.equal((await call(handler, 'GET', '/v2/open?')).status, 200);
+  assert.equal(logged.mock.callCount(), 0);
+});
+
+test('본문을 다 보내기 전에 끊긴 요청은 조용히 끝난다 (500으로 기록하지 않는다)', async (t) => {
+  const logged = t.mock.method(console, 'error', () => {});
+  const { handler, hits } = make();
+  let handled = () => {};
+  const settled = new Promise<void>((resolve) => {
+    handled = resolve;
+  });
+  const server = http.createServer((req, res) => void handler(req, res).then(handled));
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const socket = net.connect((server.address() as AddressInfo).port, '127.0.0.1');
+    await new Promise<void>((resolve) => socket.once('connect', resolve));
+    socket.write('POST /v2/echo HTTP/1.1\r\nhost: localhost\r\ncontent-type: application/json\r\ncontent-length: 100\r\n\r\n{"a":');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    socket.destroy();
+    await settled;
+    assert.equal(hits['/v2/echo'], 1);
+    assert.equal(logged.mock.callCount(), 0);
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
   }
 });
 
