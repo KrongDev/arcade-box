@@ -87,6 +87,7 @@ export const boardRecords = app.table(
  * 판. 받아들인 판 결과마다 한 줄이 쌓이고 고치지 않는다 (`ledger_id`만 같은 트랜잭션에서 채운다).
  *
  * - `value`·`seconds`·`won`: 검증기가 읽어 낸 것 (`RunResult`). `value`가 null이면 기록이 아닌 판이다
+ * - `coins`: 이 판으로 실제로 들어간 코인. 하루 상한에 걸리면 앱이 보낸 것보다 적다 (0일 수도 있다)
  * - `ledger_id`: 이 판으로 번 코인의 기록. 코인이 0이면 null이다. 코인 기록이 왜 생겼는지는 이쪽이 가리킨다 (스펙 5.2)
  * - `idempotency_key`: 사용자마다 따로다. 같은 사용자의 같은 키는 한 줄뿐이고, 키가 없는(null) 줄은 몇 개든 된다
  */
@@ -114,6 +115,8 @@ export const runs = app.table(
     uniqueIndex('runs_user_idempotency_key').on(t.userId, t.idempotencyKey),
     // 이 사용자의 직전 판(3초 간격)과, 다시 보낸 판의 답을 만들 때 그 판보다 앞선 판들
     index('runs_user_id_id_idx').on(t.userId, t.id),
+    // 그날(한국 날짜) 판으로 번 코인의 합 — 하루 상한(`run_coins_per_day`)
+    index('runs_user_id_created_at_idx').on(t.userId, t.createdAt),
     // 계정을 지울 때 코인 기록을 지우면서 하는 외래 키 확인이 테이블 전체를 훑지 않게
     index('runs_ledger_id_idx').on(t.ledgerId),
   ],

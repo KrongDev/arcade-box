@@ -94,8 +94,17 @@ export async function own(db: Db, userId: string, ...gameIds: string[]): Promise
   });
 }
 
-/** 판 결과를 서비스에 바로 보낸다 */
-export const send = (db: Db, userId: string, input: unknown, now: Date) => submitRun(db, userId, input, now);
+/** 판 결과를 서비스에 바로 보낸다 (답 전체) */
+export const sendFull = (db: Db, userId: string, input: unknown, now: Date) => submitRun(db, userId, input, now);
+
+/**
+ * 판 결과를 보내고 답에서 `coinsLeftToday`(하루 상한까지 남은 코인)를 뺀 것을 준다.
+ * 하루 상한을 보지 않는 테스트가 쓴다: 그 테스트들의 판은 하루 상한(1,500)에 닿지 않는다. 상한은 `run-coins.test.ts`가 `sendFull`로 본다.
+ */
+export async function send(db: Db, userId: string, input: unknown, now: Date) {
+  const { coinsLeftToday: _left, ...rest } = await submitRun(db, userId, input, now);
+  return rest;
+}
 
 /** 지뢰찾기를 깬 판 (안전한 칸을 다 열고 지뢰에 깃발을 다 꽂음) */
 export const clearRun = (boardId: string, size: { safe: number; mines: number }, seconds = 60) => ({

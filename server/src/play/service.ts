@@ -1,7 +1,9 @@
+import { getNumber } from '../admin/index.ts';
 import { canPlayGame } from '../entitlement/index.ts';
 import { getGame, isGameId } from '../game/index.ts';
 import type { Db, Q, Tx } from '../shared/db/index.ts';
 import { RuleError } from '../shared/errors.ts';
+import { kstDayStart } from '../shared/time.ts';
 import { idempotencyKey as checkKey, obj } from '../shared/validate.ts';
 import { applyCoins, lockWallet } from '../wallet/index.ts';
 import {
@@ -19,6 +21,7 @@ import {
   readRecords,
   setRunLedger,
   standingBefore,
+  sumRunCoins,
   topRecords,
   writeBoard,
   writeRecord,
@@ -27,6 +30,7 @@ import {
 import {
   applyResult,
   boardUnavailable,
+  capCoins,
   checkBoardId,
   checkBoardShape,
   checkCoins,
@@ -51,6 +55,13 @@ import {
 import { canBeCleared, checkValidatorParams, findValidator } from './validators.ts';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** `at`이 든 한국 날짜에 이 사용자가 판으로 번 코인의 합. `throughRunId`를 주면 그 판까지만 */
+async function earnedOn(q: Q, userId: string, at: Date, throughRunId?: number): Promise<number> {
+  const start = kstDayStart(at);
+  return sumRunCoins(q, userId, start, new Date(start.getTime() + DAY_MS), throughRunId);
+}
 
 // ── 판 결과 ──────────────────────────────────────────────────
 
@@ -60,7 +71,10 @@ export interface RunOutcome {
   recordValue: number | null;
   isBest: boolean;
   firstClear: boolean;
+  /** 이 판으로 실제로 들어간 코인. 하루 상한에 걸리면 앱이 보낸 것보다 적다 (0일 수도 있다) */
   coins: number;
+  /** 이 판을 반영한 뒤, 오늘(한국 날짜) 판으로 더 벌 수 있는 코인. 하루 상한이 없으면 null */
+  coinsLeftToday: number | null;
   /** 이 판을 반영한 뒤의 잔액 */
   balance: number;
   /** 같은 키로 다시 보낸 요청이라 처음 답을 그대로 준 것이면 참 */
@@ -84,13 +98,24 @@ function readRun(board: Board, body: Record<string, unknown>): { coins: number; 
  * 값의 모양(정수인지, 판이 말이 되는지)은 검증기가 그대로 본다. 지뢰찾기의 판 크기(`validator_params`)를 그사이 고쳤다면
  * 다시 계산한 점수가 달라져 거절될 수 있다 — 판에 원문을 남기지 않아서 이것까지는 되살리지 못한다.
  *
- * 처음 답은 저장해 두지 않고 다시 계산한다: `isBest`·`firstClear`는 그 판보다 앞선 판들에서
- * (`standingBefore`), 잔액은 그 판의 코인 기록에서 (`applyCoins`가 같은 키에 처음 결과를 준다). 그 뒤에 더 좋은 기록을 냈거나
- * 코인이 변했어도 처음과 같다. 코인이 0이었던 판은 가리키는 코인 기록이 없어서 지금 잔액을 준다 (그 판은 잔액을 바꾸지 않았다).
+ * 코인: 판에는 실제로 들어간 코인만 남는다 (`runs.coins`). 하루 상한에 걸리지 않은 판은 보낸 코인이 그대로 들어간 것이라
+ * 같아야 하고, 상한에 걸린 판(그 판까지 그날 번 합이 상한에 닿은 판)은 보낸 코인이 들어간 것보다 많았을 수 있어서
+ * 들어간 것보다 적게 보낸 것만 다른 내용으로 가려낸다. 답의 `coins`는 처음에 들어간 코인 그대로다.
+ *
+ * 처음 답은 저장해 두지 않고 다시 계산한다: `isBest`·`firstClear`는 그 판보다 앞선 판들에서 (`standingBefore`),
+ * 남은 코인은 그 판까지 그날 번 합에서, 잔액은 그 판의 코인 기록에서 (`applyCoins`가 같은 키에 처음 결과를 준다).
+ * 그 뒤에 더 좋은 기록을 냈거나 코인이 변했어도 처음과 같다 (운영자가 그사이 하루 상한을 바꿨다면 남은 코인은 지금 상한으로 센다).
+ * 코인이 들어가지 않은 판은 가리키는 코인 기록이 없어서 지금 잔액을 준다 (그 판은 잔액을 바꾸지 않았다).
  */
 async function replay(tx: Tx, a: { userId: string; board: Board; first: RunRow; body: Record<string, unknown>; key: string; balance: number; now: Date }): Promise<RunOutcome> {
   const { userId, board, first } = a;
-  if (first.boardId !== board.id || a.body.coins !== first.coins) throw idempotencyMismatch();
+  const sent = a.body.coins;
+  if (first.boardId !== board.id || typeof sent !== 'number' || !Number.isSafeInteger(sent) || sent < first.coins) throw idempotencyMismatch();
+  const limit = await getNumber(tx, 'run_coins_per_day');
+  const earned = await earnedOn(tx, userId, first.createdAt, first.id);
+  const capped = limit > 0 && earned >= limit;
+  if (sent !== first.coins && !capped) throw idempotencyMismatch();
+
   const validator = findValidator(board.validator);
   if (!validator) throw boardUnavailable();
   const result = validator({ ...board, minValue: Number.NEGATIVE_INFINITY, maxValue: Number.POSITIVE_INFINITY }, a.body);
@@ -105,7 +130,8 @@ async function replay(tx: Tx, a: { userId: string; board: Board; first: RunRow; 
     if (!paid.replayed || paid.ledgerId !== first.ledgerId) throw new Error('판과 코인 기록이 어긋났어요');
     balance = paid.balance;
   }
-  return { boardId: board.id, recordValue: first.value, isBest, firstClear, coins: first.coins, balance, replayed: true };
+  const coinsLeftToday = limit === 0 ? null : Math.max(0, limit - earned);
+  return { boardId: board.id, recordValue: first.value, isBest, firstClear, coins: first.coins, coinsLeftToday, balance, replayed: true };
 }
 
 /**
@@ -118,6 +144,10 @@ async function replay(tx: Tx, a: { userId: string; board: Board; first: RunRow; 
  * 모르는 순위표 `400 unknown_board` → 할 수 없는 게임 `403 game_locked` (게임이 live이고 그 게임 상품을 가졌어야 한다 — 표 D4)
  * → 앞 단계를 안 깼으면 `403 stage_locked` → 직전 판에서 3초 안이면 `429 too_fast` → 코인이 0~판당 상한의 정수가 아니면
  * `400 invalid_coins` → 검증기의 확인 (`invalid_score`, `invalid_seconds`, `invalid_board_stats`).
+ *
+ * 하루(한국 날짜)에 판으로 벌 수 있는 코인은 설정값 `run_coins_per_day`까지다 (0이면 상한 없음). 판당 상한은 앱이 보낸 값에 보고,
+ * 하루 상한에 걸리면 판과 기록은 그대로 반영하되 코인만 남은 만큼(0일 수도 있다) 넣는다. 답의 `coins`와 `runs.coins`는
+ * 실제로 들어간 코인이고 `coinsLeftToday`는 그 뒤 오늘 남은 코인이다. 출석·광고 보상·운영자 지급·구매는 세지 않는다.
  *
  * **같은 사용자의 판 결과는 차례로 처리된다.** 확인을 시작하기 전에 사용자 행 → 지갑 행을 잡아서(`lockWallet`),
  * 동시에 온 요청은 앞의 것이 끝난 뒤에 "직전 판"과 "같은 키의 판"을 본다. 동시에 5개를 보내 3초 간격을 건너뛰거나
@@ -145,7 +175,11 @@ export async function submitRun(db: Db, userId: string, input: unknown, now: Dat
     if (!(await canPlayGame(tx, userId, board.gameId))) throw gameLocked();
     if (board.requiresBoardId !== null && !(await readRecord(tx, board.requiresBoardId, userId))?.clearedAt) throw stageLocked();
     if (tooSoon(await lastRunAt(tx, userId), now)) throw tooFast();
-    const { coins, result, gameVersion } = readRun(board, body);
+    const { coins: sent, result, gameVersion } = readRun(board, body);
+    // 하루 상한: 그날 판으로 번 합을 지갑을 잡은 뒤에 읽으므로 같은 사용자의 다른 판과 겹치지 않는다.
+    // 상한에 걸려도 판은 거절하지 않고 코인만 남은 만큼 넣는다
+    const limit = await getNumber(tx, 'run_coins_per_day');
+    const { coins, left } = capCoins(sent, limit, limit === 0 ? 0 : await earnedOn(tx, userId, now));
 
     const record = await readRecord(tx, board.id, userId);
     const prior: Standing = record ? { best: record.bestValue, bestSeconds: record.bestSeconds, cleared: record.clearedAt !== null } : NO_STANDING;
@@ -170,7 +204,7 @@ export async function submitRun(db: Db, userId: string, input: unknown, now: Dat
       await setRunLedger(tx, runId, paid.ledgerId);
       after = paid.balance;
     }
-    return { boardId: board.id, recordValue: result.value, isBest, firstClear, coins, balance: after, replayed: false };
+    return { boardId: board.id, recordValue: result.value, isBest, firstClear, coins, coinsLeftToday: left, balance: after, replayed: false };
   });
 }
 
@@ -201,6 +235,15 @@ export async function leaderboard(db: Db, boardId: string, limit: number, userId
     if (record && record.bestValue !== null) mine = { rank: (await countBetter(db, board.id, board.ordering, record.bestValue)) + 1, value: record.bestValue };
   }
   return { board: { id: board.id, label: board.label, ordering: board.ordering }, top, mine };
+}
+
+/**
+ * 오늘(한국 날짜) 판으로 번 코인과 하루 상한 (`/v2/me`의 `runCoins`). 상한이 없으면(설정 0) `limit`이 null이다. 읽기만 한다.
+ * 세는 것은 판 결과로 실제로 들어간 코인뿐이다 (출석·광고 보상·운영자 지급·구매는 세지 않는다).
+ */
+export async function runCoinStatus(q: Q, userId: string, now: Date): Promise<{ earnedToday: number; limit: number | null }> {
+  const limit = await getNumber(q, 'run_coins_per_day');
+  return { earnedToday: UUID.test(userId) ? await earnedOn(q, userId, now) : 0, limit: limit === 0 ? null : limit };
 }
 
 /** 이 사용자가 판을 낸 순위표마다의 최고 기록, 최고 시간(깬 판), 깬 적이 있는지 (`/v2/me`의 `boards`) */

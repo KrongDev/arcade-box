@@ -24,10 +24,16 @@ export async function audit(
 
 // ── 설정값 ──────────────────────────────────────────────────
 
-export type ConfigKey = 'attendance_coins' | 'ad_reward_coins' | 'ad_rewards_per_day';
+export type ConfigKey = 'attendance_coins' | 'ad_reward_coins' | 'ad_rewards_per_day' | 'run_coins_per_day';
 
-/** 처음 값은 v1과 같다: 출석 50코인, 광고 보상 50코인, 하루 3번 */
-export const CONFIG_DEFAULTS: Record<ConfigKey, number> = { attendance_coins: 50, ad_reward_coins: 50, ad_rewards_per_day: 3 };
+/** 출석·광고 보상의 처음 값은 v1과 같다: 출석 50코인, 광고 보상 50코인, 하루 3번. 하루에 판으로 버는 코인 상한은 v2에서 생겼다 */
+export const CONFIG_DEFAULTS: Record<ConfigKey, number> = {
+  attendance_coins: 50,
+  ad_reward_coins: 50,
+  ad_rewards_per_day: 3,
+  /** 하루(한국 날짜)에 판 결과로 벌 수 있는 코인의 상한. 0이면 상한이 없다 (운영자 결정 2026-11-26: 처음 값 1,500) */
+  run_coins_per_day: 1500,
+};
 
 const CONFIG_MAX = 100_000;
 

@@ -4,7 +4,8 @@ import type { Db } from '../src/shared/db/index.ts';
 import { RuleError } from '../src/shared/errors.ts';
 import { applyCoins, verifyWallets } from '../src/wallet/index.ts';
 import { loginGuest } from '../test/account/helpers.ts';
-import { counts, NOW, recordsOf, seedPlay, send } from '../test/play/helpers.ts';
+import { runCoinStatus } from '../src/play/index.ts';
+import { counts, NOW, recordsOf, seedPlay, send, sendFull } from '../test/play/helpers.ts';
 import { pgTestDb, SKIP } from './helpers.ts';
 
 function failure(reason: unknown): string {
@@ -108,6 +109,33 @@ test('서로 다른 사용자의 판 결과는 서로를 기다리게 하지 않
     const settled = await Promise.allSettled(people.map((p, i) => send(db, p.userId, { boardId: 'pinball', score: 100 + i, coins: 10 }, NOW)));
     assert.deepEqual(settled.flatMap((r) => (r.status === 'rejected' ? [failure(r.reason)] : [])), []);
     for (const p of people) assert.deepEqual(await counts(db, p.userId), { runs: 1, records: 1, ledger: 1, balance: 10 });
+  } finally {
+    await close();
+  }
+});
+
+test('하루 상한: 진짜 PostgreSQL에서도 그날(한국 날짜) 판으로 번 합까지만 코인이 들어가고, 깎인 판을 동시에 다시 보내도 한 번이다', { skip: SKIP }, async () => {
+  const { db, close } = await pgTestDb();
+  try {
+    await seedPlay(db);
+    const me = await loginGuest(db, NOW);
+    // 한국 23:59:40부터 5초 간격으로 400코인 판 넷: 1,500까지만 들어간다
+    const start = new Date('2026-11-26T14:59:40Z');
+    const got = [];
+    for (let i = 0; i < 4; i++) got.push(await sendFull(db, me.userId, { boardId: 'pinball', score: 100 + i, coins: 400 }, new Date(start.getTime() + i * 5000)));
+    assert.deepEqual(got.map((r) => [r.coins, r.coinsLeftToday, r.balance]), [[400, 1100, 400], [400, 700, 800], [400, 300, 1200], [300, 0, 1500]]);
+    assert.deepEqual(await runCoinStatus(db, me.userId, new Date('2026-11-26T14:59:59Z')), { earnedToday: 1500, limit: 1500 });
+    assert.deepEqual(await runCoinStatus(db, me.userId, new Date('2026-11-26T15:00:00Z')), { earnedToday: 0, limit: 1500 }, '한국 날짜가 바뀌면 다시 0이다');
+
+    // 다음 날 첫 판: 같은 키로 5번을 동시에 보내도 판과 코인은 한 번이다
+    const run = { boardId: 'pinball', score: 9000, coins: 400, idempotencyKey: 'next-day-run-01' };
+    const settled = await Promise.allSettled([1, 2, 3, 4, 5].map(() => sendFull(db, me.userId, run, new Date('2026-11-26T15:00:03Z'))));
+    assert.deepEqual(settled.flatMap((r) => (r.status === 'rejected' ? [failure(r.reason)] : [])), []);
+    const answers = settled.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []));
+    assert.equal(answers.filter((r) => !r.replayed).length, 1);
+    for (const r of answers) assert.deepEqual([r.coins, r.coinsLeftToday, r.balance], [400, 1100, 1900]);
+    assert.deepEqual(await counts(db, me.userId), { runs: 5, records: 1, ledger: 5, balance: 1900 });
+    assert.deepEqual(await verifyWallets(db), []);
   } finally {
     await close();
   }

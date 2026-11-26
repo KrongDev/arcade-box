@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, isNotNull, lt, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, isNotNull, lt, lte, sql } from 'drizzle-orm';
 import type { Q, Tx } from '../shared/db/index.ts';
 import type { Board, Ordering, Standing } from './rules.ts';
 import { boardRecords, boards, runs } from './schema.ts';
@@ -67,12 +67,13 @@ export interface RunRow {
   coins: number;
   ledgerId: number | null;
   gameVersion: number | null;
+  createdAt: Date;
 }
 
 /** 이 사용자가 이 키로 낸 판. 지갑을 잠근 뒤에 불러야 같은 키의 다른 요청이 방금 넣은 줄이 보인다 */
 export async function findRunByKey(tx: Tx, userId: string, idempotencyKey: string): Promise<RunRow | null> {
   const [row] = await tx
-    .select({ id: runs.id, boardId: runs.boardId, value: runs.value, seconds: runs.seconds, won: runs.won, coins: runs.coins, ledgerId: runs.ledgerId, gameVersion: runs.gameVersion })
+    .select({ id: runs.id, boardId: runs.boardId, value: runs.value, seconds: runs.seconds, won: runs.won, coins: runs.coins, ledgerId: runs.ledgerId, gameVersion: runs.gameVersion, createdAt: runs.createdAt })
     .from(runs)
     .where(and(eq(runs.userId, userId), eq(runs.idempotencyKey, idempotencyKey)));
   return row ?? null;
@@ -82,6 +83,18 @@ export async function findRunByKey(tx: Tx, userId: string, idempotencyKey: strin
 export async function lastRunAt(tx: Tx, userId: string): Promise<Date | null> {
   const [row] = await tx.select({ createdAt: runs.createdAt }).from(runs).where(eq(runs.userId, userId)).orderBy(desc(runs.id)).limit(1);
   return row?.createdAt ?? null;
+}
+
+/**
+ * `from`부터 `to` 전까지 이 사용자가 판으로 번 코인의 합 (`runs.coins`는 실제로 들어간 코인이다).
+ * `throughRunId`를 주면 그 판까지만(그 판 포함) 센다: 그 판을 반영한 직후의 합이다.
+ */
+export async function sumRunCoins(q: Q, userId: string, from: Date, to: Date, throughRunId?: number): Promise<number> {
+  const [row] = await q
+    .select({ total: sql<number>`coalesce(sum(${runs.coins}), 0)::float8` })
+    .from(runs)
+    .where(and(eq(runs.userId, userId), gte(runs.createdAt, from), lt(runs.createdAt, to), throughRunId === undefined ? undefined : lte(runs.id, throughRunId)));
+  return row?.total ?? 0;
 }
 
 export async function insertRun(

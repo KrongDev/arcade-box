@@ -5,5 +5,5 @@
 export { commands } from './commands.ts';
 export { routes, type PlayDeps } from './routes.ts';
 export { nickname, type Board, type Ordering, type RunResult } from './rules.ts';
-export { boardStats, createBoard, leaderboard, listBoards, purgeUser, submitRun, updateBoard, type BoardPatch, type Leaderboard, type NewBoard, type RunOutcome } from './service.ts';
+export { boardStats, createBoard, leaderboard, listBoards, purgeUser, runCoinStatus, submitRun, updateBoard, type BoardPatch, type Leaderboard, type NewBoard, type RunOutcome } from './service.ts';
 export { VALIDATORS, type Validator } from './validators.ts';

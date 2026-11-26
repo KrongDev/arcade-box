@@ -7,13 +7,13 @@ import { RuleError } from '../../src/shared/errors.ts';
 import { fakeIo } from '../helpers/cli.ts';
 import { testDb } from '../helpers/db.ts';
 
-test('config get은 처음에 50, 50, 3을 보여 준다', async () => {
+test('config get은 처음에 50, 50, 3, 1500을 보여 준다', async () => {
   const { db, close } = await testDb();
   try {
-    assert.deepEqual(CONFIG_DEFAULTS, { attendance_coins: 50, ad_reward_coins: 50, ad_rewards_per_day: 3 });
+    assert.deepEqual(CONFIG_DEFAULTS, { attendance_coins: 50, ad_reward_coins: 50, ad_rewards_per_day: 3, run_coins_per_day: 1500 });
     const io = fakeIo();
     assert.equal(await runCli(['config', 'get'], commands(db, 'ops-kim'), io), 0);
-    assert.deepEqual(io.lines, ['attendance_coins = 50', 'ad_reward_coins = 50', 'ad_rewards_per_day = 3']);
+    assert.deepEqual(io.lines, ['attendance_coins = 50', 'ad_reward_coins = 50', 'ad_rewards_per_day = 3', 'run_coins_per_day = 1500']);
 
     const one = fakeIo();
     assert.equal(await runCli(['config', 'get', 'ad_rewards_per_day'], commands(db, 'ops-kim'), one), 0);
@@ -22,6 +22,7 @@ test('config get은 처음에 50, 50, 3을 보여 준다', async () => {
     assert.equal(await getNumber(db, 'attendance_coins'), 50);
     assert.equal(await getNumber(db, 'ad_reward_coins'), 50);
     assert.equal(await getNumber(db, 'ad_rewards_per_day'), 3);
+    assert.equal(await getNumber(db, 'run_coins_per_day'), 1500);
     // 읽기만 하는 명령은 까닭을 받지 않고 운영 기록도 남기지 않는다
     assert.deepEqual(io.questions, []);
     assert.deepEqual(await db.select().from(adminActions), []);
@@ -45,7 +46,7 @@ test('config set attendance_coins 70 뒤에 getNumber가 70을 준다', async ()
     assert.equal(await getNumber(db, 'attendance_coins'), 0);
     const shown = fakeIo();
     await runCli(['config', 'get'], cmds, shown);
-    assert.deepEqual(shown.lines, ['attendance_coins = 0', 'ad_reward_coins = 50', 'ad_rewards_per_day = 3']);
+    assert.deepEqual(shown.lines, ['attendance_coins = 0', 'ad_reward_coins = 50', 'ad_rewards_per_day = 3', 'run_coins_per_day = 1500']);
 
     const rows = await db.select().from(adminActions).orderBy(adminActions.id);
     assert.deepEqual(

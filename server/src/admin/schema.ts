@@ -16,7 +16,7 @@ export const adminActions = app.table('admin_actions', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
-/** 운영자가 조정하는 숫자 (출석 코인, 광고 보상 코인, 하루 광고 보상 횟수). 행이 없으면 기본값이다 */
+/** 운영자가 조정하는 숫자 (출석 코인, 광고 보상 코인, 하루 광고 보상 횟수, 하루에 판으로 버는 코인 상한). 행이 없으면 기본값이다 */
 export const appConfig = app.table('app_config', {
   key: text('key').primaryKey(),
   value: jsonb('value').notNull(),

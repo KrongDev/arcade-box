@@ -672,7 +672,7 @@ test('POST /v2/me/runs: 세션이 있어야 하고, 결과는 200 JSON, 말이 �
 
     const ok = await call(handler, 'POST', '/v2/me/runs', { token: me.token, body: { boardId: 'pinball', score: 31000, coins: 45, idempotencyKey: 'http-run-0001' } });
     assert.equal(ok.status, 200);
-    assert.deepEqual(ok.body, { boardId: 'pinball', recordValue: 31000, isBest: true, firstClear: false, coins: 45, balance: 45, replayed: false });
+    assert.deepEqual(ok.body, { boardId: 'pinball', recordValue: 31000, isBest: true, firstClear: false, coins: 45, coinsLeftToday: 1455, balance: 45, replayed: false });
     assert.equal(ok.headers['cache-control'], 'no-store');
 
     // 판의 시각은 요청을 받은 시각이다: 시계가 3초 흐르기 전에는 너무 빠르다

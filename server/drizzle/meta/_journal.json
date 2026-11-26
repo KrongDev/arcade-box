@@ -71,6 +71,13 @@
       "when": 1795684226205,
       "tag": "0009_reward_idempotency",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795684721947,
+      "tag": "0010_play_run_coins",
+      "breakpoints": true
     }
   ]
 }

@@ -85,6 +85,17 @@ export function checkGameVersion(v: unknown): number | null {
 }
 
 /**
+ * 하루(한국 날짜)에 판으로 벌 수 있는 코인의 상한을 반영한다 (스펙 5.9, 설정값 `run_coins_per_day`).
+ * `limit`이 0이면 상한이 없다. 상한에 걸려도 판은 거절하지 않는다: 점수와 기록은 그대로 반영하고 코인만 남은 만큼(0일 수도 있다) 넣는다.
+ * `coins`는 실제로 넣을 코인, `left`는 넣은 뒤 그날 남은 코인이다 (상한이 없으면 null).
+ */
+export function capCoins(requested: number, limit: number, earnedToday: number): { coins: number; left: number | null } {
+  if (limit === 0) return { coins: requested, left: null };
+  const coins = Math.min(requested, Math.max(0, limit - earnedToday));
+  return { coins, left: Math.max(0, limit - earnedToday - coins) };
+}
+
+/**
  * 직전 판에서 3초가 안 지났나. 직전 판이 지금보다 뒤의 시각이어도(먼저 받은 요청이 늦게 처리됨) 안 지난 것이다.
  */
 export function tooSoon(lastRunAt: Date | null, now: Date): boolean {
