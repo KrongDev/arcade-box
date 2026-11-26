@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { sql } from 'drizzle-orm';
 import { test } from 'node:test';
+import { PGlite } from '@electric-sql/pglite';
+import { drizzle } from 'drizzle-orm/pglite';
+import { isMigrated, type Db } from '../../src/shared/db/index.ts';
 import { testDb } from '../helpers/db.ts';
 
 test('PGlite에 마이그레이션을 적용하면 스키마 app이 있다', async () => {
@@ -54,5 +57,20 @@ test('testDb는 부를 때마다 서로 섞이지 않는 빈 DB를 준다', asyn
   } finally {
     await a.close();
     await b.close();
+  }
+});
+
+test('isMigrated: 마이그레이션을 적용한 DB는 참, 빈 DB는 거짓이다 (명령줄이 서버보다 먼저 불렸는지 알아본다)', async () => {
+  const { db, close } = await testDb();
+  try {
+    assert.equal(await isMigrated(db), true);
+  } finally {
+    await close();
+  }
+  const empty = new PGlite();
+  try {
+    assert.equal(await isMigrated(drizzle(empty) as unknown as Db), false);
+  } finally {
+    await empty.close();
   }
 });

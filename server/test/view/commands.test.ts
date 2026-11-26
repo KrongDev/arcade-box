@@ -97,3 +97,23 @@ test('user find는 연결된 구글 sub로 사용자 ID를 찾고, 없으면 없
     await kit.close();
   }
 });
+
+test('user find·show는 모르는 flag를 거절한다 (읽기만 하는 명령이라 --reason·--yes도 받지 않는다)', async () => {
+  const kit = await gameKit();
+  const { db } = kit;
+  try {
+    const me = await loginGuest(db, NOW);
+    for (const argv of [
+      ['user', 'show', me.userId, '--reason', '확인'],
+      ['user', 'show', me.userId, '--yes'],
+      ['user', 'find', '--provider', 'google', '--sub', 'x', '--bogus', '1'],
+      ['user', 'find', '--provider', 'google', '--sub', 'x', '--reason', '확인'],
+    ]) {
+      const out = await run(db, argv);
+      assert.equal(out.code, 1, argv.join(' '));
+      assert.match(out.text, /모르는 flag/, argv.join(' '));
+    }
+  } finally {
+    await kit.close();
+  }
+});

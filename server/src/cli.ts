@@ -13,7 +13,8 @@ import { commands as productCommands } from './product/index.ts';
 import { seedCommand } from './seed.ts';
 import { runCli, type CliIo, type Command } from './shared/cli/index.ts';
 import { loadConfig } from './shared/config.ts';
-import { connectPg } from './shared/db/index.ts';
+import { connectPg, isMigrated } from './shared/db/index.ts';
+import { safeMessage } from './shared/errors.ts';
 import { commands as viewCommands } from './view/index.ts';
 import { commands as walletCommands } from './wallet/index.ts';
 
@@ -50,6 +51,10 @@ try {
   const config = loadConfig();
   const { db, close } = connectPg(config.databaseUrl);
   try {
+    // 명령줄은 마이그레이션을 하지 않는다 (서버가 뜰 때 한다). 서버를 한 번도 띄우지 않은 DB면 쿼리 오류 대신 할 일을 알려 준다
+    if (!(await isMigrated(db))) {
+      throw new Error('DB에 아직 테이블이 없어요. 서버를 먼저 한 번 띄워 마이그레이션을 적용한 뒤 다시 실행해 주세요');
+    }
     const actor = actorName();
     const commands: Command[] = [
       ...adminCommands(db, actor),
@@ -67,7 +72,7 @@ try {
     await close();
   }
 } catch (err) {
-  // 설정이 틀렸을 때 (DATABASE_URL 없음 등). 메시지만 보여 준다
-  console.error(err instanceof Error ? err.message : String(err));
+  // 설정이 틀렸거나 DB에 닿지 못했을 때 (DATABASE_URL 없음, 마이그레이션 전 등). 메시지만 보여 준다 (쿼리와 넣은 값은 빼고)
+  console.error(safeMessage(err));
 }
 process.exitCode = code;

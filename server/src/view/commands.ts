@@ -1,7 +1,7 @@
 import { findUserByIdentity, getUser, listProviders, type AccountProvider } from '../account/index.ts';
 import { listOwned } from '../entitlement/index.ts';
 import { listOrders } from '../order/index.ts';
-import type { Command } from '../shared/cli/index.ts';
+import type { Args, Command } from '../shared/cli/index.ts';
 import type { Db } from '../shared/db/index.ts';
 import { RuleError } from '../shared/errors.ts';
 import { getBalance, listLedger } from '../wallet/index.ts';
@@ -15,6 +15,12 @@ const ACCOUNT_PROVIDERS: readonly string[] = ['google', 'apple'] satisfies Accou
 
 const signed = (n: number) => (n > 0 ? `+${n}` : String(n));
 
+/** 읽기만 하는 명령이라 `--reason`·`--yes`도 받지 않는다. 정한 것 밖의 flag가 있으면 쓰는 법을 보여 주며 거절한다 */
+function onlyFlags(args: Args, allowed: string[], usage: string): void {
+  const unknown = Object.keys(args.flags).filter((name) => !allowed.includes(name));
+  if (unknown.length > 0) throw new RuleError(400, 'unknown_flag', `모르는 flag예요: ${unknown.map((n) => `--${n}`).join(' ')}. 이렇게 써 주세요: ${usage}`);
+}
+
 /**
  * 사용자를 찾고 들여다보는 명령 (스펙 5.11). 둘 다 읽기만 한다: `--reason`을 받지 않고, 묻지 않고, 운영 기록을 남기지 않는다.
  */
@@ -24,6 +30,7 @@ export function commands(db: Db): Command[] {
       name: 'user find',
       usage: FIND,
       async run(args, io) {
+        onlyFlags(args, ['provider', 'sub'], FIND);
         const { provider, sub } = args.flags;
         if (typeof provider !== 'string' || !ACCOUNT_PROVIDERS.includes(provider)) {
           throw new RuleError(400, 'invalid_provider', `수단은 google이나 apple이에요. 이렇게 써 주세요: ${FIND}`);
@@ -38,6 +45,7 @@ export function commands(db: Db): Command[] {
       name: 'user show',
       usage: SHOW,
       async run(args, io) {
+        onlyFlags(args, [], SHOW);
         if (args.positional.length !== 1) throw new RuleError(400, 'invalid_args', `이렇게 써 주세요: ${SHOW}`);
         // 사용자부터 확인한다. 모양이 틀린 ID를 다른 함수에 바로 넘기면 DB 오류가 난다 (getUser는 모양을 먼저 본다)
         const user = await getUser(db, args.positional[0]);

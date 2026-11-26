@@ -61,3 +61,17 @@ export async function pgTestDb(): Promise<{ db: Db; close(): Promise<void> }> {
     },
   };
 }
+
+/**
+ * 마이그레이션을 적용하지 않은 빈 데이터베이스를 새로 만들어 그 주소를 준다. `drop()`이 지운다.
+ * 마이그레이션 자체(동시에 띄운 서버 둘)를 보는 테스트가 쓴다.
+ */
+export async function emptyPgDb(): Promise<{ url: string; drop(): Promise<void> }> {
+  if (!PG_URL) throw new Error('DATABASE_URL이 필요해요');
+  const url = new URL(PG_URL);
+  assertLocal(url);
+  const name = `arcade_test_${randomBytes(8).toString('hex')}`;
+  await admin(`CREATE DATABASE "${name}"`);
+  url.pathname = `/${name}`;
+  return { url: url.toString(), drop: () => admin(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`) };
+}
