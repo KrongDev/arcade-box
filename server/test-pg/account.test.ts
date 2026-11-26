@@ -51,9 +51,9 @@ test('같은 기기 비밀값으로 동시에 5번 등록하면 사용자는 하
 
 const summarize = async () => ({ coins: 0, games: 0 });
 
-/** nonce를 받아 개발용 토큰(`dev:<sub>:<nonce>`)을 만든다. 서명은 PGlite 테스트가 보고, 여기서는 동시에 온 요청만 본다 */
-async function devToken(db: Db, sub: string): Promise<{ provider: string; idToken: string }> {
-  return { provider: 'google', idToken: `dev:${sub}:${await issueNonce(db, NOW)}` };
+/** `userId`의 세션에서 nonce를 받아 개발용 토큰(`dev:<sub>:<nonce>`)을 만든다. 서명은 PGlite 테스트가 보고, 여기서는 동시에 온 요청만 본다 */
+async function devToken(db: Db, userId: string, sub: string): Promise<{ provider: string; idToken: string }> {
+  return { provider: 'google', idToken: `dev:${sub}:${await issueNonce(db, userId, NOW)}` };
 }
 
 const codeOf = (res: { status: number; body: unknown }) => `${res.status} ${(res.body as { error?: { code?: string } } | null)?.error?.code ?? 'ok'}`;
@@ -64,7 +64,7 @@ test('같은 nonce와 토큰으로 연결을 동시에 두 번 보내면 수단�
     const handler = accountHandler(db, fakeClock(NOW.toISOString()), { verify: devVerifier() });
     for (let round = 0; round < 5; round++) {
       const me = await loginGuest(db, NOW);
-      const body = await devToken(db, `same-nonce-${round}`);
+      const body = await devToken(db, me.userId, `same-nonce-${round}`);
       const results = await Promise.all([1, 2].map(() => call(handler, 'POST', '/v2/auth/link', { token: me.token, body })));
       // nonce는 한 번만 쓰인다: 하나는 연결되고 하나는 이미 쓴 nonce로 거절된다
       assert.deepEqual(results.map(codeOf).sort(), ['200 ok', '401 token_invalid'], `${round}번째`);
@@ -85,7 +85,7 @@ test('두 기기가 같은 구글 계정을 동시에 처음 연결하면 하나
     for (let round = 0; round < 5; round++) {
       const sub = `race-${round}`;
       const devices = [await loginGuest(db, NOW), await loginGuest(db, NOW)];
-      const bodies = [await devToken(db, sub), await devToken(db, sub)];
+      const bodies = [await devToken(db, devices[0].userId, sub), await devToken(db, devices[1].userId, sub)];
       const results = await Promise.all(devices.map((d, i) => call(handler, 'POST', '/v2/auth/link', { token: d.token, body: bodies[i] })));
       assert.deepEqual(results.map(codeOf).sort(), ['200 ok', '409 link_conflict'], `${round}번째`);
       const google = (await db.select().from(userIdentities)).filter((i) => i.provider === 'google' && i.subject === sub);
@@ -107,9 +107,9 @@ test('같은 토큰으로 충돌 정리를 동시에 두 번 보내면 한 번�
     for (let round = 0; round < 5; round++) {
       const sub = `resolve-${round}`;
       const account = await loginGuest(db, NOW);
-      await linkIdentity(db, account.session, await devToken(db, sub), devVerifier(), NOW, summarize);
+      await linkIdentity(db, account.session, await devToken(db, account.userId, sub), devVerifier(), NOW, summarize);
       const device = await loginGuest(db, NOW);
-      const body = await devToken(db, sub);
+      const body = await devToken(db, device.userId, sub);
       const results = await Promise.all([1, 2].map(() => call(handler, 'POST', '/v2/auth/link/resolve', { token: device.token, body })));
       assert.deepEqual(results.map(codeOf).sort(), ['200 ok', '401 token_invalid'], `${round}번째`);
       const moved = (await db.select().from(userIdentities)).find((i) => i.id === device.session.identityId);
@@ -134,9 +134,9 @@ test('계정 삭제·충돌 정리·로그아웃과 같은 기기의 로그인�
       // 충돌 정리와 로그인
       const sub = `overlap-${round}`;
       const account = await loginGuest(db, NOW);
-      await linkIdentity(db, account.session, await devToken(db, sub), devVerifier(), NOW, summarize);
+      await linkIdentity(db, account.session, await devToken(db, account.userId, sub), devVerifier(), NOW, summarize);
       const device = await loginGuest(db, NOW);
-      const body = await devToken(db, sub);
+      const body = await devToken(db, device.userId, sub);
       const [resolved, ...relogins] = await Promise.allSettled([
         resolveLink(db, device.session, body, devVerifier(), NOW, TTL_DAYS, noPolicy),
         ...[1, 2, 3].map(() => registerOrLoginGuest(db, device.secret, NOW, TTL_DAYS)),

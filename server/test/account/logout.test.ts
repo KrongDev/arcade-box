@@ -15,16 +15,16 @@ const START = '2026-11-26T03:00:00.000Z';
 const kit = await googleKit();
 const summarize = async () => ({ coins: 0, games: 0 });
 
-async function token(db: Db, now: Date, sub: string) {
-  return { provider: 'google', idToken: await kit.sign({ sub, nonce: await issueNonce(db, now) }) };
+async function token(db: Db, userId: string, now: Date, sub: string) {
+  return { provider: 'google', idToken: await kit.sign({ sub, nonce: await issueNonce(db, userId, now) }) };
 }
 
 /** 구글 계정 하나에 기기 두 대가 붙은 상태: `first`가 계정을 만들었고 `second`가 나중에 들어왔다 */
 async function accountWithTwoDevices(db: Db, now: Date): Promise<{ first: Guest; second: Guest }> {
   const first = await loginGuest(db, now);
-  await linkIdentity(db, first.session, await token(db, now, 'g-1'), kit.verify, now, summarize);
+  await linkIdentity(db, first.session, await token(db, first.userId, now, 'g-1'), kit.verify, now, summarize);
   const guest = await loginGuest(db, now);
-  await resolveLink(db, guest.session, await token(db, now, 'g-1'), kit.verify, now, TTL_DAYS, noPolicy);
+  await resolveLink(db, guest.session, await token(db, guest.userId, now, 'g-1'), kit.verify, now, TTL_DAYS, noPolicy);
   // 두 번째 기기가 그 계정으로 다시 들어온다
   const second = await loginGuest(db, now, guest.secret);
   assert.equal(second.userId, first.userId);

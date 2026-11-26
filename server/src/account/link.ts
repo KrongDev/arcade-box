@@ -36,13 +36,22 @@ const tryAgain = () => new RuleError(503, 'try_again', '잠시 뒤 다시 시도
 const linkedElsewhere = () => new RuleError(409, 'linked_elsewhere', '이 계정은 다른 사용자에게 연결돼 있어요. 이미 계정을 연결한 사용자와는 합칠 수 없어요');
 
 /**
- * 계정 연결에 쓰는 일회용 값을 만든다. 앱이 구글 로그인에 넣고, 돌아온 ID 토큰에 같은 값이 들어 있어야 한다.
- * 5분 동안 한 번만 쓸 수 있다. 서버에는 해시만 둔다. 지난 것은 새로 만들 때 치운다.
+ * 저장하는 nonce 해시. 받은 사용자의 ID를 섞어서, 남의 세션에서 받은 nonce가 든 토큰은 내 세션에서 통하지 않는다
+ * (다른 사람이 로그인해 받은 토큰을 내 세션에 끼워 넣어 그 사람의 계정을 내게 붙이는 일을 막는다).
+ * 사용자 ID는 uuid라 `:`가 없어서 두 값의 경계가 헷갈리지 않는다.
  */
-export async function issueNonce(db: Db, now: Date): Promise<string> {
+function nonceHash(userId: string, nonce: string): string {
+  return sha256Hex(`${userId}:${nonce}`);
+}
+
+/**
+ * 계정 연결에 쓰는 일회용 값을 만든다. 앱이 구글 로그인에 넣고, 돌아온 ID 토큰에 같은 값이 들어 있어야 한다.
+ * 5분 동안, 받은 사용자의 세션에서, 한 번만 쓸 수 있다. 서버에는 해시만 둔다. 지난 것은 새로 만들 때 치운다.
+ */
+export async function issueNonce(db: Db, userId: string, now: Date): Promise<string> {
   const nonce = randomToken();
   await deleteExpiredNonces(db, now);
-  await insertNonce(db, sha256Hex(nonce), new Date(now.getTime() + NONCE_TTL_MS));
+  await insertNonce(db, nonceHash(userId, nonce), new Date(now.getTime() + NONCE_TTL_MS));
   return nonce;
 }
 
@@ -54,13 +63,13 @@ function parseLinkInput(input: unknown): { provider: string; idToken: string } {
   };
 }
 
-/** 토큰을 확인하고(트랜잭션 밖: 공개 키를 받아 오느라 기다릴 수 있다) nonce의 해시를 준다 */
-async function verified(input: unknown, verify: IdTokenVerifier): Promise<{ provider: AccountProvider; sub: string; nonceHash: string }> {
+/** 토큰을 확인하고(트랜잭션 밖: 공개 키를 받아 오느라 기다릴 수 있다) 지금 세션의 사용자가 받은 nonce라면 저장돼 있을 해시를 준다 */
+async function verified(session: Session, input: unknown, verify: IdTokenVerifier): Promise<{ provider: AccountProvider; sub: string; nonceHash: string }> {
   const { provider, idToken } = parseLinkInput(input);
   const id = await verify(provider, idToken);
   // nonce가 없는 토큰은 우리 서버가 시킨 로그인에서 나온 것인지 알 수 없다
   if (id.nonce === null) throw tokenInvalid();
-  return { provider: id.provider, sub: id.sub, nonceHash: sha256Hex(id.nonce) };
+  return { provider: id.provider, sub: id.sub, nonceHash: nonceHash(session.userId, id.nonce) };
 }
 
 /**
@@ -71,7 +80,7 @@ async function verified(input: unknown, verify: IdTokenVerifier): Promise<{ prov
  * - 지금 사용자에게 이미 계정 수단이 있으면 `409 linked_elsewhere` (진짜 계정 둘은 합치지 않는다).
  * - 지금 사용자에게 같은 종류의 다른 계정이 이미 붙어 있으면 `409 already_linked`.
  *
- * nonce는 트랜잭션 안에서 지우면서 확인한다. 거절로 끝나면 트랜잭션이 되돌아가 nonce가 남는다.
+ * nonce는 지금 세션의 사용자가 받은 것이어야 하고, 트랜잭션 안에서 지우면서 확인한다. 거절로 끝나면 트랜잭션이 되돌아가 nonce가 남는다.
  */
 export async function linkIdentity(
   db: Db,
@@ -81,7 +90,7 @@ export async function linkIdentity(
   now: Date,
   summarize: Summarize,
 ): Promise<{ linked: true; providers: string[] }> {
-  const id = await verified(input, verify);
+  const id = await verified(session, input, verify);
   return db.transaction(async (tx) => {
     if (!(await consumeNonce(tx, id.nonceHash, now))) throw tokenInvalid();
     if (!(await lockUser(tx, session.userId))) throw sessionGone();
@@ -119,7 +128,7 @@ export async function resolveLink(
   ttlDays: number,
   policy: DeletionPolicy,
 ): Promise<{ userId: string; token: string; expiresAt: Date }> {
-  const id = await verified(input, verify);
+  const id = await verified(session, input, verify);
   return db.transaction(async (tx) => {
     if (!(await consumeNonce(tx, id.nonceHash, now))) throw tokenInvalid();
     if (!(await lockUser(tx, session.userId))) throw sessionGone();

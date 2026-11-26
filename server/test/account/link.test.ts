@@ -27,9 +27,9 @@ function fakeSummaries() {
   return { byUser, summarize };
 }
 
-/** nonce를 받아 그 nonce가 든 구글 토큰을 만든다 (앱이 구글 로그인에 nonce를 넣어 받는 것과 같다) */
-async function googleToken(db: Db, now: Date, sub: string, extra: Record<string, unknown> = {}): Promise<string> {
-  const nonce = await issueNonce(db, now);
+/** `userId`의 세션에서 nonce를 받아 그 nonce가 든 구글 토큰을 만든다 (앱이 구글 로그인에 nonce를 넣어 받는 것과 같다) */
+async function googleToken(db: Db, userId: string, now: Date, sub: string, extra: Record<string, unknown> = {}): Promise<string> {
+  const nonce = await issueNonce(db, userId, now);
   return kit.sign({ sub, nonce, ...extra });
 }
 
@@ -37,7 +37,7 @@ async function googleToken(db: Db, now: Date, sub: string, extra: Record<string,
 async function linkedUser(db: Db, now: Date, sub: string): Promise<Guest> {
   const device = await loginGuest(db, now);
   const { summarize } = fakeSummaries();
-  await linkIdentity(db, device.session, { provider: 'google', idToken: await googleToken(db, now, sub) }, kit.verify, now, summarize);
+  await linkIdentity(db, device.session, { provider: 'google', idToken: await googleToken(db, device.userId, now, sub) }, kit.verify, now, summarize);
   return device;
 }
 
@@ -48,7 +48,7 @@ test('처음 연결: 지금 사용자에게 구글 수단이 붙고 기기 수�
     const { summarize } = fakeSummaries();
     const me = await loginGuest(db, clock());
     const before = await db.select().from(userIdentities);
-    const idToken = await googleToken(db, clock(), 'google-sub-1');
+    const idToken = await googleToken(db, me.userId, clock(), 'google-sub-1');
     assert.equal((await db.select().from(authNonces)).length, 1);
 
     const result = await linkIdentity(db, me.session, { provider: 'google', idToken }, kit.verify, clock(), summarize);
@@ -87,7 +87,7 @@ test('nonce가 토큰의 것과 다르거나, 이미 썼거나, 5분이 지났�
     const link = (idToken: string) => linkIdentity(db, me.session, { provider: 'google', idToken }, kit.verify, clock(), summarize);
 
     // 서버가 준 적 없는 nonce
-    await issueNonce(db, clock());
+    await issueNonce(db, me.userId, clock());
     await assert.rejects(link(await kit.sign({ sub: 'g-1', nonce: 'made-up-by-the-app-0123456789' })), rule(401, 'token_invalid'));
     // nonce가 없는 토큰
     await assert.rejects(link(await kit.sign({ sub: 'g-1' })), rule(401, 'token_invalid'));
@@ -97,8 +97,8 @@ test('nonce가 토큰의 것과 다르거나, 이미 썼거나, 5분이 지났�
     assert.deepEqual(await listProviders(db, me.userId), ['guest'], '아무것도 붙지 않았다');
 
     // 5분: 4분 59초에는 되고, 5분이 되는 시각부터는 안 된다
-    const late = await googleToken(db, clock(), 'g-late');
-    const inTime = await googleToken(db, clock(), 'g-1');
+    const late = await googleToken(db, me.userId, clock(), 'g-late');
+    const inTime = await googleToken(db, me.userId, clock(), 'g-1');
     clock.advance(5 * 60_000 - 1000);
     assert.equal((await link(inTime)).linked, true);
     clock.advance(1000);
@@ -114,8 +114,56 @@ test('nonce가 토큰의 것과 다르거나, 이미 썼거나, 5분이 지났�
     assert.equal(await findUserByIdentity(db, 'google', 'g-1'), me.userId);
 
     // 지난 nonce는 새 nonce를 받을 때 치워진다
-    await issueNonce(db, clock());
+    await issueNonce(db, me.userId, clock());
     assert.equal((await db.select().from(authNonces)).length, 1);
+  } finally {
+    await close();
+  }
+});
+
+test('다른 사용자의 세션에서 받은 nonce가 든 토큰은 401 token_invalid이고, 그 nonce는 원래 사용자에게 그대로 남아 있다', async () => {
+  const { db, close } = await testDb();
+  try {
+    const clock = fakeClock(START);
+    const { summarize } = fakeSummaries();
+    const owner = await loginGuest(db, clock());
+    const other = await loginGuest(db, clock());
+    const account = await linkedUser(db, clock(), 'g-account');
+
+    // owner의 세션에서 받은 nonce
+    const nonce = await issueNonce(db, owner.userId, clock());
+    const before = await dumpAppSchema(db);
+
+    // 그 nonce가 든 토큰을 other의 세션에 넣는다 (owner가 받은 nonce로 로그인한 구글 계정을 other에게 붙이려는 경우)
+    const injected = { provider: 'google', idToken: await kit.sign({ sub: 'g-injected', nonce }) };
+    await assert.rejects(linkIdentity(db, other.session, injected, kit.verify, clock(), summarize), rule(401, 'token_invalid'));
+    // 이미 있는 계정을 가리키는 토큰이어도 마찬가지다: 충돌(409)까지 가지 못하고, resolve로 그 계정에 들어가지도 못한다
+    const toAccount = { provider: 'google', idToken: await kit.sign({ sub: 'g-account', nonce }) };
+    await assert.rejects(linkIdentity(db, other.session, toAccount, kit.verify, clock(), summarize), rule(401, 'token_invalid'));
+    await assert.rejects(resolveLink(db, other.session, toAccount, kit.verify, clock(), TTL_DAYS, noPolicy), rule(401, 'token_invalid'));
+
+    assert.deepEqual(await dumpAppSchema(db), before, '아무것도 바뀌지 않았고 nonce도 남아 있다');
+    assert.deepEqual(await listProviders(db, other.userId), ['guest']);
+    assert.equal(await findUserByIdentity(db, 'google', 'g-injected'), null);
+    assert.equal(await findUserByIdentity(db, 'google', 'g-account'), account.userId);
+    assert.deepEqual(await findSession(db, other.tokenHash, clock()), other.session);
+
+    // 원래 사용자는 그 nonce를 그대로 쓸 수 있다
+    const mine = { provider: 'google', idToken: await kit.sign({ sub: 'g-owner', nonce }) };
+    assert.deepEqual(await linkIdentity(db, owner.session, mine, kit.verify, clock(), summarize), { linked: true, providers: ['guest', 'google'] });
+    assert.equal(await findUserByIdentity(db, 'google', 'g-owner'), owner.userId);
+    assert.deepEqual(await db.select().from(authNonces), [], '쓴 nonce는 지워진다');
+
+    // HTTP로도 같다: other가 받은 nonce는 other의 세션에서만 통한다
+    const handler = accountHandler(db, clock, { verify: kit.verify, summarize });
+    const otherNonce = ((await call(handler, 'POST', '/v2/auth/nonce', { token: other.token })).body as { nonce: string }).nonce;
+    const idToken = await kit.sign({ sub: 'g-other', nonce: otherNonce });
+    const third = await loginGuest(db, clock());
+    const wrong = await call(handler, 'POST', '/v2/auth/link', { token: third.token, body: { provider: 'google', idToken } });
+    assert.equal(wrong.status, 401);
+    assert.equal((wrong.body as { error: { code: string } }).error.code, 'token_invalid');
+    assert.equal((await call(handler, 'POST', '/v2/auth/link', { token: other.token, body: { provider: 'google', idToken } })).status, 200);
+    assert.equal(await findUserByIdentity(db, 'google', 'g-other'), other.userId);
   } finally {
     await close();
   }
@@ -127,7 +175,7 @@ test('연결 요청의 모양이 틀리면 400이고, 못 믿을 토큰은 401 t
     const clock = fakeClock(START);
     const { summarize } = fakeSummaries();
     const me = await loginGuest(db, clock());
-    const idToken = await googleToken(db, clock(), 'g-1');
+    const idToken = await googleToken(db, me.userId, clock(), 'g-1');
     const link = (input: unknown) => linkIdentity(db, me.session, input, kit.verify, clock(), summarize);
     for (const input of [null, [], 'x', 7]) await assert.rejects(link(input), rule(400, 'invalid_body'), JSON.stringify(input));
     for (const input of [{}, { provider: 'google' }, { provider: 'google', idToken: 7 }, { provider: 'google', idToken: '' }, { provider: 'google', idToken: 'a'.repeat(8193) }]) {
@@ -154,7 +202,7 @@ test('이미 있는 계정: 409 link_conflict와 양쪽 요약을 주고 아무�
     byUser.set(account.userId, { coins: 5200, games: 3 });
     byUser.set(device.userId, { coins: 40, games: 1 });
 
-    const idToken = await googleToken(db, clock(), 'g-1');
+    const idToken = await googleToken(db, device.userId, clock(), 'g-1');
     const before = await dumpAppSchema(db);
     await assert.rejects(linkIdentity(db, device.session, { provider: 'google', idToken }, kit.verify, clock(), summarize), (err: unknown) => {
       assert.ok(err instanceof RuleError);
@@ -194,7 +242,7 @@ test('충돌 뒤 같은 토큰으로 resolve: 기기 수단이 그 계정으로 
       purge: [async (_tx, userId) => void purged.push(userId)],
     };
 
-    const input = { provider: 'google', idToken: await googleToken(db, clock(), 'g-1') };
+    const input = { provider: 'google', idToken: await googleToken(db, device.userId, clock(), 'g-1') };
     await assert.rejects(linkIdentity(db, device.session, input, kit.verify, clock(), summarize), rule(409, 'link_conflict'));
     clock.advance(30_000); // 앱이 물어보는 동안
     const resolved = await resolveLink(db, device.session, input, kit.verify, clock(), TTL_DAYS, policy);
@@ -238,7 +286,7 @@ test('resolve 뒤 세션이 끝나도 기기 비밀값만으로 그 계정에 �
     const clock = fakeClock(START);
     const account = await linkedUser(db, clock(), 'g-1');
     const device = await loginGuest(db, clock());
-    const input = { provider: 'google', idToken: await googleToken(db, clock(), 'g-1') };
+    const input = { provider: 'google', idToken: await googleToken(db, device.userId, clock(), 'g-1') };
     const resolved = await resolveLink(db, device.session, input, kit.verify, clock(), TTL_DAYS, noPolicy);
 
     clock.advance(TTL_DAYS * DAY_MS + 1000);
@@ -265,7 +313,7 @@ test('충돌 뒤 resolve를 부르지 않으면(취소) 손님 사용자와 그 
     const account = await linkedUser(db, clock(), 'g-1');
     const device = await loginGuest(db, clock());
     await updateSettings(db, device.userId, { haptic: false });
-    const input = { provider: 'google', idToken: await googleToken(db, clock(), 'g-1') };
+    const input = { provider: 'google', idToken: await googleToken(db, device.userId, clock(), 'g-1') };
     const before = await dumpAppSchema(db);
 
     await assert.rejects(linkIdentity(db, device.session, input, kit.verify, clock(), summarize), rule(409, 'link_conflict'));
@@ -294,7 +342,7 @@ test('지금 사용자에게 이미 계정 수단이 있고 다른 계정의 구
     const { summarize } = fakeSummaries();
     const first = await linkedUser(db, clock(), 'g-1');
     const second = await linkedUser(db, clock(), 'g-2');
-    const input = { provider: 'google', idToken: await googleToken(db, clock(), 'g-1') };
+    const input = { provider: 'google', idToken: await googleToken(db, second.userId, clock(), 'g-1') };
     const before = await dumpAppSchema(db);
 
     await assert.rejects(linkIdentity(db, second.session, input, kit.verify, clock(), summarize), rule(409, 'linked_elsewhere'));
@@ -305,7 +353,7 @@ test('지금 사용자에게 이미 계정 수단이 있고 다른 계정의 구
     assert.equal(await findUserByIdentity(db, 'google', 'g-2'), second.userId);
 
     // 어디에도 붙지 않은 구글 계정이어도, 구글 수단은 사용자마다 하나다
-    const third = { provider: 'google', idToken: await googleToken(db, clock(), 'g-3') };
+    const third = { provider: 'google', idToken: await googleToken(db, second.userId, clock(), 'g-3') };
     await assert.rejects(linkIdentity(db, second.session, third, kit.verify, clock(), summarize), rule(409, 'already_linked'));
     assert.equal(await findUserByIdentity(db, 'google', 'g-3'), null);
   } finally {
@@ -319,16 +367,16 @@ test('이미 내게 붙은 구글 계정을 다시 연결하면 그대로 성공
     const clock = fakeClock(START);
     const { summarize } = fakeSummaries();
     const me = await linkedUser(db, clock(), 'g-1');
-    const again = { provider: 'google', idToken: await googleToken(db, clock(), 'g-1') };
+    const again = { provider: 'google', idToken: await googleToken(db, me.userId, clock(), 'g-1') };
     assert.deepEqual(await linkIdentity(db, me.session, again, kit.verify, clock(), summarize), { linked: true, providers: ['guest', 'google'] });
     assert.equal((await db.select().from(userIdentities)).length, 2);
 
     // 내 계정을 가리키는 토큰으로 resolve
-    const mine = { provider: 'google', idToken: await googleToken(db, clock(), 'g-1') };
+    const mine = { provider: 'google', idToken: await googleToken(db, me.userId, clock(), 'g-1') };
     await assert.rejects(resolveLink(db, me.session, mine, kit.verify, clock(), TTL_DAYS, noPolicy), rule(409, 'no_link_conflict'));
     // 아무에게도 붙지 않은 구글 계정으로 resolve
     const guest = await loginGuest(db, clock());
-    const nobody = { provider: 'google', idToken: await googleToken(db, clock(), 'g-new') };
+    const nobody = { provider: 'google', idToken: await googleToken(db, guest.userId, clock(), 'g-new') };
     await assert.rejects(resolveLink(db, guest.session, nobody, kit.verify, clock(), TTL_DAYS, noPolicy), rule(409, 'no_link_conflict'));
     assert.deepEqual(await getUser(db, guest.userId), { id: guest.userId, status: 'active', createdAt: START }, '손님은 그대로다');
     // 거절된 resolve는 nonce를 쓰지 않았다: 같은 토큰으로 연결이 된다
@@ -345,7 +393,7 @@ test('현금 주문이 있는 손님을 resolve로 지우면 사용자 행만 de
     const account = await linkedUser(db, clock(), 'g-1');
     const device = await loginGuest(db, clock());
     const policy: DeletionPolicy = { mustKeepUserRow: async (_tx, userId) => userId === device.userId, purge: [] };
-    const input = { provider: 'google', idToken: await googleToken(db, clock(), 'g-1') };
+    const input = { provider: 'google', idToken: await googleToken(db, device.userId, clock(), 'g-1') };
     const resolved = await resolveLink(db, device.session, input, kit.verify, clock(), TTL_DAYS, policy);
     assert.equal(resolved.userId, account.userId);
     assert.equal((await getUser(db, device.userId))?.status, 'deleted');
@@ -371,17 +419,17 @@ test('DB에 이메일이나 이름이 저장되지 않는다', async () => {
       locale: 'ko-KR-x-private',
     };
     const me = await loginGuest(db, clock());
-    const nonce = await issueNonce(db, clock());
+    const nonce = await issueNonce(db, me.userId, clock());
     const idToken = await kit.sign({ sub: 'google-sub-77', nonce, ...personal });
     await linkIdentity(db, me.session, { provider: 'google', idToken }, kit.verify, clock(), summarize);
 
     // 충돌과 정리를 거친 기기도 마찬가지다
     const device = await loginGuest(db, clock());
-    const nonce2 = await issueNonce(db, clock());
+    const nonce2 = await issueNonce(db, device.userId, clock());
     const idToken2 = await kit.sign({ sub: 'google-sub-77', nonce: nonce2, ...personal });
     await assert.rejects(linkIdentity(db, device.session, { provider: 'google', idToken: idToken2 }, kit.verify, clock(), summarize), rule(409, 'link_conflict'));
     const stillThere = await db.select().from(authNonces);
-    assert.deepEqual(stillThere.map((n) => n.nonceHash), [sha256Hex(nonce2)], 'nonce도 해시로만 둔다');
+    assert.deepEqual(stillThere.map((n) => n.nonceHash), [sha256Hex(`${device.userId}:${nonce2}`)], 'nonce도 해시로만 둔다 (받은 사용자의 ID를 섞어서)');
     const resolved = await resolveLink(db, device.session, { provider: 'google', idToken: idToken2 }, kit.verify, clock(), TTL_DAYS, noPolicy);
 
     // users, user_identities를 비롯한 모든 테이블의 모든 열을 훑는다

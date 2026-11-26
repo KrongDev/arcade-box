@@ -46,7 +46,7 @@ export function routes(deps: AccountDeps): Route[] {
       auth: 'required',
       limit: AUTH_LIMIT,
       async handle(ctx) {
-        return { nonce: await issueNonce(db, ctx.now) };
+        return { nonce: await issueNonce(db, ctx.session!.userId, ctx.now) };
       },
     },
     {

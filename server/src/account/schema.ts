@@ -71,7 +71,7 @@ export const sessions = app.table(
   (t) => [index('sessions_expires_at_idx').on(t.expiresAt), index('sessions_user_id_idx').on(t.userId), index('sessions_identity_id_idx').on(t.identityId)],
 );
 
-/** 계정 연결에 쓰는 일회용 값. 원문은 두지 않는다. 한 번 쓰면 지운다 */
+/** 계정 연결에 쓰는 일회용 값. 원문은 두지 않고, 받은 사용자의 ID와 함께 해시한 값만 둔다. 한 번 쓰면 지운다 */
 export const authNonces = app.table('auth_nonces', {
   nonceHash: text('nonce_hash').primaryKey(),
   expiresAt: at('expires_at').notNull(),

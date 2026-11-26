@@ -17,7 +17,7 @@ const summarize = async () => ({ coins: 0, games: 0 });
 /** 구글이 붙고, 설정을 바꿨고, 세션이 둘인 사용자 */
 async function fullUser(db: Db, now: Date, sub: string): Promise<Guest> {
   const me = await loginGuest(db, now);
-  await linkIdentity(db, me.session, { provider: 'google', idToken: await kit.sign({ sub, nonce: await issueNonce(db, now) }) }, kit.verify, now, summarize);
+  await linkIdentity(db, me.session, { provider: 'google', idToken: await kit.sign({ sub, nonce: await issueNonce(db, me.userId, now) }) }, kit.verify, now, summarize);
   await updateSettings(db, me.userId, { sound: false });
   await loginGuest(db, now, me.secret);
   return me;
@@ -66,7 +66,7 @@ test('mustKeepUserRow가 거짓이면 사용자 행까지 사라지고 purge가 
     assert.notEqual(fresh.userId, me.userId);
     // 구글 계정도 다시 쓸 수 있다
     const again = await loginGuest(db, clock(), me.secret);
-    const relink = await linkIdentity(db, again.session, { provider: 'google', idToken: await kit.sign({ sub: 'g-me', nonce: await issueNonce(db, clock()) }) }, kit.verify, clock(), summarize);
+    const relink = await linkIdentity(db, again.session, { provider: 'google', idToken: await kit.sign({ sub: 'g-me', nonce: await issueNonce(db, again.userId, clock()) }) }, kit.verify, clock(), summarize);
     assert.equal(relink.linked, true);
 
     // 없는 사용자를 지우라고 해도 던지지 않는다 (같은 요청이 두 번 온 경우)
