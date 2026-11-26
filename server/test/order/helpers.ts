@@ -34,20 +34,23 @@ const PRODUCTS: Array<NewProduct & { coin?: number; krw?: number }> = [
   { id: 'coins.1000', kind: 'coin_pack', name: '코인 1000', access: 'purchase', grantCoins: 1000, status: 'on_sale', coin: 100, krw: 1200 },
   { id: 'pinball.table.draft', kind: 'item', name: '초안', access: 'purchase', gameId: 'pinball', slot: 'table', status: 'draft', coin: 100 },
   { id: 'pinball.table.retired', kind: 'item', name: '끝난 것', access: 'purchase', gameId: 'pinball', slot: 'table', status: 'retired', coin: 100 },
+  // 할 수 없는 게임의 게임 상품: 상품은 on_sale이고 가격도 있지만 게임이 live가 아니다
+  { id: 'game.breakout', kind: 'game', name: '벽돌깨기', access: 'purchase', gameId: 'breakout', status: 'on_sale', coin: 2000 },
+  { id: 'game.tetra', kind: 'game', name: '테트라', access: 'purchase', gameId: 'tetra', status: 'on_sale', coin: 2000 },
   // 가격이 0인 것 (켜진 COIN 가격이 있으니 살 수 있다)
   { id: 'pinball.ball.free', kind: 'item', name: '공짜 공', access: 'purchase', gameId: 'pinball', slot: 'ball', status: 'on_sale', coin: 0 },
   ...CHEAP.map((id, i): NewProduct & { coin: number } => ({ id, kind: 'item', name: `공 ${i}`, access: 'purchase', gameId: 'pinball', slot: 'ball', status: 'on_sale', coin: 300 })),
 ];
 
 /**
- * 게임 둘(pinball·minesweeper, 모두 live)과 상품. 지뢰찾기 게임 상품은 3000코인, 노을은 300코인,
+ * 게임 넷(pinball·minesweeper는 live, breakout은 draft, tetra는 retired)과 상품. 지뢰찾기 게임 상품은 3000코인, 노을은 300코인,
  * 300코인짜리 공 열 개, 그리고 팔 수 없는 상품들(위의 주석).
  */
 export async function seedShop(db: Db): Promise<void> {
   await db.transaction(async (tx) => {
-    for (const id of ['pinball', 'minesweeper']) {
+    for (const [id, status] of [['pinball', 'live'], ['minesweeper', 'live'], ['breakout', 'draft'], ['tetra', 'retired']] as const) {
       await createGame(tx, { id, name: id, description: '' });
-      await updateGame(tx, id, { status: 'live' });
+      if (status !== 'draft') await updateGame(tx, id, { status });
     }
     for (const { coin, krw, ...product } of PRODUCTS) {
       await createProduct(tx, product);
