@@ -27,14 +27,30 @@ async function productOrThrow(q: Q, productId: string): Promise<Product> {
   return product;
 }
 
-/** 이 사용자가 이 상품을 가졌나: `everyone`이면 늘 참, 아니면 회수되지 않은 보유가 있어야 한다 */
+/**
+ * `everyone` 상품이 지금 누구에게나 주어진 것인가: `on_sale`일 때만이다 (지휘자 결정, 2026-11-26).
+ * draft·hidden·retired인 `everyone` 상품은 저절로 가진 것이 아니다.
+ */
+function givenToEveryone(product: Product): boolean {
+  return product.access === 'everyone' && product.status === 'on_sale';
+}
+
+/**
+ * 이 사용자가 이 상품을 가졌나.
+ * - `everyone`이고 `on_sale`이면 누구나 가진 것이다 (보유 행 없이)
+ * - 그 밖에는 회수되지 않은 보유가 있어야 한다. 지급받았거나 산 보유는 상품의 status와 상관없이 가진 것이다
+ *   (retired·hidden·draft로 바뀌어도 회수하기 전까지 그 사람 것)
+ */
 export async function owns(q: Q, userId: string, product: Product): Promise<boolean> {
-  if (product.access === 'everyone') return true;
+  if (givenToEveryone(product)) return true;
   if (!UUID.test(userId)) return false;
   return hasActive(q, userId, product.id);
 }
 
-/** 이 게임을 할 수 있나 (스펙 5.6): 게임이 live이고, 그 게임의 game 상품을 가졌다. game 상품이 없는 게임은 못 한다 */
+/**
+ * 이 게임을 할 수 있나 (스펙 5.6): 게임이 live이고, 그 게임의 game 상품을 `owns`의 규칙으로 가졌다
+ * (게임 상품이 `everyone`이어도 `on_sale`이 아니면 보유가 있어야 한다). game 상품이 없는 게임은 못 한다.
+ */
 export async function canPlayGame(q: Q, userId: string, gameId: string): Promise<boolean> {
   const game = await getGame(q, gameId);
   if (game?.status !== 'live') return false;
@@ -80,7 +96,11 @@ export async function listOwned(q: Q, userId: string): Promise<string[]> {
   return readOwnedIds(q, userId);
 }
 
-/** 켜진 보유가 있는 게임 상품의 수 (`everyone` 게임은 세지 않는다). 계정 연결 충돌 때 양쪽 요약에 쓴다 */
+/**
+ * 켜진 보유가 있는 게임 상품의 수 (`everyone` 게임은 세지 않는다). 계정 연결 충돌 때 양쪽 요약에 쓴다.
+ * 상품의 종류는 `product`에 물어서 보유한 상품마다 쿼리가 하나씩이다 (`products`와 엮는 쿼리는 경계를 넘는다).
+ * 연결 충돌 때만 불리고 보유는 수십 개라 괜찮다.
+ */
 export async function countOwnedGames(q: Q, userId: string): Promise<number> {
   let n = 0;
   for (const id of await listOwned(q, userId)) if ((await getProduct(q, id))?.kind === 'game') n++;
@@ -89,7 +109,7 @@ export async function countOwnedGames(q: Q, userId: string): Promise<number> {
 
 /**
  * 아이템을 장착한다 (스펙 5.10 `PUT /v2/me/equipped`). 같은 게임·같은 자리의 장착을 바꾼다.
- * v1과 달리 종류와 상관없이 가진 것만 장착한다 (표 K18). `everyone` 아이템은 누구나 가진 것이다.
+ * v1과 달리 종류와 상관없이 가진 것만 장착한다 (표 K18). 가졌는지는 `owns`의 규칙이다 (`on_sale`인 `everyone` 아이템은 누구나 가진 것).
  *
  * - `productId`가 글자열이 아니면 `400 invalid_product_id`, 없는 상품이면 `404 not_found`
  * - 아이템이 아니면 `400 not_item`, 가지지 않았으면 `403 not_owned`
@@ -103,14 +123,27 @@ export async function equip(db: Db, userId: string, productId: unknown): Promise
     await requireActiveUser(tx, userId);
     const product = await productOrThrow(tx, productId);
     if (product.kind !== 'item' || product.gameId === null || product.slot === null) throw new RuleError(400, 'not_item', '장착할 수 있는 아이템이 아니에요');
-    if (product.access !== 'everyone' && !(await holdActive(tx, userId, product.id))) throw notOwned(403);
+    if (!givenToEveryone(product) && !(await holdActive(tx, userId, product.id))) throw notOwned(403);
     await upsertEquipped(tx, { userId, gameId: product.gameId, slot: product.slot, productId: product.id });
   });
 }
 
+/**
+ * 장착한 아이템 가운데 지금 가진 것(`owns`)만 준다 (게임·자리 순서). 장착한 뒤에 운영자가 `everyone` 아이템을
+ * `purchase`로 바꾸거나 `on_sale`이 아니게 바꾸면 장착 행은 남지만 가지지 않은 것이라 내려 주지 않는다
+ * (스펙 5.10 "가진 것만 장착돼요", 표 K18). 행을 지우지는 않는다: 되돌리거나 지급하면 그대로 장착된 것으로 보인다.
+ *
+ * 상품과 보유를 한 쿼리로 엮지 않고 `product`의 `getProduct`로 묻는다 — 다른 도메인의 테이블은 `schema.ts`만
+ * 가져올 수 있어서다 (스펙 5.14). 한 사용자의 장착은 게임마다 자리 몇 개뿐이다.
+ */
 export async function listEquipped(q: Q, userId: string): Promise<Array<{ gameId: string; slot: string; productId: string }>> {
   if (!UUID.test(userId)) return [];
-  return readEquipped(q, userId);
+  const out = [];
+  for (const row of await readEquipped(q, userId)) {
+    const product = await getProduct(q, row.productId);
+    if (product && (await owns(q, userId, product))) out.push(row);
+  }
+  return out;
 }
 
 /**

@@ -1,3 +1,5 @@
+import { isIconName } from '../asset/index.ts';
+import { isGameId } from '../game/index.ts';
 import { RuleError } from '../shared/errors.ts';
 
 /** 상품 종류 (스펙 5.2): 게임을 할 수 있게 하는 것, 꾸미는 아이템, 코인 묶음(2차) */
@@ -37,8 +39,6 @@ export interface Product {
 export const PRODUCT_ID = /^[a-z][a-z0-9.-]{1,63}$/;
 /** 아이템의 자리: 영문 소문자로 시작하는 소문자·숫자·`-` 1~32자 (예: 'table', 'ball'). 서버는 뜻을 모른다 */
 export const SLOT = /^[a-z][a-z0-9-]{0,31}$/;
-const GAME_ID = /^[a-z][a-z0-9-]{1,31}$/;
-const ICON_NAME = /^[0-9a-f]{64}\.(png|webp)$/;
 
 export const NAME_MAX = 60;
 export const DESCRIPTION_MAX = 1000;
@@ -120,7 +120,7 @@ export function checkSortOrder(v: unknown): number {
 }
 
 export function checkIconPath(v: unknown): string | null {
-  if (v !== null && (typeof v !== 'string' || !ICON_NAME.test(v))) throw invalid('icon', '아이콘 이름이 올바르지 않아요');
+  if (v !== null && (typeof v !== 'string' || !isIconName(v))) throw invalid('icon', '아이콘 이름이 올바르지 않아요');
   return v;
 }
 
@@ -130,7 +130,7 @@ export function checkSlot(v: unknown): string | null {
 }
 
 export function checkGameRef(v: unknown): string | null {
-  if (v !== null && (typeof v !== 'string' || !GAME_ID.test(v))) throw invalid('game_id', '게임 ID 모양이 아니에요');
+  if (v !== null && !isGameId(v)) throw invalid('game_id', '게임 ID 모양이 아니에요');
   return v;
 }
 

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -76,7 +76,21 @@ test('product update --icon은 아이콘을 저장해 상품에 단다', async (
     const out = await k.run(['product', 'update', 'game.pinball', '--icon', path, '--status', 'on_sale', '--reason', '아이콘', '--yes']);
     assert.equal(out.code, 0, out.text);
     const p = await getProduct(k.db, 'game.pinball');
-    assert.deepEqual({ iconPath: p?.iconPath, status: p?.status }, { iconPath: `${createHash('sha256').update(icon).digest('hex')}.webp`, status: 'on_sale' });
+    const name = `${createHash('sha256').update(icon).digest('hex')}.webp`;
+    assert.deepEqual({ iconPath: p?.iconPath, status: p?.status }, { iconPath: name, status: 'on_sale' });
+
+    // 거절되는 명령은 assets/에 아무것도 남기지 않는다: 없는 상품, 고친 뒤 규칙에 안 맞는 상품
+    assert.equal((await k.run(['product', 'add', 'pinball.table.neon', '--kind', 'item', '--game', 'pinball', '--slot', 'table', '--access', 'purchase', '--name', '네온', '--reason', '추가', '--yes'])).code, 0);
+    await writeFile(path, Buffer.concat([icon, Buffer.from('다른 그림')]));
+    for (const argv of [
+      ['product', 'update', 'none.here', '--icon', path, '--reason', '아이콘', '--yes'],
+      ['product', 'update', 'pinball.table.neon', '--grant-coins', '100', '--icon', path, '--reason', '아이콘', '--yes'],
+    ]) {
+      const out = await k.run(argv);
+      assert.equal(out.code, 1, argv.join(' '));
+    }
+    assert.deepEqual(await readdir(join(k.root, 'data', 'assets')), [name], '앞서 단 아이콘 하나뿐이다');
+    assert.equal((await getProduct(k.db, 'pinball.table.neon'))?.iconPath, null);
   } finally {
     await k.close();
   }

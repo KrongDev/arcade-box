@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { iconUrl, routes, storeIcon } from '../../src/asset/index.ts';
 import { RuleError } from '../../src/shared/errors.ts';
@@ -143,16 +143,39 @@ test('올린 아이콘을 GET으로 받으면 내용이 같고 content-type과 �
   }
 });
 
-for (const name of ['../config.ts', '..%2F..%2Fetc%2Fpasswd', 'a.png', `${'a'.repeat(64)}.svg`]) {
-  test(`${name}: 404이고 파일을 내주지 않는다`, async () => {
+const HASH = 'c'.repeat(64);
+/**
+ * 이름에 경로를 넣은 요청. `..%2F…` 경우는 이름 규칙이 없으면 진짜 파일에 닿는다 (아래에서 그 자리에 파일을 둔다):
+ * `<dataDir>/assets/../config.ts`, `<dataDir>/assets/../<해시>.png`, `<dataDir>/assets/../../etc/passwd`.
+ * 규칙을 느슨하게 고치면(예: 앞에 아무 글자나 허용) 이 테스트가 알려 준다.
+ */
+const PATH_NAMES = [
+  '../config.ts',
+  '..%2Fconfig.ts',
+  `..%2F${HASH}.png`,
+  '..%2F..%2Fetc%2Fpasswd',
+  'a.png',
+  `${'a'.repeat(64)}.svg`,
+  `${HASH}.png%00`,
+  `${HASH}.PNG`,
+  `${'a'.repeat(5000)}.png`,
+];
+
+for (const name of PATH_NAMES) {
+  test(`${name.length > 80 ? `${name.slice(0, 20)}…(${name.length}자)` : name}: 404이고 파일을 내주지 않는다`, async () => {
     const d = await dirs();
     try {
       // 이름이 가리킬 수 있는 곳마다 진짜 파일을 둔다. 그래도 내주지 않아야 한다
       const secret = Buffer.from('SECRET-CONTENT-123');
+      const root = dirname(d.dataDir);
       await mkdir(join(d.dataDir, 'assets'), { recursive: true });
+      await mkdir(join(root, 'etc'), { recursive: true });
       await writeFile(join(d.dataDir, 'config.ts'), secret);
+      await writeFile(join(d.dataDir, `${HASH}.png`), secret);
+      await writeFile(join(root, 'etc', 'passwd'), secret);
       await writeFile(join(d.dataDir, 'assets', 'a.png'), secret);
       await writeFile(join(d.dataDir, 'assets', `${'a'.repeat(64)}.svg`), secret);
+      await writeFile(join(d.dataDir, 'assets', `${HASH}.PNG`), secret);
 
       const res = await call(handler(d.dataDir), 'GET', `/v2/assets/${name}`);
       assert.equal(res.status, 404);

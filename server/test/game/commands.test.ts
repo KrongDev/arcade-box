@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { adminActions } from '../../src/admin/schema.ts';
@@ -83,6 +83,15 @@ test('game update --icon은 아이콘을 저장하고 그 이름을 게임에 �
     assert.equal(bad.code, 1);
     assert.equal((await getGame(k.db, 'pinball'))?.iconPath, name);
     assert.equal((await actions(k.db)).length, 2, '실패한 명령은 운영 기록을 남기지 않는다');
+
+    // 없는 게임에 아이콘을 주면 assets/에 아무것도 생기지 않는다 (거절할 것을 다 거절한 뒤에 파일을 쓴다)
+    const other = Buffer.concat([icon, Buffer.from('다른 그림')]);
+    await writeFile(path, other);
+    const ghost = await run(k, ['game', 'update', 'nogame', '--icon', path, '--name', '없음', '--reason', '아이콘', '--yes']);
+    assert.equal(ghost.code, 1);
+    assert.match(ghost.text, /없는 게임/);
+    assert.deepEqual(await readdir(join(k.dataDir, 'assets')), [name], '앞서 단 아이콘 하나뿐이다');
+    assert.equal((await actions(k.db)).length, 2);
   } finally {
     await k.close();
   }

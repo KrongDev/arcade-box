@@ -148,6 +148,27 @@ test('canPlayGame: 게임 상품이 everyone이면 참, purchase인데 안 샀�
     await db.transaction((tx) => updateGame(tx, 'pinball', { status: 'live' }));
     await db.transaction((tx) => updateProduct(tx, 'game.pinball', { access: 'purchase' }));
     assert.equal(await canPlayGame(db, me.userId, 'pinball'), false);
+    await db.transaction((tx) => updateProduct(tx, 'game.pinball', { access: 'everyone' }));
+    assert.equal(await canPlayGame(db, me.userId, 'pinball'), true);
+  } finally {
+    await close();
+  }
+});
+
+test('게임 상품이 on_sale이 아니면 everyone이어도 canPlayGame이 거짓이다', async () => {
+  const { db, close } = await testDb();
+  try {
+    await seedCatalog(db);
+    const me = await loginGuest(db, NOW);
+    assert.equal(await canPlayGame(db, me.userId, 'pinball'), true);
+    for (const status of ['draft', 'hidden', 'retired'] as const) {
+      await db.transaction((tx) => updateProduct(tx, 'game.pinball', { status }));
+      assert.equal(await canPlayGame(db, me.userId, 'pinball'), false, status);
+    }
+    // 산 게임은 게임 상품이 retired가 되어도 계속 할 수 있다
+    await give(db, me.userId, 'game.minesweeper', 'coin_purchase');
+    await db.transaction((tx) => updateProduct(tx, 'game.minesweeper', { status: 'retired' }));
+    assert.equal(await canPlayGame(db, me.userId, 'minesweeper'), true);
   } finally {
     await close();
   }

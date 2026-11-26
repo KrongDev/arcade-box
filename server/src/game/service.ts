@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { copyFile, mkdir, rename, rm, stat } from 'node:fs/promises';
+import { copyFile, mkdir, rename, rm, rmdir, stat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { isIconName } from '../asset/index.ts';
 import { sha256File, verifyEd25519 } from '../shared/crypto.ts';
@@ -105,8 +105,11 @@ export async function listLiveGames(q: Q): Promise<Game[]> {
  * 5. 그 값으로 만든 `manifestText`의 서명이 맞지 않으면 `409 bad_signature`
  * 6. 'uploaded'로 넣고 임시 파일을 `<버전>.zip`으로 바꿔 단다
  *
- * 복사본을 확인하므로 확인한 내용과 저장한 내용이 같다 (원본이 그사이 바뀌어도). 거절하면 임시 파일을 지워
- * 그 자리에 아무 파일도 남기지 않는다.
+ * 복사본을 확인하므로 확인한 내용과 저장한 내용이 같다 (원본이 그사이 바뀌어도). 거절하면 임시 파일을 지우고,
+ * 이번에 처음 만든 빈 `bundles/<게임>/` 디렉토리도 지워 그 자리에 아무것도 남기지 않는다.
+ *
+ * 남을 수 있는 것 하나: 바꿔 단(`rename`) 뒤에 부른 쪽의 트랜잭션이 실패하면(커밋 실패 등) 행 없는 `<버전>.zip`이
+ * 남는다. 행이 없으니 내려 주지 않고(`getVersion`이 null), 같은 버전을 다시 올리면 덮어쓴다.
  */
 export async function addVersion(
   tx: Tx,
@@ -135,6 +138,7 @@ export async function addVersion(
   const target = join(env.dataDir, bundlePath);
   await mkdir(dirname(target), { recursive: true });
   const temp = join(dirname(target), `.upload-${randomBytes(8).toString('hex')}`);
+  let ok = false;
   try {
     await copyFile(input.filePath, temp);
     const { hex: sha256, size: sizeBytes } = await sha256File(temp);
@@ -143,9 +147,12 @@ export async function addVersion(
     }
     await insertVersion(tx, { gameId, version, bundlePath, sizeBytes, sha256, signature, minShellApi, notes });
     await rename(temp, target);
+    ok = true;
     return { version, sha256, sizeBytes };
   } finally {
     await rm(temp, { force: true });
+    // 거절했으면 빈 디렉토리를 지운다. 다른 버전의 묶음이 있으면 비어 있지 않아 지워지지 않는다
+    if (!ok) await rmdir(dirname(target)).catch(() => {});
   }
 }
 

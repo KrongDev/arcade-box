@@ -3,7 +3,7 @@ import { storeIcon } from '../asset/index.ts';
 import type { Args, Command } from '../shared/cli/index.ts';
 import type { Db } from '../shared/db/index.ts';
 import { RuleError } from '../shared/errors.ts';
-import { readAllGames, readVersions } from './repo.ts';
+import { lockGame, readAllGames, readVersions } from './repo.ts';
 import { checkDescription, checkGameId, checkGameStatus, checkMinShellApi, checkName, checkNotes, checkSignature, checkSortOrder, checkVersion, INT_MAX } from './rules.ts';
 import { addVersion, createGame, publish, rollback, updateGame } from './service.ts';
 
@@ -120,8 +120,17 @@ export function commands(db: Db, actor: string, env: GameEnv): Command[] {
         target: (args) => ({ ref: updateArgs(args).id }),
         apply: async (tx, args) => {
           const a = updateArgs(args);
-          const iconPath = a.icon === undefined ? undefined : await storeIcon(env.dataDir, a.icon);
-          await updateGame(tx, a.id, { ...a.patch, iconPath });
+          if (a.icon === undefined) {
+            await updateGame(tx, a.id, a.patch);
+            return undefined;
+          }
+          // 아이콘 파일은 거절할 것을 다 거절한 뒤에 쓴다: 게임을 잠가 있는지 보고, 아이콘 말고 고칠 것을 먼저 고친다.
+          // 그래야 거절된 명령이 assets/에 아무 게임에도 달리지 않은 파일을 남기지 않는다 (이름이 내용의 해시라
+          // 다른 게임이 같은 파일을 쓰고 있을 수 있어서, 실패한 뒤에 지우는 방식은 쓰지 않는다)
+          if (!(await lockGame(tx, a.id))) throw new RuleError(404, 'not_found', '없는 게임이에요');
+          if (Object.values(a.patch).some((v) => v !== undefined)) await updateGame(tx, a.id, a.patch);
+          const iconPath = await storeIcon(env.dataDir, a.icon);
+          await updateGame(tx, a.id, { iconPath });
           return iconPath;
         },
         report: (iconPath) => (iconPath ? `고쳤어요. 아이콘: ${iconPath}` : '고쳤어요'),

@@ -1,5 +1,6 @@
-import { getGame } from '../game/index.ts';
+import { getGame, isGameId } from '../game/index.ts';
 import type { Q, Tx } from '../shared/db/index.ts';
+import { DrizzleQueryError } from 'drizzle-orm/errors';
 import { RuleError } from '../shared/errors.ts';
 import {
   deactivatePrice,
@@ -123,7 +124,7 @@ export async function getProduct(q: Q, id: string): Promise<Product | null> {
 
 /** 이 게임의 game 상품 (게임 하나에 하나). 없으면 null */
 export async function gameProduct(q: Q, gameId: string): Promise<Product | null> {
-  if (typeof gameId !== 'string' || !/^[a-z][a-z0-9-]{1,31}$/.test(gameId)) return null;
+  if (!isGameId(gameId)) return null;
   return readGameProduct(q, gameId);
 }
 
@@ -164,7 +165,14 @@ export async function setSku(tx: Tx, productId: string, store: Store, sku: strin
   if (!isProductId(productId) || !(await lockProduct(tx, productId))) throw noProduct();
   const owner = await skuOwner(tx, s, code, productId);
   if (owner) throw new RuleError(409, 'sku_taken', `${s}의 ${code}는 이미 ${owner}가 쓰고 있어요`);
-  await upsertSku(tx, productId, s, code);
+  try {
+    await upsertSku(tx, productId, s, code);
+  } catch (err) {
+    // 같은 순간에 다른 상품이 같은 코드를 넣었다 (위의 확인 뒤). 날 오류 대신 같은 거절로 답한다
+    const cause = err instanceof DrizzleQueryError ? (err.cause as { code?: string; constraint?: string } | undefined) : undefined;
+    if (cause?.code === '23505' && cause.constraint === 'store_skus_store_sku') throw new RuleError(409, 'sku_taken', `${s}의 ${code}는 이미 다른 상품이 쓰고 있어요`);
+    throw err;
+  }
 }
 
 // ── 목록 ────────────────────────────────────────────────────

@@ -1,17 +1,16 @@
 import { getUser } from '../account/index.ts';
 import { mutation } from '../admin/index.ts';
+import { isProductId } from '../product/index.ts';
 import type { Args, Command } from '../shared/cli/index.ts';
 import type { Db, Tx } from '../shared/db/index.ts';
 import { RuleError } from '../shared/errors.ts';
 import { grant, revoke } from './service.ts';
 
-const PRODUCT_ID = /^[a-z][a-z0-9.-]{1,63}$/;
-
 /** `<userId> <상품ID>`. 사용자 ID 모양은 `mutation`이 `target`으로 본다 */
 function userProduct(args: Args, line: string): { userId: string; productId: string } {
   if (args.positional.length !== 2) throw new RuleError(400, 'invalid_args', `이렇게 써 주세요: ${line}`);
   const [userId, productId] = args.positional;
-  if (!PRODUCT_ID.test(productId)) throw new RuleError(400, 'invalid_product_id', `상품 ID 모양이 아니에요: ${productId}`);
+  if (!isProductId(productId)) throw new RuleError(400, 'invalid_product_id', `상품 ID 모양이 아니에요: ${productId}`);
   return { userId, productId };
 }
 

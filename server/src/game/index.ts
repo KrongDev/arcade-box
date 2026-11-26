@@ -4,5 +4,5 @@
  */
 export { commands, type GameEnv } from './commands.ts';
 export type { LiveVersion } from './repo.ts';
-export { GAME_STATUSES, manifestText, type GameStatus, type VersionStatus } from './rules.ts';
+export { GAME_STATUSES, isGameId, manifestText, type GameStatus, type VersionStatus } from './rules.ts';
 export { addVersion, createGame, getGame, getVersion, listLiveGames, publish, rollback, updateGame, type Game, type GamePatch } from './service.ts';

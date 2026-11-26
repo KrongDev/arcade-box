@@ -99,9 +99,12 @@ export async function patchGame(
 /**
  * 게임 행을 잠그고 상태와 지금 버전의 행 번호를 준다. 버전 올리기·내보내기·되돌리기가 이 게임에서 한 번에 하나씩 돈다.
  * 없으면 null.
+ *
+ * 잠금은 `FOR NO KEY UPDATE`다: 게임의 키(id)는 바꾸지 않으니, 이 게임을 외래 키로 가리키는 행을 넣는 요청
+ * (장착, 상품 추가 — `FOR KEY SHARE`로 확인한다)은 큰 묶음을 복사·해시하는 동안에도 기다리지 않는다.
  */
 export async function lockGame(tx: Tx, id: string): Promise<{ status: GameStatus; liveVersionId: number | null } | null> {
-  const [row] = await tx.select({ status: games.status, liveVersionId: games.liveVersionId }).from(games).where(eq(games.id, id)).for('update');
+  const [row] = await tx.select({ status: games.status, liveVersionId: games.liveVersionId }).from(games).where(eq(games.id, id)).for('no key update');
   return row ?? null;
 }
 

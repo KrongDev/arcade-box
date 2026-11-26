@@ -23,9 +23,12 @@ export async function readProduct(q: Q, id: string): Promise<Product | null> {
   return row ?? null;
 }
 
-/** 상품 행을 잠그고 읽는다 (고치기·가격 바꾸기가 한 상품에서 한 번에 하나씩 돈다) */
+/**
+ * 상품 행을 잠그고 읽는다 (고치기·가격 바꾸기가 한 상품에서 한 번에 하나씩 돈다).
+ * `FOR NO KEY UPDATE`라서 이 상품을 외래 키로 가리키는 행을 넣는 요청(지급, 장착)은 기다리지 않는다.
+ */
 export async function lockProduct(tx: Tx, id: string): Promise<Product | null> {
-  const [row] = await tx.select(productColumns).from(products).where(eq(products.id, id)).for('update');
+  const [row] = await tx.select(productColumns).from(products).where(eq(products.id, id)).for('no key update');
   return row ?? null;
 }
 

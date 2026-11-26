@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { equip, grant, listEquipped, revoke } from '../../src/entitlement/index.ts';
+import { equip, grant, listEquipped, owns, revoke } from '../../src/entitlement/index.ts';
+import { createProduct, getProduct, updateProduct } from '../../src/product/index.ts';
 import type { Db } from '../../src/shared/db/index.ts';
 import { loginGuest } from '../account/helpers.ts';
 import { fakeClock } from '../helpers/clock.ts';
@@ -101,6 +102,81 @@ test('PUT /v2/me/equipped: 로그인한 사용자의 장착을 바꾸고 바뀐 
     assert.equal((await call(h, 'PUT', '/v2/me/equipped', { token: me.token, body: 'not json' })).status, 400);
     assert.equal((await call(h, 'PUT', '/v2/me/equipped', { body: { productId: 'pinball.table.classic' } })).status, 401);
     assert.equal((await call(h, 'GET', '/v2/me/equipped', { token: me.token })).status, 405);
+  } finally {
+    await close();
+  }
+});
+
+test('everyone이던 아이템을 purchase로 바꾸면 장착 목록에서 빠지고, 지급하면 다시 보인다', async () => {
+  const { db, close } = await testDb();
+  try {
+    await seedCatalog(db);
+    const me = await loginGuest(db, NOW);
+    await equip(db, me.userId, 'pinball.table.classic');
+    await db.transaction((tx) => updateProduct(tx, 'pinball.table.classic', { access: 'purchase' }));
+    assert.deepEqual(await listEquipped(db, me.userId), [], '가지지 않은 것은 장착된 것으로 내려 주지 않는다');
+    await assert.rejects(equip(db, me.userId, 'pinball.table.classic'), rule(403, 'not_owned'));
+    await give(db, me.userId, 'pinball.table.classic');
+    assert.deepEqual(await listEquipped(db, me.userId), [{ gameId: 'pinball', slot: 'table', productId: 'pinball.table.classic' }]);
+  } finally {
+    await close();
+  }
+});
+
+test('draft인 everyone 아이템은 장착되지 않는다', async () => {
+  const { db, close } = await testDb();
+  try {
+    await seedCatalog(db);
+    await db.transaction((tx) => createProduct(tx, { id: 'pinball.ball.silver', kind: 'item', name: '은 공', access: 'everyone', gameId: 'pinball', slot: 'ball' }));
+    const me = await loginGuest(db, NOW);
+    assert.equal(await owns(db, me.userId, (await getProduct(db, 'pinball.ball.silver'))!), false);
+    await assert.rejects(equip(db, me.userId, 'pinball.ball.silver'), rule(403, 'not_owned'));
+    for (const status of ['hidden', 'retired'] as const) {
+      await db.transaction((tx) => updateProduct(tx, 'pinball.ball.silver', { status }));
+      await assert.rejects(equip(db, me.userId, 'pinball.ball.silver'), rule(403, 'not_owned'), status);
+    }
+    await db.transaction((tx) => updateProduct(tx, 'pinball.ball.silver', { status: 'on_sale' }));
+    await equip(db, me.userId, 'pinball.ball.silver');
+    assert.deepEqual(await listEquipped(db, me.userId), [{ gameId: 'pinball', slot: 'ball', productId: 'pinball.ball.silver' }]);
+  } finally {
+    await close();
+  }
+});
+
+test('on_sale이던 everyone 아이템을 retired로 바꾸면 장착 목록에서 빠진다', async () => {
+  const { db, close } = await testDb();
+  try {
+    await seedCatalog(db);
+    const me = await loginGuest(db, NOW);
+    await equip(db, me.userId, 'pinball.table.classic');
+    await db.transaction((tx) => updateProduct(tx, 'pinball.table.classic', { status: 'retired' }));
+    assert.deepEqual(await listEquipped(db, me.userId), []);
+    assert.equal(await owns(db, me.userId, (await getProduct(db, 'pinball.table.classic'))!), false);
+  } finally {
+    await close();
+  }
+});
+
+test('retired로 바뀐 상품도 지급받은 사람은 계속 가진다', async () => {
+  const { db, close } = await testDb();
+  try {
+    await seedCatalog(db);
+    const me = await loginGuest(db, NOW);
+    const other = await loginGuest(db, NOW);
+    await give(db, me.userId, 'pinball.table.sunset');
+    await equip(db, me.userId, 'pinball.table.sunset');
+    await db.transaction((tx) => updateProduct(tx, 'pinball.table.sunset', { status: 'retired' }));
+    const p = (await getProduct(db, 'pinball.table.sunset'))!;
+    assert.equal(await owns(db, me.userId, p), true);
+    assert.equal(await owns(db, other.userId, p), false);
+    assert.deepEqual(await listEquipped(db, me.userId), [{ gameId: 'pinball', slot: 'table', productId: 'pinball.table.sunset' }]);
+    // hidden 상품(neon)도 운영자는 줄 수 있고, 받은 사람은 장착한다
+    await give(db, me.userId, 'pinball.table.neon');
+    await equip(db, me.userId, 'pinball.table.neon');
+    assert.equal((await listEquipped(db, me.userId))[0].productId, 'pinball.table.neon');
+    // retired 상품도 운영자 지급은 된다 (not_grantable은 consumable·everyone일 때만)
+    await give(db, other.userId, 'pinball.table.sunset');
+    assert.equal(await owns(db, other.userId, p), true);
   } finally {
     await close();
   }

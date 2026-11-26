@@ -3,7 +3,7 @@
  * 다른 도메인은 이 파일로만 가져온다 (테이블에 외래 키를 걸 때만 `schema.ts`).
  */
 export { commands, type ProductEnv } from './commands.ts';
-export { checkProductShape, type Currency, type Product, type ProductAccess, type ProductKind, type ProductStatus, type Store } from './rules.ts';
+export { checkProductShape, isProductId, type Currency, type Product, type ProductAccess, type ProductKind, type ProductStatus, type Store } from './rules.ts';
 export {
   activePrice,
   clearPrice,

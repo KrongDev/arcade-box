@@ -3,7 +3,7 @@ import { storeIcon } from '../asset/index.ts';
 import type { Args, Command } from '../shared/cli/index.ts';
 import type { Db } from '../shared/db/index.ts';
 import { RuleError } from '../shared/errors.ts';
-import { readPriceHistory, readProducts, readSkus, readActivePrices } from './repo.ts';
+import { lockProduct, readActivePrices, readPriceHistory, readProducts, readSkus } from './repo.ts';
 import {
   checkAccess,
   checkAmount,
@@ -144,10 +144,16 @@ export function commands(db: Db, actor: string, env: ProductEnv): Command[] {
         target: (args) => ({ ref: updateArgs(args).id }),
         apply: async (tx, args) => {
           const a = updateArgs(args);
-          const patch = { ...a.patch };
-          if (a.icon !== undefined) patch.iconPath = await storeIcon(env.dataDir, a.icon);
-          await updateProduct(tx, a.id, patch);
-          return patch.iconPath;
+          if (a.icon === undefined) {
+            await updateProduct(tx, a.id, a.patch);
+            return undefined;
+          }
+          // 아이콘 파일은 거절할 것을 다 거절한 뒤에 쓴다 (game update --icon과 같은 까닭)
+          if (!(await lockProduct(tx, a.id))) throw new RuleError(404, 'not_found', '없는 상품이에요');
+          if (Object.keys(a.patch).length > 0) await updateProduct(tx, a.id, a.patch);
+          const iconPath = await storeIcon(env.dataDir, a.icon);
+          await updateProduct(tx, a.id, { iconPath });
+          return iconPath;
         },
         report: (iconPath) => (iconPath ? `고쳤어요. 아이콘: ${iconPath}` : '고쳤어요'),
       }),
