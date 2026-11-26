@@ -43,6 +43,13 @@
       "when": 1795679723664,
       "tag": "0005_product",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1795679951389,
+      "tag": "0006_entitlement",
+      "breakpoints": true
     }
   ]
 }

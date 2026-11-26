@@ -5,6 +5,7 @@
 import { userInfo } from 'node:os';
 import { createInterface } from 'node:readline';
 import { commands as adminCommands } from './admin/index.ts';
+import { commands as entitlementCommands } from './entitlement/index.ts';
 import { commands as gameCommands } from './game/index.ts';
 import { commands as productCommands } from './product/index.ts';
 import { runCli, type CliIo, type Command } from './shared/cli/index.ts';
@@ -51,6 +52,7 @@ try {
       ...walletCommands(db, actor),
       ...gameCommands(db, actor, { dataDir: config.dataDir, publicKey: config.bundlePublicKey }),
       ...productCommands(db, actor, { dataDir: config.dataDir }),
+      ...entitlementCommands(db, actor),
     ];
     code = await runCli(process.argv.slice(2), commands, io);
   } finally {

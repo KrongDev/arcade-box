@@ -8,3 +8,4 @@ export * from './account/schema.ts';
 export * from './wallet/schema.ts';
 export * from './game/schema.ts';
 export * from './product/schema.ts';
+export * from './entitlement/schema.ts';
