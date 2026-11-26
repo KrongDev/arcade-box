@@ -5,3 +5,4 @@
 export { app } from './shared/db/schema.ts';
 export * from './admin/schema.ts';
 export * from './account/schema.ts';
+export * from './wallet/schema.ts';

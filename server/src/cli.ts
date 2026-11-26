@@ -8,6 +8,7 @@ import { commands as adminCommands } from './admin/index.ts';
 import { runCli, type CliIo, type Command } from './shared/cli/index.ts';
 import { loadConfig } from './shared/config.ts';
 import { connectPg } from './shared/db/index.ts';
+import { commands as walletCommands } from './wallet/index.ts';
 
 /** 운영 기록에 남는 "누가": ADMIN_ACTOR, 없으면 OS 사용자 이름 */
 function actorName(): string {
@@ -42,7 +43,8 @@ try {
   const config = loadConfig();
   const { db, close } = connectPg(config.databaseUrl);
   try {
-    const commands: Command[] = [...adminCommands(db, actorName())];
+    const actor = actorName();
+    const commands: Command[] = [...adminCommands(db, actor), ...walletCommands(db, actor)];
     code = await runCli(process.argv.slice(2), commands, io);
   } finally {
     await close();
