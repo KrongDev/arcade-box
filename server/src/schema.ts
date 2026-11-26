@@ -7,3 +7,4 @@ export * from './admin/schema.ts';
 export * from './account/schema.ts';
 export * from './wallet/schema.ts';
 export * from './game/schema.ts';
+export * from './product/schema.ts';
