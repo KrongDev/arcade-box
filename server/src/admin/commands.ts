@@ -27,6 +27,7 @@ export function commands(db: Db, actor: string): Command[] {
     {
       name: 'config get',
       usage: 'config get [key]',
+      flags: [],
       run: async (args, io) => {
         const keys = args.positional.length > 0 ? [configKey(args.positional[0])] : KEYS;
         for (const key of keys) io.out(`${key} = ${await getNumber(db, key)}`);
@@ -35,6 +36,7 @@ export function commands(db: Db, actor: string): Command[] {
     {
       name: 'config set',
       usage: 'config set <key> <value> --reason <까닭> [--yes]',
+      flags: ['reason', 'yes'],
       run: mutation(db, actor, {
         action: 'config.set',
         describe: (args) => {

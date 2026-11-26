@@ -65,6 +65,7 @@ export function seedCommand(db: Db, actor: string): Command {
   return {
     name: 'seed',
     usage: 'seed --reason <까닭> [--yes]',
+    flags: ['reason', 'yes'],
     run: mutation(db, actor, {
       action: 'seed',
       describe: () => `처음 자료(게임 ${SEED.games.length}, 순위표 ${SEED.boards.length}, 상품 ${SEED.products.length})를 넣어요. 이미 있는 것은 건드리지 않아요`,

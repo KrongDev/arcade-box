@@ -167,8 +167,8 @@ async function replay(tx: Tx, a: { userId: string; productId: string; first: Ord
  *    잠그는 순서는 판 결과·보상과 같다: 사용자 → 지갑 → 그 밖
  * 2. 같은 키의 주문이 있으면 처음 답을 `replayed: true`로 준다 (`replay`). 가진 것을 확인하기 전에 본다 — 안 그러면 다시 보낸 구매가 `already_owned`를 받는다
  * 3. 팔 수 있는지: 없는 상품이면 `404 not_found`. `on_sale`이 아니거나, `access`가 `purchase`가 아니거나, 소모되는 상품(코인 묶음)이거나,
- *    게임 상품인데 그 게임이 `live`가 아니거나, 켜진 COIN 가격이 없으면 `409 not_for_sale`.
- *    게임의 상태는 게임 상품에만 본다 (그 게임의 아이템은 상품 상태만 본다)
+ *    게임 상품이나 게임에 딸린 아이템인데 그 게임이 `live`가 아니거나, 켜진 COIN 가격이 없으면 `409 not_for_sale`.
+ *    이미 산 사람의 보유는 게임을 내려도 그대로다 (가진 것의 기준은 스펙 5.6)
  * 4. 이미 가졌으면 `409 already_owned`
  * 5. 코인을 뺀다 (`applyCoins`, 까닭 `purchase`). 모자라면 `409 insufficient_coins`. 가격이 0이면 코인 기록을 만들지 않는다
  * 6. 주문(구매 당시 이름·종류·가격)과 사건 셋(created → completed → granted), 보유, `orders.entitlement_id`를 넣는다
@@ -201,9 +201,12 @@ export async function purchaseWithCoins(db: Db, userId: string, input: unknown, 
     const product = await getProduct(tx, productId);
     if (!product) throw noProduct();
     if (product.status !== 'on_sale' || product.access !== 'purchase' || product.consumable) throw notForSale();
-    // 게임 상품은 그 게임이 live일 때만 판다: 아직 내보내지 않았거나(draft) 내린(retired) 게임은 사도 할 수 없다
-    const game = product.kind === 'game' && product.gameId !== null ? await getGame(tx, product.gameId) : null;
-    if (product.kind === 'game' && game?.status !== 'live') throw notForSale();
+    // 게임 상품도, 게임에 딸린 아이템도 그 게임이 live일 때만 판다: 아직 내보내지 않았거나(draft) 내린(retired) 게임은
+    // 사도 할 수 없고, 그 게임의 아이템은 목록(/v2/catalog)에도 나오지 않는다. 게임에 딸리지 않은 상품(gameId 없음)은 보지 않는다
+    const ofGame = product.gameId !== null ? await getGame(tx, product.gameId) : null;
+    if (product.gameId !== null && ofGame?.status !== 'live') throw notForSale();
+    // 답의 `game`은 게임 상품을 샀을 때만 준다
+    const game = product.kind === 'game' ? ofGame : null;
     const price = await activePrice(tx, product.id, 'COIN');
     if (!price) throw notForSale();
     if (await owns(tx, userId, product)) throw alreadyOwned();

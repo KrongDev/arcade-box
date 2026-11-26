@@ -27,6 +27,7 @@ export function commands(db: Db, actor: string): Command[] {
     {
       name: 'grant',
       usage: `${GRANT} [--yes]`,
+      flags: ['reason', 'yes'],
       run: mutation(db, actor, {
         action: 'grant',
         describe: (args) => {
@@ -48,6 +49,7 @@ export function commands(db: Db, actor: string): Command[] {
     {
       name: 'revoke',
       usage: `${REVOKE} [--yes]`,
+      flags: ['reason', 'yes'],
       run: mutation(db, actor, {
         action: 'revoke',
         describe: (args) => {

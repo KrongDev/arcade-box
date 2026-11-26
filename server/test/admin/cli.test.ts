@@ -7,19 +7,20 @@ import { fakeIo } from '../helpers/cli.ts';
 /** 받은 인자를 적어 두기만 하는 명령들 */
 function recording() {
   const calls: Array<{ name: string; args: Args }> = [];
-  const make = (name: string, usage = name): Command => ({
+  const make = (name: string, usage = name, flags: string[] = []): Command => ({
     name,
     usage,
+    flags,
     run: async (args) => {
       calls.push({ name, args });
     },
   });
   const commands = [
     make('config get', 'config get [key]'),
-    make('config set', 'config set <key> <value> --reason <까닭> [--yes]'),
+    make('config set', 'config set <key> <value> --reason <까닭> [--yes]', ['reason', 'yes']),
     make('game add'),
-    make('game add-version'),
-    make('grant', 'grant <userId> <상품> --reason <까닭>'),
+    make('game add-version', 'game add-version <게임ID> <버전> --file <묶음.zip>', ['file']),
+    make('grant', 'grant <userId> <상품> --reason <까닭>', ['reason']),
     make('order show'),
     make('orders purge-expired'),
   ];
@@ -69,12 +70,56 @@ test('명령 이름 뒤의 것을 인자로 넘기고 0으로 끝난다', async 
   ]);
 });
 
+test('명령이 받지 않는 flag가 오면 실행하지 않고, 어느 flag인지와 쓰는 법을 보여 주며 1로 끝난다', async () => {
+  const { calls, commands } = recording();
+  for (const [argv, bad] of [
+    // 오타 난 flag: 조용히 넘기면 까닭 없이, 또는 확인 없이 실행된다
+    [['config', 'set', 'attendance_coins', '70', '--reasn', '이벤트', '--yes'], ['--reasn']],
+    [['config', 'set', 'attendance_coins', '70', '--reason', '이벤트', '--yse'], ['--yse']],
+    [['config', 'set', 'attendance_coins', '70', '--reason', '이벤트', '--yes', '--dry-run', '--force=1'], ['--dry-run', '--force']],
+    // 다른 명령의 flag
+    [['grant', 'u1', 'game.minesweeper', '--reason', '보상', '--yes'], ['--yes']],
+    // flag를 하나도 받지 않는 명령
+    [['config', 'get', '--reason', '확인'], ['--reason']],
+    [['game', 'add', 'pinball', '--yes'], ['--yes']],
+  ] as Array<[string[], string[]]>) {
+    const io = fakeIo();
+    assert.equal(await runCli(argv, commands, io), 1, argv.join(' '));
+    assert.match(io.text(), /모르는 flag/, argv.join(' '));
+    for (const name of bad) assert.ok(io.text().includes(name), `${argv.join(' ')}: ${name}을 알려 주지 않는다`);
+    const usage = commands.find((c) => argv.join(' ').startsWith(c.name))!.usage;
+    assert.ok(io.text().includes(usage), `${argv.join(' ')}: 쓰는 법이 없다`);
+  }
+  assert.deepEqual(calls, [], '거절한 명령은 실행되지 않는다');
+});
+
+test('값이 --로 시작해 flag로 읽혔으면 --flag=값으로 적으라고 알려 준다', async () => {
+  const { calls, commands } = recording();
+  const io = fakeIo();
+  assert.equal(await runCli(['config', 'set', 'attendance_coins', '70', '--reason', '--yes가 필요해서', '--yes'], commands, io), 1);
+  assert.match(io.text(), /모르는 flag예요: --yes가 필요해서/);
+  assert.match(io.text(), /--reason=…/);
+  assert.deepEqual(calls, []);
+  // 그렇게 적으면 된다
+  const again = recording();
+  assert.equal(await runCli(['config', 'set', 'attendance_coins', '70', '--reason=--yes가 필요해서', '--yes'], again.commands, fakeIo()), 0);
+  assert.deepEqual(
+    again.calls.map((c) => c.args.flags),
+    [{ reason: '--yes가 필요해서', yes: true }],
+  );
+  // 오타일 뿐인 flag에는 그 말을 덧붙이지 않는다
+  const typo = fakeIo();
+  assert.equal(await runCli(['config', 'set', 'attendance_coins', '70', '--reason', '이벤트', '--yse'], commands, typo), 1);
+  assert.doesNotMatch(typo.text(), /=…/);
+});
+
 test('RuleError는 메시지만 보여 주고 1로 끝난다', async () => {
   const io = fakeIo();
   const commands: Command[] = [
     {
       name: 'fail',
       usage: 'fail',
+      flags: [],
       run: async () => {
         throw new RuleError(409, 'already_owned', '이미 가지고 있어요');
       },
@@ -90,6 +135,7 @@ test('그 밖의 오류는 스택까지 보여 주고 1로 끝난다', async () 
     {
       name: 'crash',
       usage: 'crash',
+      flags: [],
       run: async function crashingCommand() {
         throw new TypeError('뜻밖의 오류');
       },
@@ -107,6 +153,7 @@ test('오류가 다른 오류를 감싸고 있으면 속 까닭도 보여 준다
     {
       name: 'db',
       usage: 'db',
+      flags: [],
       run: async () => {
         throw new Error('Failed query: select "value" from "app"."app_config"', { cause: refused });
       },
@@ -114,6 +161,7 @@ test('오류가 다른 오류를 감싸고 있으면 속 까닭도 보여 준다
     {
       name: 'deep',
       usage: 'deep',
+      flags: [],
       run: async () => {
         throw new Error('바깥', { cause: new Error('가운데', { cause: new Error('맨 안쪽 까닭') }) });
       },

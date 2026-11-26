@@ -119,6 +119,7 @@ export function commands(db: Db, actor: string, env: ProductEnv): Command[] {
     {
       name: 'product add',
       usage: `${ADD} [--yes]`,
+      flags: ['kind', 'name', 'access', 'game', 'slot', 'grant-coins', 'description', 'status', 'sort', 'reason', 'yes'],
       run: mutation(db, actor, {
         action: 'product.add',
         describe: (args) => {
@@ -133,6 +134,7 @@ export function commands(db: Db, actor: string, env: ProductEnv): Command[] {
     {
       name: 'product update',
       usage: `${UPDATE} [--yes]`,
+      flags: ['name', 'description', 'access', 'status', 'grant-coins', 'sort', 'icon', 'reason', 'yes'],
       run: mutation(db, actor, {
         action: 'product.update',
         describe: (args) => {
@@ -162,6 +164,7 @@ export function commands(db: Db, actor: string, env: ProductEnv): Command[] {
       // 읽기만 한다: 까닭도 확인도 받지 않고 운영 기록도 남기지 않는다
       name: 'product list',
       usage: 'product list',
+      flags: [],
       run: async (args, io) => {
         if (args.positional.length > 0) throw usage('product list');
         const all = await readProducts(db, false);
@@ -181,6 +184,7 @@ export function commands(db: Db, actor: string, env: ProductEnv): Command[] {
     {
       name: 'product show',
       usage: 'product show <상품ID>',
+      flags: [],
       run: async (args, io) => {
         if (args.positional.length !== 1) throw usage('product show <상품ID>');
         const p = await getProduct(db, args.positional[0]);
@@ -200,6 +204,7 @@ export function commands(db: Db, actor: string, env: ProductEnv): Command[] {
     {
       name: 'price set',
       usage: 'price set <상품ID> <COIN|KRW> <금액> --reason <까닭> [--yes]',
+      flags: ['reason', 'yes'],
       run: mutation(db, actor, {
         action: 'price.set',
         describe: (args) => {
@@ -217,6 +222,7 @@ export function commands(db: Db, actor: string, env: ProductEnv): Command[] {
     {
       name: 'price clear',
       usage: 'price clear <상품ID> <COIN|KRW> --reason <까닭> [--yes]',
+      flags: ['reason', 'yes'],
       run: mutation(db, actor, {
         action: 'price.clear',
         describe: (args) => {
@@ -234,6 +240,7 @@ export function commands(db: Db, actor: string, env: ProductEnv): Command[] {
     {
       name: 'sku set',
       usage: 'sku set <상품ID> <google_play|app_store> <코드> --reason <까닭> [--yes]',
+      flags: ['reason', 'yes'],
       run: mutation(db, actor, {
         action: 'sku.set',
         describe: (args) => {

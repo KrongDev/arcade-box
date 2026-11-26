@@ -10,7 +10,7 @@ import { test } from 'node:test';
  * - 다른 도메인의 것은 그 도메인의 index.ts로만 가져온다. 외래 키를 거는 schema.ts끼리만 예외다.
  * - shared는 shared 밖의 것을 가져오지 않는다.
  * - 의존은 아래 단에서 위 단으로만 간다. 같은 단끼리도 가져오지 않는다.
- *   src 바로 아래의 조립 파일(index.ts, server.ts, cli.ts, schema.ts, seed.ts …)은 맨 위 단이다.
+ *   src 바로 아래의 조립 파일(index.ts, server.ts, cli.ts, commands.ts, schema.ts, seed.ts …)은 맨 위 단이다.
  */
 const TIERS: string[][] = [['admin', 'asset', 'account'], ['game', 'wallet'], ['product'], ['entitlement'], ['play', 'reward', 'order'], ['view']];
 const SHARED = 'shared';
@@ -114,8 +114,8 @@ test('검사기가 진짜 src를 읽고 있다', () => {
   assert.ok('shared/http/index.ts' in real);
   assert.ok('shared/errors.ts' in real);
   assert.ok(importsOf(real['shared/http/index.ts']).includes('../errors.ts'));
-  // 경계를 넘는 import도 실제로 읽힌다: 명령줄 조립이 admin을 그 index.ts로 가져온다
-  assert.ok(importsOf(real['cli.ts']).includes('./admin/index.ts'));
+  // 경계를 넘는 import도 실제로 읽힌다: 명령을 모으는 조립 파일이 admin을 그 index.ts로 가져온다
+  assert.ok(importsOf(real['commands.ts']).includes('./admin/index.ts'));
   assert.ok(importsOf(real['schema.ts']).includes('./admin/schema.ts'));
 });
 

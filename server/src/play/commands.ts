@@ -101,6 +101,7 @@ export function commands(db: Db, actor: string): Command[] {
     {
       name: 'board add',
       usage: `${ADD} [--yes]`,
+      flags: ['game', 'label', 'ordering', 'min', 'max', 'max-coins', 'requires', 'validator', 'params', 'sort', 'reason', 'yes'],
       run: mutation(db, actor, {
         action: 'board.add',
         describe: (args) => {
@@ -115,6 +116,8 @@ export function commands(db: Db, actor: string): Command[] {
     {
       name: 'board update',
       usage: `${UPDATE} [--yes]`,
+      // --game·--ordering은 쓰는 법에 없지만 받는다: "바꿀 수 없어요. 새 순위표를 만들어 주세요"라고 답하려고 (`updateArgs`)
+      flags: ['label', 'min', 'max', 'max-coins', 'requires', 'validator', 'params', 'sort', 'game', 'ordering', 'reason', 'yes'],
       run: mutation(db, actor, {
         action: 'board.update',
         describe: (args) => {
@@ -136,6 +139,7 @@ export function commands(db: Db, actor: string): Command[] {
       // 읽기만 한다: 까닭도 확인도 받지 않고 운영 기록도 남기지 않는다
       name: 'board list',
       usage: LIST,
+      flags: [],
       run: async (args, io) => {
         if (args.positional.length > 1) throw usage(LIST);
         const gameId = args.positional[0];

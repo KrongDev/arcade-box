@@ -93,6 +93,7 @@ export function commands(db: Db, actor: string, env: GameEnv): Command[] {
     {
       name: 'game add',
       usage: 'game add <게임ID> --name <이름> [--description <설명>] [--sort <순서>] --reason <까닭> [--yes]',
+      flags: ['name', 'description', 'sort', 'reason', 'yes'],
       run: mutation(db, actor, {
         action: 'game.add',
         describe: (args) => {
@@ -107,6 +108,7 @@ export function commands(db: Db, actor: string, env: GameEnv): Command[] {
     {
       name: 'game update',
       usage: 'game update <게임ID> [--name <이름>] [--description <설명>] [--sort <순서>] [--status draft|live|retired] [--icon <파일>] --reason <까닭> [--yes]',
+      flags: ['name', 'description', 'sort', 'status', 'icon', 'reason', 'yes'],
       run: mutation(db, actor, {
         action: 'game.update',
         describe: (args) => {
@@ -140,6 +142,7 @@ export function commands(db: Db, actor: string, env: GameEnv): Command[] {
       // 읽기만 한다: 까닭도 확인도 받지 않고 운영 기록도 남기지 않는다
       name: 'game list',
       usage: 'game list',
+      flags: [],
       run: async (args, io) => {
         if (args.positional.length > 0) throw usage('game list');
         const all = await readAllGames(db);
@@ -157,6 +160,7 @@ export function commands(db: Db, actor: string, env: GameEnv): Command[] {
     {
       name: 'game add-version',
       usage: 'game add-version <게임ID> <버전> --file <묶음.zip> --signature <base64> --min-shell-api <n> [--notes <메모>] --reason <까닭> [--yes]',
+      flags: ['file', 'signature', 'min-shell-api', 'notes', 'reason', 'yes'],
       run: mutation(db, actor, {
         action: 'game.add_version',
         describe: (args) => {
@@ -174,6 +178,7 @@ export function commands(db: Db, actor: string, env: GameEnv): Command[] {
     {
       name: 'game publish',
       usage: 'game publish <게임ID> <버전> --reason <까닭> [--yes]',
+      flags: ['reason', 'yes'],
       run: mutation(db, actor, {
         action: 'game.publish',
         describe: (args) => {
@@ -195,6 +200,7 @@ export function commands(db: Db, actor: string, env: GameEnv): Command[] {
     {
       name: 'game rollback',
       usage: 'game rollback <게임ID> [--to <버전>] --reason <까닭> [--yes]',
+      flags: ['to', 'reason', 'yes'],
       run: mutation(db, actor, {
         action: 'game.rollback',
         describe: (args) => {

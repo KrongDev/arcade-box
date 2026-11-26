@@ -29,6 +29,7 @@ export function commands(db: Db, actor: string): Command[] {
     {
       name: 'coins adjust',
       usage: 'coins adjust <userId> <증감> --reason <까닭> [--yes]',
+      flags: ['reason', 'yes'],
       run: mutation(db, actor, {
         action: 'coins.adjust',
         describe: (args) => {
@@ -60,6 +61,7 @@ export function commands(db: Db, actor: string): Command[] {
       // 읽기만 한다: 까닭도 확인도 받지 않고 운영 기록도 남기지 않는다. 어긋난 것을 고치지 않는다
       name: 'wallet verify',
       usage: 'wallet verify [userId]',
+      flags: [],
       run: async (args, io) => {
         if (args.positional.length > 1) throw new RuleError(400, 'invalid_args', '이렇게 써 주세요: wallet verify [userId]');
         const userId = args.positional[0];

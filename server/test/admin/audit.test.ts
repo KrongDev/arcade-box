@@ -20,6 +20,7 @@ async function setup() {
     {
       name: 'thing set',
       usage: 'thing set <n> --reason <까닭> [--yes]',
+      flags: ['user', 'note', 'fail', 'reason', 'yes'],
       run: mutation(db, 'ops-kim', {
         action: 'thing.set',
         describe: (args) => `물건을 ${args.positional[0]}(으)로 바꿔요`,

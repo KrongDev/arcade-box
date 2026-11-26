@@ -146,6 +146,8 @@ for (const [why, productId] of [
   ['retired 상품', 'pinball.table.retired'],
   ['draft 게임의 게임 상품', 'game.breakout'],
   ['retired 게임의 게임 상품', 'game.tetra'],
+  ['draft 게임의 아이템', 'breakout.paddle.gold'],
+  ['retired 게임의 아이템', 'tetra.block.neon'],
 ] as const) {
   test(`${why}: 409 not_for_sale`, () =>
     withShop(async (db) => {
@@ -301,9 +303,35 @@ test('게임 상품은 그 게임이 live일 때만 팔린다: 내보내면 살 
     assert.deepEqual(await listOwned(db, me.userId), ['game.breakout']);
     assert.deepEqual(await buy(db, me.userId, 'game.breakout', 'breakout-key-01'), { ...out, replayed: true });
 
-    // 게임이 live가 아니어도 그 게임의 아이템은 상품 상태만 본다 (게임 상품에만 거는 규칙이다)
-    await db.transaction((tx) => updateGame(tx, 'pinball', { status: 'retired' }));
+  }));
+
+test('게임에 딸린 아이템도 그 게임이 live일 때만 팔린다: 내보내면 살 수 있고, 내린 뒤에는 새로 못 사지만 산 사람은 그대로 가진다', () =>
+  withShop(async (db) => {
+    const me = await loginGuest(db, NOW);
+    const late = await loginGuest(db, NOW);
+    await fund(db, me.userId, 5000);
+    await fund(db, late.userId, 5000);
+    // 아직 내보내지 않은(draft) 게임의 아이템: 목록(/v2/catalog)에는 없지만 상품 ID를 알아도 사지 못한다
+    await assert.rejects(buy(db, me.userId, 'breakout.paddle.gold', 'paddle-key-01'), rule(409, 'not_for_sale'));
+    assert.deepEqual(await counts(db, me.userId), { orders: 0, events: 0, entitlements: 0, ledger: 1, balance: 5000 });
+
+    // 게임을 내보내면(live) 같은 키로 살 수 있다
+    await db.transaction((tx) => updateGame(tx, 'breakout', { status: 'live' }));
+    const out = await buy(db, me.userId, 'breakout.paddle.gold', 'paddle-key-01');
+    assert.deepEqual([out.balance, out.replayed, out.game], [4800, false, null]);
+
+    // 게임을 내린(retired) 뒤: 새로 사지 못한다. 이미 산 사람의 보유와, 다시 보낸 요청의 답은 그대로다
+    await db.transaction((tx) => updateGame(tx, 'breakout', { status: 'retired' }));
+    await assert.rejects(buy(db, late.userId, 'breakout.paddle.gold'), rule(409, 'not_for_sale'));
+    assert.deepEqual(await counts(db, late.userId), { orders: 0, events: 0, entitlements: 0, ledger: 1, balance: 5000 });
+    assert.deepEqual(await listOwned(db, me.userId), ['breakout.paddle.gold']);
+    assert.deepEqual(await buy(db, me.userId, 'breakout.paddle.gold', 'paddle-key-01'), { ...out, replayed: true });
+
+    // live인 게임의 아이템은 그대로 팔린다. 그 게임을 내리면 그 아이템도 팔리지 않는다
     assert.equal((await buy(db, late.userId, 'pinball.table.sunset')).balance, 4700);
+    await db.transaction((tx) => updateGame(tx, 'pinball', { status: 'retired' }));
+    await assert.rejects(buy(db, late.userId, CHEAP_ONE), rule(409, 'not_for_sale'));
+    assert.deepEqual(await listOwned(db, late.userId), ['pinball.table.sunset']);
   }));
 
 test('가격이 0인 상품을 사면 코인 기록 없이 주문·사건·보유가 생긴다', () =>

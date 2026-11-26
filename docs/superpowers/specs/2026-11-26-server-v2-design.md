@@ -215,7 +215,7 @@
 
 **코인으로 사기** `POST /v2/shop/purchase` `{ productId, idempotencyKey }`. 한 트랜잭션으로:
 
-1. 상품이 `on_sale`이고 `access = 'purchase'`인지, 켜진 COIN 가격이 있는지 봐요. 게임 상품은 그 게임이 `live`일 때만 팔아요 (할 수 없는 게임에 코인을 받지 않아요). 아니면 `not_for_sale`이에요.
+1. 상품이 `on_sale`이고 `access = 'purchase'`인지, 켜진 COIN 가격이 있는지 봐요. 게임 상품과 게임에 딸린 아이템은 그 게임이 `live`일 때만 팔아요 (할 수 없는 게임과, 목록에 보이지 않는 그 게임의 아이템에 코인을 받지 않아요). 아니면 `not_for_sale`이에요. 이미 산 사람의 보유는 게임을 내려도 그대로예요.
 2. 이미 가졌으면 `already_owned`.
 3. 지갑을 잠그고 잔액을 봐요.
 4. 주문(완료, 구매 당시 이름·가격), 주문 사건(created, completed, granted), 코인 기록(−가격), 보유를 넣어요.

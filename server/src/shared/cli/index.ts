@@ -18,6 +18,12 @@ export interface Command {
   name: string;
   /** 쓰는 법 한 줄. 모르는 명령이 오면 이 줄들을 보여 준다 */
   usage: string;
+  /**
+   * 이 명령이 받는 flag의 이름 (`--` 없이, 예: `['reason', 'yes']`). 여기에 없는 flag가 오면 `runCli`가 실행하지 않고 거절한다:
+   * 오타 난 flag(`--yse`, `--stauts`)를 조용히 넘기면 운영자가 뜻하지 않은 일을 한다.
+   * 바꾸는 명령은 `reason`과 `yes`를 적고, 읽기만 하는 명령은 적지 않는다.
+   */
+  flags: readonly string[];
   run(args: Args, io: CliIo): Promise<void>;
 }
 
@@ -60,7 +66,8 @@ export function parseArgs(argv: string[]): Args {
 
 /**
  * 명령을 찾아 실행한다. 0은 성공, 1은 실패.
- * 명령 이름은 맨 앞에 온다 (`config set …`). `RuleError`는 메시지만, 그 밖의 오류는 스택까지 보여 준다.
+ * 명령 이름은 맨 앞에 온다 (`config set …`). 그 명령이 받지 않는 flag가 있으면 실행하지 않고 쓰는 법을 보여 준다.
+ * `RuleError`는 메시지만, 그 밖의 오류는 스택까지 보여 준다.
  */
 export async function runCli(argv: string[], commands: Command[], io: CliIo): Promise<number> {
   let found: Command | null = null;
@@ -78,8 +85,18 @@ export async function runCli(argv: string[], commands: Command[], io: CliIo): Pr
     for (const command of commands) io.out(`  ${command.usage}`);
     return 1;
   }
+  const args = parseArgs(argv.slice(used));
+  const unknown = Object.keys(args.flags).filter((name) => !found.flags.includes(name));
+  if (unknown.length > 0) {
+    io.out(`모르는 flag예요: ${unknown.map((name) => `--${name}`).join(' ')}. 이렇게 써 주세요: ${found.usage}`);
+    // 값이 `--`로 시작해서 flag로 읽힌 것일 수 있다 (`--reason --yes가 필요해서`). 값을 받지 못한 flag가 있으면 적는 법을 알려 준다
+    for (const [name, value] of Object.entries(args.flags)) {
+      if (value === true && !VALUELESS.has(name) && found.flags.includes(name)) io.out(`--${name}의 값이 --로 시작하면 --${name}=… 으로 적어요`);
+    }
+    return 1;
+  }
   try {
-    await found.run(parseArgs(argv.slice(used)), io);
+    await found.run(args, io);
     return 0;
   } catch (err) {
     if (err instanceof RuleError) {

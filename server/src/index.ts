@@ -26,7 +26,7 @@ const SHUTDOWN_GRACE_MS = 8_000;
 let pg: ReturnType<typeof connectPg> | null = null;
 try {
   const config = loadConfig();
-  pg = connectPg(config.databaseUrl);
+  pg = connectPg(config.databaseUrl, config.dbTimeouts);
   await pg.migrate();
   const db = pg.db;
   const closeDb = pg.close;

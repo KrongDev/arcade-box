@@ -50,6 +50,7 @@ export function commands(db: Db, actor: string, now: Clock = () => new Date()): 
     {
       name: 'order list',
       usage: LIST,
+      flags: ['user', 'limit'],
       run: async (args, io) => {
         const found = await recentOrders(db, listArgs(args));
         if (found.length === 0) {
@@ -62,6 +63,7 @@ export function commands(db: Db, actor: string, now: Clock = () => new Date()): 
     {
       name: 'order show',
       usage: SHOW,
+      flags: [],
       run: async (args, io) => {
         const o = await getOrder(db, orderArg(args, SHOW));
         if (!o) throw noOrder();
@@ -85,6 +87,7 @@ export function commands(db: Db, actor: string, now: Clock = () => new Date()): 
       // 읽은 주문으로 요약과 운영 기록의 대상(사용자, 주문)을 채운다. 환불 자체는 트랜잭션 안에서 주문을 잠그고 다시 확인한다
       name: 'order refund',
       usage: `${REFUND} [--yes]`,
+      flags: ['reason', 'yes'],
       run: async (args, io) => {
         const order = await getOrder(db, orderArg(args, REFUND));
         if (!order) throw noOrder();
@@ -111,6 +114,7 @@ export function commands(db: Db, actor: string, now: Clock = () => new Date()): 
       // 실제로 지운 수는 틀이 기록에 넣을 길이 없어 화면에만 나온다 — 센 뒤에 계정을 지운 사용자가 없으면 같은 수다)
       name: 'orders purge-expired',
       usage: `${PURGE} [--yes]`,
+      flags: ['reason', 'yes'],
       run: async (args, io) => {
         if (args.positional.length !== 0) throw usage(PURGE);
         const at = now();

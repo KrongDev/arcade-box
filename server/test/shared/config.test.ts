@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { loadConfig } from '../../src/shared/config.ts';
+import { DB_TIMEOUT_DEFAULTS, loadConfig } from '../../src/shared/config.ts';
 
 const BASE = { DATABASE_URL: 'postgres://u:p@db:5432/arcade' };
 
@@ -17,7 +17,17 @@ test('환경 변수가 DATABASE_URL뿐이면 기본값으로 채운다', () => {
     dataDir: './data',
     devAuth: false,
     clientIpHeader: null,
+    dbTimeouts: { connectMs: 5000, statementMs: 10000, idleInTxMs: 10000 },
   });
+});
+
+test('DB 시간 제한을 환경 변수로 바꿀 수 있고, 0이나 숫자가 아닌 값은 던진다 (끄는 길은 없다)', () => {
+  const config = loadConfig({ ...BASE, DB_CONNECT_TIMEOUT_MS: '2000', DB_STATEMENT_TIMEOUT_MS: '3000', DB_IDLE_IN_TX_TIMEOUT_MS: '4000' });
+  assert.deepEqual(config.dbTimeouts, { connectMs: 2000, statementMs: 3000, idleInTxMs: 4000 });
+  assert.deepEqual(loadConfig({ ...BASE, DB_CONNECT_TIMEOUT_MS: '', DB_STATEMENT_TIMEOUT_MS: '', DB_IDLE_IN_TX_TIMEOUT_MS: '' }).dbTimeouts, DB_TIMEOUT_DEFAULTS);
+  for (const name of ['DB_CONNECT_TIMEOUT_MS', 'DB_STATEMENT_TIMEOUT_MS', 'DB_IDLE_IN_TX_TIMEOUT_MS']) {
+    for (const bad of ['0', '-1', 'abc', '1.5', '10s', '600001']) assert.throws(() => loadConfig({ ...BASE, [name]: bad }), new RegExp(name), `${name}=${bad}`);
+  }
 });
 
 test('환경 변수로 준 값을 읽는다', () => {

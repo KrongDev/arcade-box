@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import pg from 'pg';
+import type { DbTimeouts } from '../src/shared/config.ts';
 import { connectPg, type Db } from '../src/shared/db/index.ts';
 
 /**
@@ -36,8 +37,9 @@ async function admin(statement: string): Promise<void> {
 /**
  * 마이그레이션을 적용한 빈 데이터베이스를 새로 만들어 준다. 연결은 여러 개(pool)라서
  * `Promise.all`로 보낸 요청이 진짜로 동시에 돈다. 다 쓰면 `close()`를 부른다.
+ * `timeouts`를 주면 연결 풀의 시간 제한을 그 값으로 한다 (시간 제한 자체를 보는 테스트용).
  */
-export async function pgTestDb(): Promise<{ db: Db; close(): Promise<void> }> {
+export async function pgTestDb(timeouts?: DbTimeouts): Promise<{ db: Db; close(): Promise<void> }> {
   if (!PG_URL) throw new Error('DATABASE_URL이 필요해요');
   const url = new URL(PG_URL);
   assertLocal(url);
@@ -45,7 +47,7 @@ export async function pgTestDb(): Promise<{ db: Db; close(): Promise<void> }> {
   const name = `arcade_test_${randomBytes(8).toString('hex')}`;
   await admin(`CREATE DATABASE "${name}"`);
   url.pathname = `/${name}`;
-  const conn = connectPg(url.toString());
+  const conn = connectPg(url.toString(), timeouts);
   try {
     await conn.migrate();
   } catch (err) {

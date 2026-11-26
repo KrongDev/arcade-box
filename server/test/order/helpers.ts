@@ -38,6 +38,9 @@ const PRODUCTS: Array<NewProduct & { coin?: number; krw?: number }> = [
   // 할 수 없는 게임의 게임 상품: 상품은 on_sale이고 가격도 있지만 게임이 live가 아니다
   { id: 'game.breakout', kind: 'game', name: '벽돌깨기', access: 'purchase', gameId: 'breakout', status: 'on_sale', coin: 2000 },
   { id: 'game.tetra', kind: 'game', name: '테트라', access: 'purchase', gameId: 'tetra', status: 'on_sale', coin: 2000 },
+  // 할 수 없는 게임에 딸린 아이템: 상품은 on_sale이고 가격도 있지만 게임이 live가 아니다
+  { id: 'breakout.paddle.gold', kind: 'item', name: '금 막대', access: 'purchase', gameId: 'breakout', slot: 'paddle', status: 'on_sale', coin: 200 },
+  { id: 'tetra.block.neon', kind: 'item', name: '네온 블록', access: 'purchase', gameId: 'tetra', slot: 'block', status: 'on_sale', coin: 200 },
   // 가격이 0인 것 (켜진 COIN 가격이 있으니 살 수 있다)
   { id: 'pinball.ball.free', kind: 'item', name: '공짜 공', access: 'purchase', gameId: 'pinball', slot: 'ball', status: 'on_sale', coin: 0 },
   ...CHEAP.map((id, i): NewProduct & { coin: number } => ({ id, kind: 'item', name: `공 ${i}`, access: 'purchase', gameId: 'pinball', slot: 'ball', status: 'on_sale', coin: 300 })),
