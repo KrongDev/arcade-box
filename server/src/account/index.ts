@@ -3,8 +3,8 @@
  * 다른 도메인은 이 파일로만 가져온다 (테이블에 외래 키를 걸 때만 `schema.ts`).
  */
 export { deleteAccount, type DeletionPolicy } from './deletion.ts';
-export { findUserByIdentity, getUser, issueNonce, linkIdentity, logout, resolveLink, type Summarize } from './link.ts';
+export { issueNonce, linkIdentity, resolveLink, type Summarize } from './link.ts';
 export { routes, type AccountDeps } from './routes.ts';
 export type { AccountProvider, Provider, Settings } from './rules.ts';
-export { findSession, getSettings, listProviders, registerOrLoginGuest, updateSettings } from './service.ts';
+export { findSession, findUserByIdentity, getSettings, getUser, listProviders, logout, registerOrLoginGuest, requireActiveUser, updateSettings } from './service.ts';
 export { devVerifier, googleVerifier, type IdTokenVerifier, type JWKSource } from './verify.ts';

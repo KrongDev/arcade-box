@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
+import { eq } from 'drizzle-orm';
 import { test } from 'node:test';
 import { findSession, findUserByIdentity, getUser, issueNonce, linkIdentity, listProviders, registerOrLoginGuest, resolveLink, updateSettings, type DeletionPolicy } from '../../src/account/index.ts';
-import { authNonces, sessions, userIdentities, users } from '../../src/account/schema.ts';
+import { authNonces, sessions, userIdentities, users, userSettings } from '../../src/account/schema.ts';
 import { sha256Hex } from '../../src/shared/crypto.ts';
 import type { Db, Q } from '../../src/shared/db/index.ts';
 import { RuleError } from '../../src/shared/errors.ts';
@@ -235,7 +236,7 @@ test('충돌 뒤 같은 토큰으로 resolve: 기기 수단이 그 계정으로 
     const { summarize } = fakeSummaries();
     const account = await linkedUser(db, clock(), 'g-1');
     const device = await loginGuest(db, clock());
-    await updateSettings(db, device.userId, { sound: false });
+    await updateSettings(db, device.userId, { sound: false }, clock());
     const purged: string[] = [];
     const policy: DeletionPolicy = {
       mustKeepUserRow: async () => false,
@@ -280,6 +281,43 @@ test('충돌 뒤 같은 토큰으로 resolve: 기기 수단이 그 계정으로 
   }
 });
 
+test('충돌 정리가 중간에 실패하면 아무것도 남지 않는다: 수단은 옮겨지지 않고 손님과 nonce가 그대로다', async () => {
+  const { db, close } = await testDb();
+  try {
+    const clock = fakeClock(START);
+    const account = await linkedUser(db, clock(), 'g-1');
+    const device = await loginGuest(db, clock());
+    await updateSettings(db, device.userId, { sound: false }, clock());
+    const input = { provider: 'google', idToken: await googleToken(db, device.userId, clock(), 'g-1') };
+    const before = await dumpAppSchema(db);
+
+    // 손님의 다른 도메인 데이터를 지우다 실패한다 (수단을 옮긴 뒤, 세션을 주기 전)
+    const failing: DeletionPolicy = {
+      mustKeepUserRow: async () => false,
+      purge: [
+        async (tx, userId) => {
+          await tx.delete(userSettings).where(eq(userSettings.userId, userId));
+        },
+        async () => {
+          throw new Error('지갑을 지우다 실패');
+        },
+      ],
+    };
+    await assert.rejects(resolveLink(db, device.session, input, kit.verify, clock(), TTL_DAYS, failing), /지갑을 지우다 실패/);
+
+    assert.deepEqual(await dumpAppSchema(db), before, '수단 옮기기·손님 삭제·세션 발급이 한 트랜잭션이라 모두 되돌아간다');
+    assert.deepEqual(await findSession(db, device.tokenHash, clock()), device.session, '손님의 세션이 그대로 통한다');
+    assert.equal((await db.select().from(userIdentities)).find((i) => i.id === device.session.identityId)?.userId, device.userId);
+    assert.equal((await db.select().from(sessions)).filter((s) => s.userId === account.userId).length, 1, '그 계정의 세션은 늘지 않았다');
+
+    // nonce가 남아 있어서 같은 토큰으로 다시 하면 된다
+    const resolved = await resolveLink(db, device.session, input, kit.verify, clock(), TTL_DAYS, noPolicy);
+    assert.equal(resolved.userId, account.userId);
+  } finally {
+    await close();
+  }
+});
+
 test('resolve 뒤 세션이 끝나도 기기 비밀값만으로 그 계정에 다시 들어간다', async () => {
   const { db, close } = await testDb();
   try {
@@ -312,7 +350,7 @@ test('충돌 뒤 resolve를 부르지 않으면(취소) 손님 사용자와 그 
     const { summarize } = fakeSummaries();
     const account = await linkedUser(db, clock(), 'g-1');
     const device = await loginGuest(db, clock());
-    await updateSettings(db, device.userId, { haptic: false });
+    await updateSettings(db, device.userId, { haptic: false }, clock());
     const input = { provider: 'google', idToken: await googleToken(db, device.userId, clock(), 'g-1') };
     const before = await dumpAppSchema(db);
 
@@ -506,6 +544,67 @@ test('HTTP: nonce 받기 → 연결 → 충돌 → 정리까지, 토큰은 응�
     }
   } finally {
     Object.assign(console, original);
+    await close();
+  }
+});
+
+test('nonce·연결·충돌 정리는 사용자당 분당 10번까지다', async () => {
+  const { db, close } = await testDb();
+  try {
+    const clock = fakeClock(START);
+    const handler = accountHandler(db, clock, { verify: kit.verify });
+    const a = await loginGuest(db, clock());
+    const b = await loginGuest(db, clock());
+    const code = (res: { body: unknown }) => (res.body as { error?: { code?: string } }).error?.code;
+
+    for (const path of ['/v2/auth/nonce', '/v2/auth/link', '/v2/auth/link/resolve']) {
+      // 거절되는 요청(틀린 본문)도 한도에 들어간다
+      const body = path === '/v2/auth/nonce' ? undefined : { provider: 'google', idToken: 'not-a-token' };
+      for (let i = 0; i < 10; i++) {
+        const res = await call(handler, 'POST', path, { token: a.token, body });
+        assert.notEqual(res.status, 429, `${path} ${i + 1}번째`);
+      }
+      const blocked = await call(handler, 'POST', path, { token: a.token, body });
+      assert.equal(blocked.status, 429, `${path} 11번째`);
+      assert.equal(code(blocked), 'rate_limited');
+      // 다른 사용자는 따로 센다. 같은 IP여도 막히지 않는다
+      assert.notEqual((await call(handler, 'POST', path, { token: b.token, body })).status, 429, `${path} 다른 사용자`);
+    }
+    assert.equal((await db.select().from(authNonces)).length, 11, '막힌 요청은 nonce를 만들지 않는다 (a 10개, b 1개)');
+
+    // 1분 뒤에는 다시 된다
+    clock.advance(60_000);
+    assert.equal((await call(handler, 'POST', '/v2/auth/nonce', { token: a.token })).status, 200);
+  } finally {
+    await close();
+  }
+});
+
+test('잘못된 입력의 오류 메시지에 서버 안에서 쓰는 이름이 나오지 않는다', async () => {
+  const { db, close } = await testDb();
+  try {
+    const clock = fakeClock(START);
+    const handler = accountHandler(db, clock, { verify: kit.verify });
+    const me = await loginGuest(db, clock());
+    const error = async (path: string, body: unknown, token?: string) => (await call(handler, 'POST', path, { token, body })).body as { error: { code: string; message: string } };
+
+    const cases: Array<[string, { error: { code: string; message: string } }]> = [
+      ['invalid_device_secret', await error('/v2/auth/guest', { deviceSecret: '' })],
+      ['invalid_body', await error('/v2/auth/guest', [1])],
+      ['invalid_body', await error('/v2/auth/link', 'null', me.token)],
+      ['invalid_id_token', await error('/v2/auth/link', { provider: 'google', idToken: 7 }, me.token)],
+      ['invalid_provider', await error('/v2/auth/link', { provider: 7, idToken: 'x.y.z' }, me.token)],
+      ['invalid_provider', await error('/v2/auth/link', { provider: 'apple', idToken: 'x.y.z' }, me.token)],
+      ['invalid_id_token', await error('/v2/auth/link/resolve', { provider: 'google' }, me.token)],
+    ];
+    for (const [code, body] of cases) {
+      assert.equal(body.error.code, code);
+      assert.doesNotMatch(body.error.message, /device_secret|id_token|provider|body|_/, `${code}: ${body.error.message}`);
+      assert.match(body.error.message, /요$/, '메시지는 해요체다');
+    }
+    // 같은 코드는 같은 말로 답한다 (모양이 틀린 수단과 모르는 수단)
+    assert.equal(cases[4][1].error.message, cases[5][1].error.message);
+  } finally {
     await close();
   }
 });

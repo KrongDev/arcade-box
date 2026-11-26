@@ -1,9 +1,24 @@
 import assert from 'node:assert/strict';
 import { eq } from 'drizzle-orm';
 import { test } from 'node:test';
-import { deleteAccount, findSession, findUserByIdentity, getUser, issueNonce, linkIdentity, listProviders, registerOrLoginGuest, updateSettings, type DeletionPolicy } from '../../src/account/index.ts';
+import {
+  deleteAccount,
+  findSession,
+  findUserByIdentity,
+  getUser,
+  issueNonce,
+  linkIdentity,
+  listProviders,
+  logout,
+  registerOrLoginGuest,
+  requireActiveUser,
+  resolveLink,
+  updateSettings,
+  type DeletionPolicy,
+} from '../../src/account/index.ts';
 import { sessions, userIdentities, users, userSettings } from '../../src/account/schema.ts';
 import type { Db } from '../../src/shared/db/index.ts';
+import { RuleError } from '../../src/shared/errors.ts';
 import { fakeClock } from '../helpers/clock.ts';
 import { testDb } from '../helpers/db.ts';
 import { call } from '../helpers/http.ts';
@@ -18,7 +33,7 @@ const summarize = async () => ({ coins: 0, games: 0 });
 async function fullUser(db: Db, now: Date, sub: string): Promise<Guest> {
   const me = await loginGuest(db, now);
   await linkIdentity(db, me.session, { provider: 'google', idToken: await kit.sign({ sub, nonce: await issueNonce(db, me.userId, now) }) }, kit.verify, now, summarize);
-  await updateSettings(db, me.userId, { sound: false });
+  await updateSettings(db, me.userId, { sound: false }, now);
   await loginGuest(db, now, me.secret);
   return me;
 }
@@ -45,7 +60,7 @@ test('mustKeepUserRow가 거짓이면 사용자 행까지 사라지고 purge가 
     const otherBefore = await dumpAppSchema(db);
     const { calls, policy } = recordingPolicy(false);
 
-    await deleteAccount(db, me.userId, policy);
+    await deleteAccount(db, me.userId, policy, clock());
 
     assert.equal(await getUser(db, me.userId), null);
     assert.deepEqual(await tablesContaining(db, [me.userId]), [], '이 사용자를 가리키는 행이 어디에도 없다');
@@ -70,7 +85,7 @@ test('mustKeepUserRow가 거짓이면 사용자 행까지 사라지고 purge가 
     assert.equal(relink.linked, true);
 
     // 없는 사용자를 지우라고 해도 던지지 않는다 (같은 요청이 두 번 온 경우)
-    await deleteAccount(db, me.userId, policy);
+    await deleteAccount(db, me.userId, policy, clock());
   } finally {
     await close();
   }
@@ -83,12 +98,13 @@ test('참이면 사용자 행은 status deleted로 남고 로그인 수단·세�
     const me = await fullUser(db, clock(), 'g-me');
     const { calls, policy } = recordingPolicy(true);
 
-    await deleteAccount(db, me.userId, policy);
+    clock.advance(3 * 60 * 60 * 1000);
+    await deleteAccount(db, me.userId, policy, clock());
 
     const [row] = await db.select().from(users);
     assert.equal(row.id, me.userId);
     assert.equal(row.status, 'deleted');
-    assert.ok(row.deletedAt instanceof Date);
+    assert.equal(row.deletedAt?.getTime(), clock().getTime(), '지운 시각은 요청을 받은 시각이다');
     assert.deepEqual(await getUser(db, me.userId), { id: me.userId, status: 'deleted', createdAt: START });
     assert.deepEqual(await db.select().from(userIdentities), []);
     assert.deepEqual(await db.select().from(sessions), []);
@@ -103,6 +119,47 @@ test('참이면 사용자 행은 status deleted로 남고 로그인 수단·세�
     assert.equal(fresh.created, true);
     assert.notEqual(fresh.userId, me.userId);
     assert.equal((await getUser(db, me.userId))?.status, 'deleted');
+  } finally {
+    await close();
+  }
+});
+
+test('지워진(행만 남은) 사용자에게는 수단·세션·설정이 다시 붙지 않는다: 옛 세션 값으로 불러도 401이다', async () => {
+  const { db, close } = await testDb();
+  try {
+    const clock = fakeClock(START);
+    const me = await fullUser(db, clock(), 'g-me');
+    // 삭제가 도는 동안 도착한 요청은 세션 확인을 이미 지나서, 삭제가 끝난 뒤 이 세션 값을 들고 들어온다
+    const stale = me.session;
+    const nonce = await issueNonce(db, me.userId, clock());
+    await deleteAccount(db, me.userId, recordingPolicy(true).policy, clock());
+    const before = await dumpAppSchema(db);
+    const unauthorized = (err: unknown) => err instanceof RuleError && err.status === 401 && err.code === 'unauthorized';
+
+    const input = { provider: 'google', idToken: await kit.sign({ sub: 'g-again', nonce }) };
+    await assert.rejects(linkIdentity(db, stale, input, kit.verify, clock(), summarize), unauthorized);
+    await assert.rejects(resolveLink(db, stale, input, kit.verify, clock(), TTL_DAYS, recordingPolicy(false).policy), unauthorized);
+    await assert.rejects(updateSettings(db, me.userId, { sound: true }, clock()), unauthorized);
+    await db.transaction(async (tx) => {
+      await assert.rejects(requireActiveUser(tx, me.userId), unauthorized);
+    });
+    // 로그아웃과 다시 지우기는 할 일이 없어서 조용히 끝난다
+    await logout(db, stale, me.tokenHash);
+    const again = recordingPolicy(false);
+    await deleteAccount(db, me.userId, again.policy, clock());
+    assert.deepEqual(again.calls, [], '이미 지운 사용자는 다시 지우지 않는다 (사용자 행도 그대로 남는다)');
+
+    assert.deepEqual(await dumpAppSchema(db), before, '아무것도 붙지 않았다');
+    assert.equal(await findUserByIdentity(db, 'google', 'g-again'), null);
+    assert.equal((await getUser(db, me.userId))?.status, 'deleted');
+
+    // 없는 사용자도 마찬가지고, 살아 있는 사용자는 통과한다
+    const alive = await loginGuest(db, clock());
+    await db.transaction(async (tx) => {
+      await assert.rejects(requireActiveUser(tx, '11111111-1111-4111-8111-111111111111'), unauthorized);
+      await requireActiveUser(tx, alive.userId);
+    });
+    await assert.rejects(updateSettings(db, '11111111-1111-4111-8111-111111111111', { sound: true }, clock()), unauthorized);
   } finally {
     await close();
   }
@@ -125,7 +182,7 @@ test('purge가 중간에 실패하면 아무것도 지워지지 않는다', asyn
         },
       ],
     };
-    await assert.rejects(deleteAccount(db, me.userId, policy), /지갑을 지우다 실패/);
+    await assert.rejects(deleteAccount(db, me.userId, policy, clock()), /지갑을 지우다 실패/);
     assert.deepEqual(await dumpAppSchema(db), before, '앞선 purge가 지운 것까지 되돌아간다 (한 트랜잭션)');
     assert.deepEqual(await findSession(db, me.tokenHash, clock()), me.session);
   } finally {

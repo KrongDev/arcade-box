@@ -1,10 +1,10 @@
 import type { Config } from '../shared/config.ts';
 import type { Db } from '../shared/db/index.ts';
 import type { Route } from '../shared/http/index.ts';
-import { obj } from '../shared/validate.ts';
 import { deleteAccount, type DeletionPolicy } from './deletion.ts';
-import { issueNonce, linkIdentity, logout, resolveLink, type Summarize } from './link.ts';
-import { registerOrLoginGuest, updateSettings } from './service.ts';
+import { issueNonce, linkIdentity, resolveLink, type Summarize } from './link.ts';
+import { parseBody } from './rules.ts';
+import { logout, registerOrLoginGuest, updateSettings } from './service.ts';
 import type { IdTokenVerifier } from './verify.ts';
 
 /**
@@ -34,7 +34,7 @@ export function routes(deps: AccountDeps): Route[] {
       auth: 'none',
       limit: { by: 'ip', perMinute: 10 },
       async handle(ctx) {
-        const body = obj(await ctx.json(), 'body');
+        const body = parseBody(await ctx.json());
         const result = await registerOrLoginGuest(db, body.deviceSecret as string, ctx.now, config.sessionTtlDays);
         return { userId: result.userId, token: result.token, expiresAt: result.expiresAt.toISOString(), created: result.created };
       },
@@ -84,7 +84,7 @@ export function routes(deps: AccountDeps): Route[] {
       path: '/v2/me',
       auth: 'required',
       async handle(ctx) {
-        await deleteAccount(db, ctx.session!.userId, policy);
+        await deleteAccount(db, ctx.session!.userId, policy, ctx.now);
         return { deleted: true };
       },
     },
@@ -93,7 +93,7 @@ export function routes(deps: AccountDeps): Route[] {
       path: '/v2/me/settings',
       auth: 'required',
       async handle(ctx) {
-        return { settings: await updateSettings(db, ctx.session!.userId, await ctx.json()) };
+        return { settings: await updateSettings(db, ctx.session!.userId, await ctx.json(), ctx.now) };
       },
     },
   ];

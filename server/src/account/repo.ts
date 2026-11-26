@@ -1,4 +1,4 @@
-import { and, eq, gt, lte, sql } from 'drizzle-orm';
+import { and, eq, gt, lte } from 'drizzle-orm';
 import type { Q, Tx } from '../shared/db/index.ts';
 import type { Provider, Settings } from './rules.ts';
 import { authNonces, sessions, userIdentities, users, userSettings } from './schema.ts';
@@ -72,14 +72,14 @@ export async function readSettings(q: Q, userId: string): Promise<Settings | nul
 }
 
 /** 보낸 것만 바꾼다. 행이 없으면 나머지는 켜진 채로 만든다 */
-export async function upsertSettings(q: Q, userId: string, patch: Partial<Settings>): Promise<Settings> {
+export async function upsertSettings(q: Q, userId: string, patch: Partial<Settings>, now: Date): Promise<Settings> {
   const set: { soundOn?: boolean; hapticOn?: boolean } = {};
   if (patch.sound !== undefined) set.soundOn = patch.sound;
   if (patch.haptic !== undefined) set.hapticOn = patch.haptic;
   const [row] = await q
     .insert(userSettings)
-    .values({ userId, ...set })
-    .onConflictDoUpdate({ target: userSettings.userId, set: { ...set, updatedAt: sql`now()` } })
+    .values({ userId, ...set, updatedAt: now })
+    .onConflictDoUpdate({ target: userSettings.userId, set: { ...set, updatedAt: now } })
     .returning({ sound: userSettings.soundOn, haptic: userSettings.hapticOn });
   return row;
 }
@@ -92,16 +92,20 @@ export async function distinctProviders(q: Q, userId: string): Promise<Provider[
 // ── 잠금 ────────────────────────────────────────────────────
 // 계정을 바꾸는 일(연결, 충돌 정리, 로그아웃, 삭제)은 먼저 사용자 행을 잠그고, 그다음에 수단 행을 건드린다.
 // 로그인도 같은 순서(사용자 → 수단)로 잠가서 서로 물고 서는 일(deadlock)이 없다.
+//
+// 둘 다 살아 있는(`active`) 사용자만 잡는다. 삭제가 끝나기를 기다리던 요청은 잠금을 얻은 뒤 조건을 다시 보게 되는데,
+// 현금 주문 때문에 행이 `deleted`로 남은 사용자도 "없는 사용자"로 봐야 지워진 계정에 수단·세션·설정이 다시 붙지 않는다.
+const alive = (userId: string) => and(eq(users.id, userId), eq(users.status, 'active'));
 
-/** 계정을 바꾸는 동안 사용자 행을 잠근다 (같은 사용자의 다른 변경·로그인·외래 키를 거는 쓰기가 기다린다). 없으면 거짓 */
+/** 계정을 바꾸는 동안 사용자 행을 잠근다 (같은 사용자의 다른 변경·로그인·외래 키를 거는 쓰기가 기다린다). 없거나 지워졌으면 거짓 */
 export async function lockUser(tx: Tx, userId: string): Promise<boolean> {
-  const rows = await tx.select({ id: users.id }).from(users).where(eq(users.id, userId)).for('update');
+  const rows = await tx.select({ id: users.id }).from(users).where(alive(userId)).for('update');
   return rows.length > 0;
 }
 
-/** 이 사용자가 지워지지 않게 잡아 둔다 (다른 로그인은 막지 않는다). 지워지는 중이면 끝날 때까지 기다리고, 없으면 거짓 */
+/** 이 사용자가 지워지지 않게 잡아 둔다 (다른 로그인은 막지 않는다). 지워지는 중이면 끝날 때까지 기다리고, 없거나 지워졌으면 거짓 */
 export async function holdUser(tx: Tx, userId: string): Promise<boolean> {
-  const rows = await tx.select({ id: users.id }).from(users).where(eq(users.id, userId)).for('key share');
+  const rows = await tx.select({ id: users.id }).from(users).where(alive(userId)).for('key share');
   return rows.length > 0;
 }
 
@@ -159,11 +163,8 @@ export async function deleteLoginData(tx: Tx, userId: string): Promise<void> {
   await tx.delete(userSettings).where(eq(userSettings.userId, userId));
 }
 
-export async function markUserDeleted(tx: Tx, userId: string): Promise<void> {
-  await tx
-    .update(users)
-    .set({ status: 'deleted', deletedAt: sql`coalesce(${users.deletedAt}, now())` })
-    .where(eq(users.id, userId));
+export async function markUserDeleted(tx: Tx, userId: string, now: Date): Promise<void> {
+  await tx.update(users).set({ status: 'deleted', deletedAt: now }).where(eq(users.id, userId));
 }
 
 export async function readUser(q: Q, userId: string): Promise<{ id: string; status: 'active' | 'deleted'; createdAt: Date } | null> {

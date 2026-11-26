@@ -1,6 +1,6 @@
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose';
 import { RuleError } from '../shared/errors.ts';
-import type { AccountProvider } from './rules.ts';
+import { invalidProvider, tokenInvalid, type AccountProvider } from './rules.ts';
 
 /**
  * ID 토큰을 확인해 사용자 고유값을 얻는다. 수단(구글, 3번 작업의 애플)마다 구현이 하나씩이고 모양은 같다 (스펙 5.15).
@@ -31,10 +31,6 @@ const TOKEN_FAULTS = new Set([
   'ERR_JWKS_NO_MATCHING_KEY',
   'ERR_JWKS_MULTIPLE_MATCHING_KEYS',
 ]);
-
-// 메시지에 토큰이나 그 안의 값을 넣지 않는다
-const tokenInvalid = () => new RuleError(401, 'token_invalid', '로그인 정보를 확인하지 못했어요. 다시 시도해 주세요');
-const invalidProvider = () => new RuleError(400, 'invalid_provider', '지원하지 않는 로그인 수단이에요');
 
 function claim(value: unknown): string {
   if (typeof value !== 'string' || value.length < 1 || value.length > MAX_CLAIM_LENGTH) throw tokenInvalid();
@@ -83,8 +79,10 @@ const DEV_TOKEN = /^dev:([A-Za-z0-9_-]{1,64}):([A-Za-z0-9_-]{0,128})$/;
 /**
  * 개발용 가짜 확인기: 토큰 `dev:<sub>:<nonce>`를 구글 수단으로 받아들인다. 서명을 보지 않으니
  * `config.devAuth`일 때만 조립에 넣는다 (운영에서 `AUTH_DEV=1`이면 `loadConfig`가 던져서 서버가 뜨지 않는다).
+ * 조립이 잘못돼도 한 번 더 막히게, 운영 환경(`NODE_ENV=production`)에서는 만들 때 던진다.
  */
 export function devVerifier(): IdTokenVerifier {
+  if (process.env.NODE_ENV === 'production') throw new Error('운영 환경에서는 개발용 확인기를 쓸 수 없어요 (개발용 가짜 로그인 금지)');
   return async (provider, idToken) => {
     if (provider !== 'google') throw invalidProvider();
     const m = typeof idToken === 'string' ? DEV_TOKEN.exec(idToken) : null;

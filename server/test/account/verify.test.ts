@@ -145,3 +145,18 @@ test('개발용 확인기는 dev:<sub>:<nonce>를 구글 수단으로 받아들�
   // 진짜 구글 토큰은 개발용 확인기를 통과하지 못한다
   await assert.rejects(dev('google', await kit.sign(CLAIMS)), /token_invalid/);
 });
+
+test('개발용 확인기는 운영 환경(NODE_ENV=production)에서는 만들어지지 않는다', () => {
+  const original = process.env.NODE_ENV;
+  try {
+    process.env.NODE_ENV = 'production';
+    assert.throws(() => devVerifier(), /운영/);
+    process.env.NODE_ENV = 'development';
+    assert.equal(typeof devVerifier(), 'function');
+    delete process.env.NODE_ENV;
+    assert.equal(typeof devVerifier(), 'function');
+  } finally {
+    if (original === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = original;
+  }
+});

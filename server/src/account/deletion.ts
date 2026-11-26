@@ -16,22 +16,25 @@ export interface DeletionPolicy {
 /**
  * 부른 쪽의 트랜잭션 안에서 계정을 지운다 (충돌 정리가 손님을 지울 때도 쓴다).
  * 사용자 행을 먼저 잠가서, 지우는 동안 이 사용자에게 새 행(세션, 코인 기록 …)이 붙지 못하게 한다.
- * 이미 없는 사용자면 아무것도 하지 않는다.
+ *
+ * 없는 사용자와 이미 지운(`deleted`로 행만 남은) 사용자에게는 아무것도 하지 않는다: `purge`도 부르지 않고 행도 그대로 둔다.
+ * 그래서 이 함수로는 남은 사용자 행을 지울 수 없다. 현금 주문의 보관 기간(5년)이 지난 뒤 그 행을 지우는 길이
+ * 필요하면 order 쪽(`orders purge-expired`)이 따로 만들어야 한다.
  */
-export async function deleteAccountInTx(tx: Tx, userId: string, policy: DeletionPolicy): Promise<void> {
+export async function deleteAccountInTx(tx: Tx, userId: string, policy: DeletionPolicy, now: Date): Promise<void> {
   if (!(await lockUser(tx, userId))) return;
   const keep = await policy.mustKeepUserRow(tx, userId);
   for (const purge of policy.purge) await purge(tx, userId);
   await deleteLoginData(tx, userId);
-  if (keep) await markUserDeleted(tx, userId);
+  if (keep) await markUserDeleted(tx, userId, now);
   else await deleteUserRow(tx, userId);
 }
 
 /**
  * 계정 삭제 (스펙 5.4). 한 트랜잭션으로 다른 도메인의 데이터(`policy.purge`)와 로그인 수단·세션·설정을 지운다.
- * `mustKeepUserRow`가 참이면 사용자 행만 `deleted`로 남고, 거짓이면 사용자 행까지 지운다.
+ * `mustKeepUserRow`가 참이면 사용자 행만 `deleted`로 남고(`deleted_at`은 `now`), 거짓이면 사용자 행까지 지운다.
  * 지운 뒤 같은 기기 비밀값으로 들어오면 새 손님이다.
  */
-export async function deleteAccount(db: Db, userId: string, policy: DeletionPolicy): Promise<void> {
-  await db.transaction((tx) => deleteAccountInTx(tx, userId, policy));
+export async function deleteAccount(db: Db, userId: string, policy: DeletionPolicy, now: Date): Promise<void> {
+  await db.transaction((tx) => deleteAccountInTx(tx, userId, policy, now));
 }

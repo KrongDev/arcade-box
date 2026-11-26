@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { test } from 'node:test';
-import { deleteAccount, devVerifier, issueNonce, linkIdentity, logout, registerOrLoginGuest, resolveLink } from '../src/account/index.ts';
-import { authNonces, sessions, userIdentities, users } from '../src/account/schema.ts';
+import { deleteAccount, devVerifier, findSession, getUser, issueNonce, linkIdentity, logout, registerOrLoginGuest, resolveLink, type DeletionPolicy } from '../src/account/index.ts';
+import { authNonces, sessions, userIdentities, users, userSettings } from '../src/account/schema.ts';
 import { sha256Hex } from '../src/shared/crypto.ts';
 import type { Db } from '../src/shared/db/index.ts';
 import { accountHandler, loginGuest, noPolicy } from '../test/account/helpers.ts';
@@ -128,7 +128,7 @@ test('계정 삭제·충돌 정리·로그아웃과 같은 기기의 로그인�
     for (let round = 0; round < 10; round++) {
       // 삭제와 로그인
       const me = await loginGuest(db, NOW);
-      const [, ...logins] = await Promise.allSettled([deleteAccount(db, me.userId, noPolicy), ...[1, 2, 3].map(() => registerOrLoginGuest(db, me.secret, NOW, TTL_DAYS))]);
+      const [, ...logins] = await Promise.allSettled([deleteAccount(db, me.userId, noPolicy, NOW), ...[1, 2, 3].map(() => registerOrLoginGuest(db, me.secret, NOW, TTL_DAYS))]);
       assert.deepEqual(logins.filter((r) => r.status === 'rejected').map((r) => String((r as PromiseRejectedResult).reason?.cause?.code ?? (r as PromiseRejectedResult).reason)), [], `삭제와 겹친 로그인 ${round}`);
 
       // 충돌 정리와 로그인
@@ -163,3 +163,77 @@ test('계정 삭제·충돌 정리·로그아웃과 같은 기기의 로그인�
     await close();
   }
 });
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/** 다른 도메인의 데이터를 지우느라 0.2초가 걸리는 삭제. 그동안 사용자 행이 잠겨 있어서, 겹쳐 온 요청이 삭제가 끝나기를 기다리게 된다 */
+function slowPolicy(keepRow: boolean): DeletionPolicy {
+  return { mustKeepUserRow: async () => keepRow, purge: [() => sleep(200)] };
+}
+
+for (const keepRow of [true, false]) {
+  const kind = keepRow ? '행을 남기는(현금 주문이 있는)' : '행까지 지우는';
+  test(`${kind} 계정 삭제가 도는 동안 온 연결·충돌 정리·설정·로그인은 지워진 사용자에 아무것도 붙이지 못하고 500도 없다`, { skip: SKIP }, async () => {
+    const { db, close } = await pgTestDb();
+    try {
+      const handler = accountHandler(db, fakeClock(NOW.toISOString()), { verify: devVerifier() });
+      const policy = slowPolicy(keepRow);
+      /** 삭제를 먼저 시작하고(사용자 행을 잠근 뒤) 겹칠 요청을 보낸다 */
+      const during = async <T>(userId: string, request: () => Promise<T>): Promise<T> => {
+        const deleting = deleteAccount(db, userId, policy, NOW);
+        await sleep(50);
+        const result = await request();
+        await deleting;
+        return result;
+      };
+
+      // (가) 같은 사용자의 연결
+      const linker = await loginGuest(db, NOW);
+      const linkBody = await devToken(db, linker.userId, `during-${keepRow}-link`);
+      const linked = await during(linker.userId, () => call(handler, 'POST', '/v2/auth/link', { token: linker.token, body: linkBody }));
+      assert.equal(codeOf(linked), '401 unauthorized', '연결');
+
+      // (나) 지워지는 계정으로의 충돌 정리: 손님은 그대로 남는다
+      const sub = `during-${keepRow}-resolve`;
+      const account = await loginGuest(db, NOW);
+      await linkIdentity(db, account.session, await devToken(db, account.userId, sub), devVerifier(), NOW, summarize);
+      const device = await loginGuest(db, NOW);
+      const resolveBody = await devToken(db, device.userId, sub);
+      const resolved = await during(account.userId, () => call(handler, 'POST', '/v2/auth/link/resolve', { token: device.token, body: resolveBody }));
+      assert.equal(codeOf(resolved), '409 no_link_conflict', '충돌 정리');
+      // 손님을 잃지 않는다: 사용자는 active이고, 기기 수단과 세션이 그대로다
+      assert.equal((await getUser(db, device.userId))?.status, 'active', '손님은 지워지지 않았다');
+      const deviceIdentity = (await db.select().from(userIdentities)).find((i) => i.id === device.session.identityId);
+      assert.equal(deviceIdentity?.userId, device.userId, '기기 수단은 손님에게 그대로 붙어 있다');
+      assert.equal(deviceIdentity?.subject, sha256Hex(device.secret));
+      assert.deepEqual(await findSession(db, device.tokenHash, NOW), device.session, '손님의 세션이 그대로 통한다');
+      assert.equal((await registerOrLoginGuest(db, device.secret, NOW, TTL_DAYS)).userId, device.userId);
+      // 그 구글 계정은 이제 아무에게도 붙어 있지 않아서 같은 토큰으로 연결이 된다 (nonce는 남아 있다)
+      assert.equal(codeOf(await call(handler, 'POST', '/v2/auth/link', { token: device.token, body: resolveBody })), '200 ok');
+
+      // (다) 설정 바꾸기
+      const setter = await loginGuest(db, NOW);
+      const set = await during(setter.userId, () => call(handler, 'PUT', '/v2/me/settings', { token: setter.token, body: { sound: false } }));
+      assert.equal(codeOf(set), '401 unauthorized', '설정');
+
+      // (라) 같은 기기의 로그인: 삭제가 끝난 뒤의 새 손님이 된다
+      const returning = await loginGuest(db, NOW);
+      const login = await during(returning.userId, () => registerOrLoginGuest(db, returning.secret, NOW, TTL_DAYS));
+      assert.equal(login.created, true);
+      assert.notEqual(login.userId, returning.userId);
+
+      // 지워진 사용자를 가리키는 수단·세션·설정이 없다
+      const gone = [linker, account, setter, returning].map((u) => u.userId);
+      const userRows = await db.select().from(users);
+      for (const userId of gone) {
+        assert.equal(userRows.find((u) => u.id === userId)?.status, keepRow ? 'deleted' : undefined, '사용자 행');
+      }
+      const alive = new Set(userRows.filter((u) => u.status === 'active').map((u) => u.id));
+      for (const row of [...(await db.select().from(userIdentities)), ...(await db.select().from(sessions)), ...(await db.select().from(userSettings))]) {
+        assert.ok(alive.has(row.userId), `살아 있지 않은 사용자를 가리키는 행: ${JSON.stringify(row)}`);
+      }
+    } finally {
+      await close();
+    }
+  });
+}

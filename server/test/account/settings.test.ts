@@ -19,15 +19,21 @@ test('설정은 처음에 둘 다 켜져 있고, 보낸 것만 바뀐다', async
     const other = await registerOrLoginGuest(db, deviceSecret(), NOW, TTL_DAYS);
     assert.deepEqual(await getSettings(db, userId), { sound: true, haptic: true });
 
-    assert.deepEqual(await updateSettings(db, userId, { sound: false }), { sound: false, haptic: true });
+    assert.deepEqual(await updateSettings(db, userId, { sound: false }, NOW), { sound: false, haptic: true });
     assert.deepEqual(await getSettings(db, userId), { sound: false, haptic: true });
-    assert.deepEqual(await updateSettings(db, userId, { haptic: false }), { sound: false, haptic: false });
-    assert.deepEqual(await updateSettings(db, userId, { sound: true, haptic: true }), { sound: true, haptic: true });
+    assert.deepEqual(await updateSettings(db, userId, { haptic: false }, NOW), { sound: false, haptic: false });
+    assert.deepEqual(await updateSettings(db, userId, { sound: true, haptic: true }, NOW), { sound: true, haptic: true });
     // 빈 요청은 아무것도 바꾸지 않는다
-    assert.deepEqual(await updateSettings(db, userId, { haptic: false }), { sound: true, haptic: false });
-    assert.deepEqual(await updateSettings(db, userId, {}), { sound: true, haptic: false });
+    assert.deepEqual(await updateSettings(db, userId, { haptic: false }, NOW), { sound: true, haptic: false });
+    assert.deepEqual(await updateSettings(db, userId, {}, NOW), { sound: true, haptic: false });
 
-    assert.equal((await db.select().from(userSettings)).length, 1);
+    const rows = await db.select().from(userSettings);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].updatedAt.getTime(), NOW.getTime(), '바꾼 시각은 요청을 받은 시각이다');
+    const later = new Date(NOW.getTime() + 90_000);
+    await updateSettings(db, userId, { sound: false }, later);
+    assert.equal((await db.select().from(userSettings))[0].updatedAt.getTime(), later.getTime());
+    await updateSettings(db, userId, { sound: true }, NOW);
     assert.deepEqual(await getSettings(db, other.userId), { sound: true, haptic: true }, '다른 사용자의 설정은 그대로다');
   } finally {
     await close();
@@ -38,7 +44,7 @@ test('설정은 sound·haptic의 참/거짓만 받고, 다른 키나 다른 타�
   const { db, close } = await testDb();
   try {
     const { userId, token } = await registerOrLoginGuest(db, deviceSecret(), NOW, TTL_DAYS);
-    await updateSettings(db, userId, { sound: false, haptic: true });
+    await updateSettings(db, userId, { sound: false, haptic: true }, NOW);
 
     const bad: unknown[] = [
       { sound: 'true' },
@@ -61,7 +67,7 @@ test('설정은 sound·haptic의 참/거짓만 받고, 다른 키나 다른 타�
       [{ sound: true }],
     ];
     for (const patch of bad) {
-      await assert.rejects(updateSettings(db, userId, patch), invalidSettings, JSON.stringify(patch));
+      await assert.rejects(updateSettings(db, userId, patch, NOW), invalidSettings, JSON.stringify(patch));
       assert.deepEqual(await getSettings(db, userId), { sound: false, haptic: true }, `그대로여야 해요: ${JSON.stringify(patch)}`);
     }
 
