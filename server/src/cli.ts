@@ -10,9 +10,11 @@ import { commands as gameCommands } from './game/index.ts';
 import { commands as orderCommands } from './order/index.ts';
 import { commands as playCommands } from './play/index.ts';
 import { commands as productCommands } from './product/index.ts';
+import { seedCommand } from './seed.ts';
 import { runCli, type CliIo, type Command } from './shared/cli/index.ts';
 import { loadConfig } from './shared/config.ts';
 import { connectPg } from './shared/db/index.ts';
+import { commands as viewCommands } from './view/index.ts';
 import { commands as walletCommands } from './wallet/index.ts';
 
 /** 운영 기록에 남는 "누가": ADMIN_ACTOR, 없으면 OS 사용자 이름 */
@@ -57,6 +59,8 @@ try {
       ...entitlementCommands(db, actor),
       ...playCommands(db, actor),
       ...orderCommands(db, actor),
+      ...viewCommands(db),
+      seedCommand(db, actor),
     ];
     code = await runCli(process.argv.slice(2), commands, io);
   } finally {
