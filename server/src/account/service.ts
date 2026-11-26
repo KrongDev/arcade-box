@@ -8,6 +8,7 @@ import {
   distinctProviders,
   findIdentity,
   findLiveSession,
+  holdUser,
   insertIdentityIfAbsent,
   insertSession,
   insertUser,
@@ -42,9 +43,11 @@ export async function registerOrLoginGuest(
     for (let attempt = 0; attempt < 3; attempt++) {
       const existing = await findIdentity(tx, 'guest', subject);
       if (existing) {
-        const userId = await touchIdentity(tx, existing.id, now);
-        if (userId === null) continue; // 읽은 사이에 로그아웃·삭제로 수단이 사라졌다. 처음부터 다시 본다
-        return { userId, ...(await issueSession(tx, userId, existing.id, now, ttlDays)), created: false };
+        // 잠그는 순서는 늘 사용자 → 수단이다 (계정 삭제·로그아웃·충돌 정리와 같은 순서라 서로 물고 서지 않는다).
+        // 읽은 사이에 사용자가 지워졌거나 수단이 사라졌거나 다른 계정으로 옮겨졌으면 처음부터 다시 본다
+        if (!(await holdUser(tx, existing.userId))) continue;
+        if ((await touchIdentity(tx, existing.id, now)) !== existing.userId) continue;
+        return { userId: existing.userId, ...(await issueSession(tx, existing.userId, existing.id, now, ttlDays)), created: false };
       }
       const userId = await insertUser(tx, now);
       const identityId = await insertIdentityIfAbsent(tx, { userId, provider: 'guest', subject, now });
