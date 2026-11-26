@@ -4,8 +4,9 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { isIP } from 'node:net';
 import { pipeline } from 'node:stream/promises';
 import { sha256Hex } from '../crypto.ts';
-import { RuleError } from '../errors.ts';
+import { RuleError, safeMessage } from '../errors.ts';
 import type { Clock } from '../time.ts';
+import { hasControlChars } from '../validate.ts';
 import { createRateLimiter } from './rate-limit.ts';
 
 /** 로그인한 사용자와, 어느 로그인 수단(기기)으로 들어왔는지 */
@@ -36,7 +37,10 @@ export interface Route {
   path: string;
   /** none: 세션을 보지 않는다 · optional: 있으면 쓰고 틀리면 없는 것으로 본다 · required: 없거나 틀리면 401 */
   auth: 'none' | 'optional' | 'required';
-  /** 분당 요청 수 제한. `user`인데 세션이 없으면 IP로 센다 */
+  /**
+   * 분당 요청 수 제한. `ip`는 세션을 찾아보기 전에 센다. `user`는 로그인한 사용자별로 세고,
+   * 로그인하지 못한 요청(401로 끝나는 것 포함)은 IP로 센다
+   */
   limit?: { by: 'ip' | 'user'; perMinute: number };
   /** 돌려준 값은 200 JSON으로 나간다. 파일이나 캐시 헤더가 필요하면 `file()`, `json()`을 돌려준다 */
   handle(ctx: Ctx): Promise<unknown>;
@@ -90,7 +94,7 @@ function sendError(res: ServerResponse, err: RuleError) {
   sendJson(res, err.status, { error: { ...err.detail, code: err.code, message: err.message } });
 }
 
-async function sendFile(res: ServerResponse, reply: FileReply) {
+async function sendFile(res: ServerResponse, reply: FileReply, headOnly: boolean) {
   let size: number;
   try {
     const info = await stat(reply.path);
@@ -106,6 +110,10 @@ async function sendFile(res: ServerResponse, reply: FileReply) {
   };
   if (reply.cacheControl) headers['cache-control'] = reply.cacheControl;
   res.writeHead(200, headers);
+  if (headOnly) {
+    res.end();
+    return;
+  }
   await pipeline(createReadStream(reply.path), res);
 }
 
@@ -175,11 +183,15 @@ function matchPath(segments: string[], parts: string[]): Record<string, string> 
       continue;
     }
     if (parts[i] === '') return null;
+    let value: string;
     try {
-      params[seg.slice(1)] = decodeURIComponent(parts[i]);
+      value = decodeURIComponent(parts[i]);
     } catch {
       return null; // 풀 수 없는 %
     }
+    // 풀었더니 제어 문자(NUL, 줄바꿈 …)가 나오면 없는 경로로 본다. DB에 넣으면 오류가 나는 값이 처리기까지 가지 않게
+    if (hasControlChars(value)) return null;
+    params[seg.slice(1)] = value;
   }
   return params;
 }
@@ -204,8 +216,9 @@ export interface HandlerOptions {
 
 /**
  * 경로 표를 받아 HTTP 요청을 처리하는 함수를 만든다. 순서는 v1과 같다:
- * GET·HEAD이면 먼저 fallback → CORS → OPTIONS 204 → 경로 표 → 404.
- * 경로를 찾은 뒤에는 로그인 확인 → 요청 수 제한 → 처리기 순서다.
+ * GET·HEAD이면 먼저 fallback → CORS → OPTIONS 204 → 경로 표 → 404 (주소는 있는데 메서드가 다르면 405).
+ * 경로를 찾은 뒤에는 IP 기준 한도 → 로그인 확인 → 사용자 기준 한도 → 처리기 순서다.
+ * HEAD는 같은 주소의 GET 경로가 답하고 본문만 뺀다.
  */
 export function createHandler(routes: Route[], opts: HandlerOptions): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
   const allowed = new Set(opts.allowedOrigins);
@@ -214,11 +227,13 @@ export function createHandler(routes: Route[], opts: HandlerOptions): (req: Inco
   const ipHeader = opts.clientIpHeader ? opts.clientIpHeader.toLowerCase() : null;
 
   function applyCors(req: IncomingMessage, res: ServerResponse): boolean {
+    // Origin에 따라 허용 헤더가 달라진다는 것은 Origin이 없는 응답에도 알린다.
+    // 그러지 않으면 중간 캐시가 Origin 없이 받은 응답(허용 헤더 없음)을 앱에 줄 수 있다
+    res.setHeader('vary', 'origin');
     const origin = req.headers.origin;
     if (!origin) return true; // 같은 출처·서버 간 호출
     if (!allowed.has(origin)) return false;
     res.setHeader('access-control-allow-origin', origin);
-    res.setHeader('vary', 'origin');
     res.setHeader('access-control-allow-headers', 'authorization, content-type');
     res.setHeader('access-control-allow-methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.setHeader('access-control-max-age', '600');
@@ -263,31 +278,50 @@ export function createHandler(routes: Route[], opts: HandlerOptions): (req: Inco
     const path = cut === -1 ? target : target.slice(0, cut);
     const query = new URLSearchParams(cut === -1 ? '' : target.slice(cut + 1));
     const parts = path.split('/');
+    const headOnly = method === 'HEAD';
+    const wanted = headOnly ? 'GET' : method;
     let found: { route: Route; params: Record<string, string> } | null = null;
+    const others = new Set<string>();
     for (const entry of table) {
-      if (entry.route.method !== method) continue;
       const params = matchPath(entry.segments, parts);
-      if (params) {
+      if (!params) continue;
+      if (entry.route.method === wanted) {
         found = { route: entry.route, params };
         break;
       }
+      others.add(entry.route.method);
     }
-    if (!found) throw new RuleError(404, 'not_found', '없는 경로예요');
+    if (!found) {
+      if (others.size === 0) throw new RuleError(404, 'not_found', '없는 경로예요');
+      res.setHeader('allow', ['GET', 'HEAD', 'POST', 'PUT', 'DELETE'].filter((m) => others.has(m === 'HEAD' ? 'GET' : m)).join(', '));
+      throw new RuleError(405, 'method_not_allowed', '이 주소에서는 쓸 수 없는 메서드예요');
+    }
     const { route, params } = found;
 
     const now = opts.now();
-    const login = route.auth === 'none' ? null : await readSession(req, now);
-    if (route.auth === 'required' && !login) throw new RuleError(401, 'unauthorized', '로그인이 필요해요');
-
     const ip = clientIp(req);
-    if (route.limit) {
-      const who = route.limit.by === 'user' && login ? `user:${login.session.userId}` : `ip:${ip}`;
-      if (!limiter.allow(`${route.method} ${route.path} ${who}`, route.limit.perMinute, now.getTime())) {
+    const limit = route.limit;
+    const checkLimit = (who: string) => {
+      if (limit && !limiter.allow(`${route.method} ${route.path} ${who}`, limit.perMinute, now.getTime())) {
         throw new RuleError(429, 'rate_limited', '요청이 너무 잦아요. 잠시 뒤 다시 시도해 주세요');
       }
-    }
+    };
+    // IP 기준 한도는 세션을 찾아보기(DB 조회) 전에 센다
+    if (limit?.by === 'ip') checkLimit(`ip:${ip}`);
+    const login = route.auth === 'none' ? null : await readSession(req, now);
+    // 사용자 기준 한도: 로그인하지 못한 요청은 IP로 센다. 틀린 토큰을 계속 보내는 쪽도 한도에 걸린다
+    if (limit?.by === 'user') checkLimit(login ? `user:${login.session.userId}` : `ip:${ip}`);
+    if (route.auth === 'required' && !login) throw new RuleError(401, 'unauthorized', '로그인이 필요해요');
 
     let body: Promise<unknown> | null = null;
+    const readOnce = () => {
+      if (!body) {
+        body = readJson(req);
+        // 처리기가 불러 놓고 기다리지 않아도 "받는 곳 없는 거절"로 프로세스가 죽지 않게 한다. 기다리는 쪽은 오류를 그대로 받는다
+        body.catch(() => {});
+      }
+      return body;
+    };
     const result = await route.handle({
       method,
       path,
@@ -297,11 +331,11 @@ export function createHandler(routes: Route[], opts: HandlerOptions): (req: Inco
       tokenHash: login?.tokenHash ?? null,
       ip,
       now,
-      json: () => (body ??= readJson(req)),
+      json: readOnce,
     });
 
     const kind = replyKind(result);
-    if (kind === 'file') return sendFile(res, result as FileReply);
+    if (kind === 'file') return sendFile(res, result as FileReply, headOnly);
     if (kind === 'json') return sendJson(res, 200, (result as JsonReply).body, (result as JsonReply).cacheControl);
     sendJson(res, 200, result);
   }
@@ -310,15 +344,20 @@ export function createHandler(routes: Route[], opts: HandlerOptions): (req: Inco
     try {
       await dispatch(req, res);
     } catch (err) {
-      if (res.headersSent) {
-        // 답을 내보내는 중에 난 오류 (파일을 읽다 끊김 등). 고쳐 보낼 수 없으니 연결을 끊는다
+      try {
+        if (res.headersSent) {
+          // 답을 내보내는 중에 난 오류 (파일을 읽다 끊김 등). 고쳐 보낼 수 없으니 연결을 끊는다
+          res.destroy();
+          return;
+        }
+        if (err instanceof RuleError) return sendError(res, err);
+        // 모르는 오류: 내용을 내보내지 않는다. 로그에는 메시지만, 그것도 쿼리에 넣은 값은 빼고 남긴다
+        console.error('[server] unexpected error:', safeMessage(err));
+        sendError(res, new RuleError(500, 'internal', '잠시 뒤 다시 시도해 주세요'));
+      } catch {
+        // 오류를 알리다가 또 실패했다. 이 함수는 던지지 않는다 (부르는 쪽이 기다리지 않는다)
         res.destroy();
-        return;
       }
-      if (err instanceof RuleError) return sendError(res, err);
-      // 모르는 오류: 내용을 내보내지 않고, 로그에는 메시지만 남긴다
-      console.error('[server] unexpected error:', err instanceof Error ? err.message : String(err));
-      sendError(res, new RuleError(500, 'internal', '잠시 뒤 다시 시도해 주세요'));
     }
   };
 }

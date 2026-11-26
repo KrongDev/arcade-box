@@ -38,7 +38,8 @@ function tierOf(area: string): number {
 /** 소스에서 상대 경로 import를 뽑는다: import … from, export … from, import '…', import('…') */
 function importsOf(source: string): string[] {
   const found: string[] = [];
-  const patterns = [/\b(?:import|export)\b[^'";]*?\bfrom\s*['"]([^'"]+)['"]/g, /\bimport\s*['"]([^'"]+)['"]/g, /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g];
+  // 따옴표는 ', ", ` 모두 본다
+  const patterns = [/\b(?:import|export)\b[^'"`;]*?\bfrom\s*['"`]([^'"`]+)['"`]/g, /\bimport\s*['"`]([^'"`]+)['"`]/g, /\bimport\s*\(\s*['"`]([^'"`]+)['"`]\s*\)/g];
   for (const pattern of patterns) for (const m of source.matchAll(pattern)) found.push(m[1]);
   return found.filter((spec) => spec.startsWith('.'));
 }
@@ -178,6 +179,8 @@ test('검사기가 어긴 예(글자열로 준 가짜 소스)를 잡아낸다', 
     `export * from '../account/repo.ts';`,
     `import '../account/repo.ts';`,
     `const m = await import('../account/repo.ts');`,
+    'const m = await import(`../account/repo.ts`);',
+    'import { findUser } from `../account/repo.ts`;',
     `import { findUser } from './../account/repo.ts';`,
     `import { findUser } from '../wallet/../account/repo.ts';`,
   ];

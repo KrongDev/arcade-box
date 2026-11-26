@@ -99,3 +99,32 @@ test('그 밖의 오류는 스택까지 보여 주고 1로 끝난다', async () 
   assert.match(io.text(), /TypeError: 뜻밖의 오류/);
   assert.match(io.text(), /at .*crashingCommand/);
 });
+
+test('오류가 다른 오류를 감싸고 있으면 속 까닭도 보여 준다 (DB에 못 닿았을 때 등)', async () => {
+  const io = fakeIo();
+  const refused = Object.assign(new Error(''), { code: 'ECONNREFUSED' });
+  const commands: Command[] = [
+    {
+      name: 'db',
+      usage: 'db',
+      run: async () => {
+        throw new Error('Failed query: select "value" from "app"."app_config"', { cause: refused });
+      },
+    },
+    {
+      name: 'deep',
+      usage: 'deep',
+      run: async () => {
+        throw new Error('바깥', { cause: new Error('가운데', { cause: new Error('맨 안쪽 까닭') }) });
+      },
+    },
+  ];
+  assert.equal(await runCli(['db'], commands, io), 1);
+  assert.match(io.text(), /Failed query/);
+  assert.match(io.text(), /까닭: .*ECONNREFUSED/);
+
+  const deep = fakeIo();
+  assert.equal(await runCli(['deep'], commands, deep), 1);
+  assert.match(deep.text(), /까닭: 가운데/);
+  assert.match(deep.text(), /까닭: 맨 안쪽 까닭/);
+});

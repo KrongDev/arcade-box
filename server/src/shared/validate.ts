@@ -8,8 +8,22 @@ function invalid(name: string): RuleError {
   return new RuleError(400, `invalid_${name}`, `${name} 값이 올바르지 않아요`);
 }
 
+/** 제어 문자(NUL, 줄바꿈, 탭, ESC, DEL …)가 들어 있는지 */
+export function hasControlChars(text: string): boolean {
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code < 0x20 || code === 0x7f) return true;
+  }
+  return false;
+}
+
+/**
+ * 길이와 모양이 맞는 글자열. 제어 문자가 들어 있으면 받지 않는다:
+ * NUL은 PostgreSQL의 text에 넣을 수 없어서 쿼리가 실패하고(500), 줄바꿈과 ESC는 로그와 터미널 출력을 흐트러뜨린다.
+ */
 export function str(v: unknown, name: string, rule: { min: number; max: number; pattern?: RegExp }): string {
   if (typeof v !== 'string' || v.length < rule.min || v.length > rule.max) throw invalid(name);
+  if (hasControlChars(v)) throw invalid(name);
   if (rule.pattern && !rule.pattern.test(v)) throw invalid(name);
   return v;
 }

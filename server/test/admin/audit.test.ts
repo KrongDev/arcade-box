@@ -60,8 +60,13 @@ test('--reason 없이 바꾸는 명령을 부르면 실패하고 아무것도 �
       assert.match(io.text(), /--reason/);
       assert.deepEqual(io.questions, [], '까닭이 없으면 확인도 묻지 않는다');
     }
-    assert.deepEqual(await things(db), []);
-    assert.deepEqual(await actions(db), []);
+    // 까닭이 --로 시작하면 flag로 읽힌다. 그때는 --reason=… 으로 적으라고 알려 준다
+    const dashed = fakeIo();
+    assert.equal(await runCli(['thing', 'set', '5', '--reason', '--yes가 필요해서', '--yes'], commands, dashed), 1);
+    assert.match(dashed.text(), /--reason=/);
+    assert.equal(await runCli(['thing', 'set', '5', '--reason=--로 시작하는 까닭', '--yes'], commands, fakeIo()), 0);
+    assert.deepEqual(await things(db), [5]);
+    assert.deepEqual((await actions(db)).map((a) => a.reason), ['--로 시작하는 까닭']);
   } finally {
     await close();
   }

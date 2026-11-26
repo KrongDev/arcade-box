@@ -26,12 +26,13 @@ export interface Config {
   clientIpHeader: string | null;
 }
 
+/** 쉼표로 나눈 목록. 비어 있으면(변수가 없거나 빈 글자열이면) 기본값이다 */
 function list(value: string | undefined, fallback: string[]): string[] {
-  if (value === undefined) return fallback;
-  return value
+  const items = (value ?? '')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
+  return items.length > 0 ? items : fallback;
 }
 
 function wholeNumber(value: string | undefined, name: string, fallback: number, max: number): number {

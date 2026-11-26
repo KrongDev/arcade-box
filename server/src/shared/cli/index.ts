@@ -29,6 +29,8 @@ const VALUELESS = new Set(['yes']);
  * - `--flag 값`, `--flag=값`: 값이 있는 flag
  * - `--yes`, 그리고 뒤에 값이 없는(끝이거나 다른 `--flag`가 오는) flag: 값 없는 flag (`true`)
  * - 그 밖은 자리 인자. `-300` 같은 음수도 자리 인자다
+ *
+ * 값이 `--`로 시작하면 flag로 읽히니 `--flag=값`으로 적는다 (예: `--reason=--yes가 필요해서`).
  */
 export function parseArgs(argv: string[]): Args {
   const positional: string[] = [];
@@ -80,8 +82,18 @@ export async function runCli(argv: string[], commands: Command[], io: CliIo): Pr
     await found.run(parseArgs(argv.slice(used)), io);
     return 0;
   } catch (err) {
-    if (err instanceof RuleError) io.out(err.message);
-    else io.out(err instanceof Error ? (err.stack ?? String(err)) : String(err));
+    if (err instanceof RuleError) {
+      io.out(err.message);
+      return 1;
+    }
+    io.out(err instanceof Error ? (err.stack ?? String(err)) : String(err));
+    // 스택에는 감싼 오류만 보인다. 속에 든 진짜 까닭(DB 연결 거부 등)도 한 줄씩 보여 준다
+    let cause: unknown = err instanceof Error ? err.cause : undefined;
+    for (let depth = 0; cause instanceof Error && depth < 5; depth++) {
+      const code = (cause as { code?: unknown }).code;
+      io.out(`까닭: ${[typeof code === 'string' ? code : '', cause.message].filter(Boolean).join(' ') || cause.name}`);
+      cause = cause.cause;
+    }
     return 1;
   }
 }

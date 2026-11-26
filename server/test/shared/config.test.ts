@@ -45,6 +45,14 @@ test('환경 변수로 준 값을 읽는다', () => {
   assert.equal(config.clientIpHeader, 'cf-connecting-ip');
 });
 
+test('빈 글자열로 온 환경 변수는 정하지 않은 것으로 본다', () => {
+  // compose에서 `ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}`처럼 넘기고 값을 안 정하면 빈 글자열이 온다
+  const config = loadConfig({ ...BASE, HOST: '', PORT: '', ALLOWED_ORIGINS: '', SESSION_TTL_DAYS: '', GOOGLE_CLIENT_IDS: '', BUNDLE_PUBLIC_KEY: '', DATA_DIR: '', AUTH_DEV: '', CLIENT_IP_HEADER: '' });
+  assert.deepEqual(config, loadConfig(BASE));
+  assert.deepEqual(loadConfig({ ...BASE, ALLOWED_ORIGINS: ' , ,' }).allowedOrigins, ['https://localhost', 'capacitor://localhost']);
+  assert.throws(() => loadConfig({ DATABASE_URL: '' }), /DATABASE_URL/);
+});
+
 test('DATABASE_URL이 없으면 던진다', () => {
   assert.throws(() => loadConfig({}), /DATABASE_URL/);
 });

@@ -4,11 +4,13 @@ import http, { type IncomingMessage, type ServerResponse } from 'node:http';
 import net, { type AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { sql } from 'drizzle-orm';
 import { after, test } from 'node:test';
 import { sha256Hex } from '../../src/shared/crypto.ts';
 import { RuleError } from '../../src/shared/errors.ts';
 import { createHandler, file, json, type Ctx, type Route, type Session } from '../../src/shared/http/index.ts';
 import { fakeClock } from '../helpers/clock.ts';
+import { testDb } from '../helpers/db.ts';
 import { call } from '../helpers/http.ts';
 
 const ALLOWED = 'https://localhost';
@@ -24,10 +26,12 @@ writeFileSync(join(dir, 'icon.png'), ICON);
 after(() => rmSync(dir, { recursive: true, force: true }));
 
 /** 테스트용 처리기. 경로마다 불린 횟수를 `hits`에 센다 */
-function make(extra: { clientIpHeader?: string | null; withFallback?: boolean } = {}) {
+function make(extra: { clientIpHeader?: string | null; withFallback?: boolean; more?: Route[] } = {}) {
   const clock = fakeClock('2026-11-26T03:00:00Z');
   const hits: Record<string, number> = {};
   const seen: Ctx[] = [];
+  /** findSession이 불릴 때마다 받은 토큰 해시 */
+  const lookups: string[] = [];
   const route = (r: Omit<Route, 'handle'> & { handle?: Route['handle'] }): Route => ({
     ...r,
     handle: async (ctx) => {
@@ -64,6 +68,18 @@ function make(extra: { clientIpHeader?: string | null; withFallback?: boolean } 
     route({ method: 'GET', path: '/v2/gone', auth: 'none', handle: async () => file(join(dir, 'nope.png'), 'image/png') }),
     route({ method: 'GET', path: '/v2/cached', auth: 'none', handle: async () => json({ games: [] }, 'public, max-age=60') }),
     route({ method: 'POST', path: '/v2/nothing', auth: 'none', handle: async () => undefined }),
+    route({ method: 'POST', path: '/v2/limited-ip-auth', auth: 'required', limit: { by: 'ip', perMinute: 1 } }),
+    route({
+      method: 'POST',
+      path: '/v2/ignore-body',
+      auth: 'none',
+      handle: async (ctx) => {
+        void ctx.json(); // 읽기를 시작해 놓고 기다리지 않는다
+        return { ok: true };
+      },
+    }),
+    route({ method: 'PUT', path: '/v2/open', auth: 'none' }),
+    ...(extra.more ?? []),
   ];
   const fallbackHits: string[] = [];
   const handler = createHandler(routes, {
@@ -71,6 +87,7 @@ function make(extra: { clientIpHeader?: string | null; withFallback?: boolean } 
     now: clock,
     clientIpHeader: extra.clientIpHeader,
     findSession: async (tokenHash, now) => {
+      lookups.push(tokenHash);
       if (tokenHash === sha256Hex(TOKEN)) return USER;
       if (tokenHash === sha256Hex(EXPIRED_TOKEN)) return now < SESSION_ENDS ? { userId: '22222222-2222-4222-8222-222222222222', identityId: 8 } : null;
       return null;
@@ -86,7 +103,7 @@ function make(extra: { clientIpHeader?: string | null; withFallback?: boolean } 
             return true;
           },
   });
-  return { handler, hits, seen, clock, fallbackHits };
+  return { handler, hits, seen, clock, fallbackHits, lookups };
 }
 
 function errorOf(body: unknown): { code: string; message: string } & Record<string, unknown> {
@@ -97,7 +114,6 @@ test('없는 경로는 404 not_found', async () => {
   const { handler } = make();
   for (const [method, path] of [
     ['GET', '/v2/nowhere'],
-    ['POST', '/v2/open'], // 경로는 있지만 메서드가 다르다
     ['GET', '/v2/open/'],
     ['GET', '/v2/games/pinball/versions'],
   ]) {
@@ -147,8 +163,45 @@ test('본문을 다 보내기 전에 끊긴 요청은 조용히 끝난다 (500�
   }
 });
 
+test('경로는 있는데 메서드가 다르면 405 method_not_allowed이고 쓸 수 있는 메서드를 알려 준다', async () => {
+  const { handler, hits } = make();
+  for (const method of ['POST', 'DELETE', 'PATCH']) {
+    const r = await call(handler, method, '/v2/open');
+    assert.equal(r.status, 405, method);
+    assert.equal(errorOf(r.body).code, 'method_not_allowed');
+    assert.equal(r.headers.allow, 'GET, HEAD, PUT');
+  }
+  const echo = await call(handler, 'GET', '/v2/echo');
+  assert.equal(echo.status, 405);
+  assert.equal(echo.headers.allow, 'POST');
+  assert.deepEqual(hits, {});
+});
+
+test('HEAD는 같은 주소의 GET 경로가 답하고 본문만 뺀다', async () => {
+  const { handler, hits } = make();
+  const get = await call(handler, 'GET', '/v2/open');
+  const head = await call(handler, 'HEAD', '/v2/open');
+  assert.equal(head.status, 200);
+  assert.equal(head.raw.length, 0);
+  assert.equal(head.headers['content-type'], 'application/json; charset=utf-8');
+  assert.equal(head.headers['content-length'], get.headers['content-length']);
+  assert.equal(hits['/v2/open'], 2);
+
+  const icon = await call(handler, 'HEAD', '/v2/icon');
+  assert.equal(icon.status, 200);
+  assert.equal(icon.raw.length, 0);
+  assert.equal(icon.headers['content-type'], 'image/png');
+  assert.equal(icon.headers['content-length'], String(ICON.length));
+
+  // GET이 없는 주소의 HEAD는 405, 없는 주소는 404, 로그인이 필요한 주소는 GET과 같이 401
+  assert.equal((await call(handler, 'HEAD', '/v2/echo')).status, 405);
+  assert.equal((await call(handler, 'HEAD', '/v2/nowhere')).status, 404);
+  assert.equal((await call(handler, 'HEAD', '/v2/me')).status, 401);
+  assert.equal((await call(handler, 'HEAD', '/v2/gone')).status, 404);
+});
+
 test('로그인이 필요한 경로에 토큰이 없거나 틀리면 401 unauthorized', async () => {
-  const { handler, hits, clock } = make();
+  const { handler, hits, clock, lookups } = make();
   const tries: Array<{ why: string; token?: string; headers?: Record<string, string> }> = [
     { why: '토큰 없음' },
     { why: '모르는 토큰', token: 'c'.repeat(43) },
@@ -162,6 +215,8 @@ test('로그인이 필요한 경로에 토큰이 없거나 틀리면 401 unautho
     assert.equal(errorOf(r.body).code, 'unauthorized', t.why);
   }
   assert.equal(hits['/v2/me'], undefined);
+  // 모양이 틀린 토큰으로는 세션을 찾아보지도 않는다 (찾아본 것은 모양이 맞는 '모르는 토큰' 하나뿐)
+  assert.deepEqual(lookups, [sha256Hex('c'.repeat(43))]);
 
   const ok = await call(handler, 'GET', '/v2/me', { token: TOKEN });
   assert.equal(ok.status, 200);
@@ -212,6 +267,15 @@ test('경로 변수(:id, :version)를 읽는다', async () => {
   assert.deepEqual((encoded.body as { params: unknown }).params, { id: '../../etc', version: '1' });
   // 풀 수 없는 %는 없는 경로로 본다
   assert.equal((await call(handler, 'GET', '/v2/games/%E0%A4%A/versions/1')).status, 404);
+  // 풀었더니 제어 문자(NUL, 줄바꿈 등)가 나오는 것도 없는 경로다. DB에 넣으면 오류가 나는 값이 처리기까지 가지 않는다
+  const before = seen.length;
+  for (const bad of ['%00', 'pin%00ball', '%0A', 'a%0D%0Ab', '%09', '%1F', '%7F']) {
+    const r = await call(handler, 'GET', `/v2/games/${bad}/versions/1`);
+    assert.equal(r.status, 404, bad);
+    assert.equal(errorOf(r.body).code, 'not_found', bad);
+  }
+  assert.equal(seen.length, before);
+  assert.equal((await call(handler, 'GET', '/v2/games/%ED%95%9C%20%EA%B8%80/versions/1')).status, 200);
 });
 
 test('처리기가 돌려준 객체는 200 JSON으로 나간다', async () => {
@@ -326,6 +390,11 @@ test('Origin 헤더가 없는 요청은 통과한다', async () => {
   const r = await call(handler, 'GET', '/v2/open');
   assert.equal(r.status, 200);
   assert.equal(r.headers['access-control-allow-origin'], undefined);
+  // Origin에 따라 헤더가 달라진다는 것은 늘 알린다. 중간 캐시가 Origin 없이 받은 응답을 앱에 주면 허용 헤더가 빠진다
+  assert.equal(r.headers.vary, 'origin');
+  assert.equal((await call(handler, 'GET', '/v2/cached')).headers.vary, 'origin');
+  assert.equal((await call(handler, 'GET', '/v2/icon')).headers.vary, 'origin');
+  assert.equal((await call(handler, 'GET', '/v2/open', { origin: EVIL })).headers.vary, 'origin');
 });
 
 test('GET·HEAD는 origin 검사보다 먼저 fallback에 물어본다: 허용하지 않은 origin이어도 fallback이 답한 것은 그대로 나간다', async () => {
@@ -337,6 +406,7 @@ test('GET·HEAD는 origin 검사보다 먼저 fallback에 물어본다: 허용�
   // 공개 페이지에는 CORS 허용 헤더를 붙이지 않는다 (다른 사이트의 스크립트가 읽어 갈 수 없다)
   assert.equal(page.headers['access-control-allow-origin'], undefined);
   assert.equal((await call(handler, 'GET', '/terms', { origin: ALLOWED })).headers['access-control-allow-origin'], undefined);
+  assert.equal(page.headers.vary, undefined);
 
   const head = await call(handler, 'HEAD', '/terms', { origin: EVIL });
   assert.equal(head.status, 200);
@@ -446,6 +516,83 @@ test('요청 IP: 헤더 값이 IP가 아니면 소켓 주소로 센다', async (
   // 헤더가 없어도 소켓 주소다
   assert.equal((await hit()).status, 429);
   assert.deepEqual(seen.map((c) => c.ip), ['172.18.0.3', '172.18.0.3']);
+});
+
+test('로그인에 실패한 요청도 한도에 들어간다 (IP로 센다)', async () => {
+  const { handler, lookups } = make();
+  const hit = (token: string, ip: string) => call(handler, 'POST', '/v2/limited-user', { token, ip });
+  assert.equal((await hit('c'.repeat(43), '203.0.113.1')).status, 401);
+  assert.equal((await hit('d'.repeat(43), '203.0.113.1')).status, 429);
+  assert.equal((await hit('e'.repeat(43), '203.0.113.2')).status, 401);
+  // 로그인한 사용자는 같은 IP에서 실패한 요청과 따로 센다
+  assert.equal((await hit(TOKEN, '203.0.113.1')).status, 200);
+
+  // IP 기준 한도는 세션을 찾아보기 전에 센다. 한도를 넘긴 요청은 DB에 가지 않는다
+  lookups.length = 0;
+  const ipHit = (token: string) => call(handler, 'POST', '/v2/limited-ip-auth', { token, ip: '203.0.113.5' });
+  assert.equal((await ipHit('c'.repeat(43))).status, 401);
+  assert.equal((await ipHit('d'.repeat(43))).status, 429);
+  assert.equal((await ipHit(TOKEN)).status, 429);
+  assert.equal(lookups.length, 1);
+});
+
+test('처리기가 json()을 불러 놓고 기다리지 않아도 깨진 본문으로 프로세스가 죽지 않는다', async () => {
+  const { handler } = make();
+  const unhandled: unknown[] = [];
+  const onUnhandled = (reason: unknown) => unhandled.push(reason);
+  process.on('unhandledRejection', onUnhandled);
+  try {
+    const r = await call(handler, 'POST', '/v2/ignore-body', { body: '{"a":' });
+    assert.equal(r.status, 200);
+    const big = await call(handler, 'POST', '/v2/ignore-body', { body: 'x'.repeat(70_000) });
+    assert.equal(big.status, 200);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.deepEqual(unhandled, []);
+  } finally {
+    process.off('unhandledRejection', onUnhandled);
+  }
+});
+
+test('DB 쿼리가 실패한 500의 로그에는 쿼리에 넣은 값이 없다', async (t) => {
+  const logged = t.mock.method(console, 'error', () => {});
+  const { db, close } = await testDb();
+  try {
+    const SECRET = 'SECRET-TOKEN-123';
+    const { handler } = make({
+      more: [
+        // 값이 열의 타입에 맞지 않는다 (PostgreSQL 메시지에 그 값이 들어가는 종류)
+        { method: 'POST', path: '/v2/db/cast', auth: 'none', handle: async () => db.execute(sql`SELECT ${SECRET}::int`) },
+        { method: 'POST', path: '/v2/db/json', auth: 'none', handle: async () => db.execute(sql`SELECT ${`{"receipt":"${SECRET}"`}::jsonb`) },
+        // 제약을 어긴다
+        {
+          method: 'POST',
+          path: '/v2/db/constraint',
+          auth: 'none',
+          handle: async () => db.execute(sql`INSERT INTO app.app_config (key, value) VALUES (${SECRET}, NULL)`),
+        },
+        // 없는 테이블
+        { method: 'POST', path: '/v2/db/missing', auth: 'none', handle: async () => db.execute(sql`SELECT * FROM app.no_such_table WHERE a = ${SECRET}`) },
+      ],
+    });
+    for (const path of ['/v2/db/cast', '/v2/db/json', '/v2/db/constraint', '/v2/db/missing']) {
+      const r = await call(handler, 'POST', path);
+      assert.equal(r.status, 500, path);
+      assert.ok(!r.raw.toString('utf8').includes(SECRET));
+    }
+    const lines = logged.mock.calls.map((c) => c.arguments.join(' '));
+    assert.equal(lines.length, 4);
+    for (const line of lines) {
+      assert.ok(!line.includes(SECRET), `로그에 값이 남았다: ${line}`);
+      assert.ok(!line.includes('params'), `로그에 params가 남았다: ${line}`);
+    }
+    // 무슨 오류인지는 PostgreSQL 오류 코드로 알 수 있다
+    assert.match(lines[0], /22P02/);
+    assert.match(lines[1], /22P02/);
+    assert.match(lines[2], /23502/);
+    assert.match(lines[3], /42P01.*no_such_table/);
+  } finally {
+    await close();
+  }
 });
 
 test('file()로 답하면 파일 내용과 content-type, cache-control이 나간다', async () => {

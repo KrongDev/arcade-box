@@ -87,7 +87,7 @@ export function mutation<T>(
   return async (args, io) => {
     const reason = args.flags.reason;
     if (typeof reason !== 'string' || reason.trim() === '') {
-      throw new RuleError(400, 'reason_required', '바꾸는 명령에는 --reason으로 까닭을 적어 주세요');
+      throw new RuleError(400, 'reason_required', '바꾸는 명령에는 --reason으로 까닭을 적어 주세요 (까닭이 --로 시작하면 --reason=… 으로 적어요)');
     }
     const summary = spec.describe(args);
     const target = spec.target?.(args) ?? {};

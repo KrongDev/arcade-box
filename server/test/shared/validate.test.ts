@@ -30,6 +30,15 @@ test('str은 길이와 모양이 맞는 글자열만 받는다', () => {
   assert.equal(str('', 'note', { min: 0, max: 10 }), '');
 });
 
+test('str은 제어 문자가 든 글자열을 받지 않는다 (NUL은 PostgreSQL text에 넣을 수 없다)', () => {
+  for (const bad of ['a\u0000b', '\u0000', 'a\nb', 'a\r\nb', '\tx', 'x\u001f', 'x\u007f', '\u001b[31m빨강']) {
+    assert.throws(() => str(bad, 'board_id', { min: 1, max: 64 }), invalid('invalid_board_id'), JSON.stringify(bad));
+  }
+  // pattern이 받아 주더라도 안 된다
+  assert.throws(() => str('a\u0000b', 'id', { min: 1, max: 64, pattern: /^[\s\S]+$/ }), invalid('invalid_id'));
+  for (const ok of ['한 글', 'a b', 'émoji 🎮', '줄 없는 긴 설명. 쉼표, 마침표!']) assert.equal(str(ok, 'name', { min: 1, max: 64 }), ok);
+});
+
 test('bool은 참/거짓만 받는다', () => {
   assert.equal(bool(true, 'sound'), true);
   assert.equal(bool(false, 'sound'), false);
