@@ -3,6 +3,8 @@
 > **⚠️ 서버 v2는 앱이 `/v2`를 부르게 바뀐 뒤에 배포해요.**
 > 지금 저장소의 서버는 v2예요 (`/v2`만 받아요). 지금 나가 있는 앱은 `/v1`을 불러서, **앱이 `/v2`를 부르게 바뀌기 전에(2번 작업) `서버 배포` 워크플로를 실행하면 앱이 부르는 `/v1`이 모두 사라져요.**
 > 운영 서버 배포는 사용자가 하라고 할 때만 해요.
+>
+> 실수로 누른 배포를 막는 잠금이 있어요: `서버 배포` 워크플로는 저장소 variable **`ALLOW_SERVER_V2_DEPLOY`가 `yes`일 때만** 진행하고, 아니면 이미지를 올리기 전에 실패해요. **앱이 `/v2`를 부르는 버전으로 나간 뒤에** 이 값을 넣어요 (`gh variable set ALLOW_SERVER_V2_DEPLOY --body yes`).
 
 ## 로컬 개발
 
@@ -51,6 +53,7 @@ npm run dev                                                             # http:/
 | `GOOGLE_CLIENT_IDS` | 구글 로그인에서 받아들이는 우리 앱의 클라이언트 ID. 여러 개면 쉼표로 이어요 (빈칸 없이). 없으면 구글 계정 연결이 모두 거절돼요 |
 | `BUNDLE_PUBLIC_KEY` | 게임 묶음 서명을 확인하는 Ed25519 **공개 키**의 base64 한 줄. 공개 키라 비밀값이 아니에요. 없으면 게임 묶음을 올릴 수 없어요 |
 | `ALLOWED_ORIGINS` | (선택) 앱의 origin을 쉼표로. 비우면 `https://localhost,capacitor://localhost` (안드로이드와 아이폰 앱) |
+| `ALLOW_SERVER_V2_DEPLOY` | 배포 잠금. `yes`가 아니면 `서버 배포`가 맨 앞에서 실패해요. 앱이 `/v2`를 부르는 버전으로 나간 뒤에 `yes`를 넣어요. 그 전에 배포하면 앱이 부르는 `/v1`이 사라져요 |
 
 **묶음 서명의 개인 키는 운영자 컴퓨터에만 있어요.** 저장소, GitHub(secret·variable), CI, 서버 어디에도 두지 않아요. 서버가 뚫려도 서명 없는 게임 코드는 앱이 받지 않게 하려는 거예요.
 
@@ -75,7 +78,7 @@ gh variable set BUNDLE_PUBLIC_KEY --body "<공개 키 base64>"
 |---|---|---|
 | `CI` | push·PR마다 | 미니앱 lint·타입 검사·빌드, 서버 타입 검사·테스트, PostgreSQL 컨테이너를 붙인 서버 동시 요청 테스트. secret을 쓰지 않아요 |
 | `미니앱 배포` | 직접 실행 (Actions → Run workflow, main만) | secret으로 릴리즈 빌드를 만들어 `ait deploy`로 콘솔에 올려요. 올린 뒤 테스트·검수 요청은 콘솔에서 해요. 광고는 `ads`로 골라요(아래) |
-| `서버 배포` | 직접 실행 (main만) | 서버 이미지를 GHCR에 올리고, SSH로 서버에 `.env`(와 Cloudflare Origin 인증서)를 쓴 뒤 `docker compose`로 다시 띄워요. **앱이 `/v2`를 부르기 전에는 실행하지 않아요** |
+| `서버 배포` | 직접 실행 (main만) | 서버 이미지를 GHCR에 올리고, SSH로 서버에 `.env`(와 Cloudflare Origin 인증서)를 쓴 뒤 `docker compose`로 다시 띄워요. **앱이 `/v2`를 부르기 전에는 실행하지 않아요** (variable `ALLOW_SERVER_V2_DEPLOY`가 `yes`가 아니면 맨 앞에서 실패해요) |
 
 #### 미니앱 배포의 광고(`ads`)
 
@@ -157,20 +160,33 @@ bash setup-gcp.sh "<공개 키 한 줄>"
 
 #### 요청한 쪽의 IP (`CLIENT_IP_HEADER`)
 
-서버는 로그인·구매 같은 요청의 수를 IP별로 세요. 운영은 Cloudflare → Caddy → 서버 순서라, 서버가 보는 소켓 주소는 늘 Caddy예요. 그래서 운영 compose는 `CLIENT_IP_HEADER: cf-connecting-ip`를 줘요: Cloudflare가 요청마다 채워 주는, 진짜 요청한 쪽의 IP가 담긴 헤더예요 (`X-Forwarded-For`는 믿지 않아요).
+서버는 손님 등록·로그인 같은 요청의 수를 IP별로 세요. 서버 앞에는 늘 Caddy가 있어서 서버가 보는 소켓 주소는 Caddy예요. 그래서 서버는 **Caddy가 직접 채운 헤더 `X-Real-IP` 하나만** 믿어요 (운영 compose의 `CLIENT_IP_HEADER: x-real-ip`). 배포 방식과 상관없이 같아요.
 
-- **서버가 Cloudflare를 거친 요청만 받게 해 두세요** (위 4번의 방화벽). Cloudflare를 건너뛰고 서버 IP로 바로 들어오는 요청은 이 헤더를 지어낼 수 있어서, IP별 요청 수 제한을 피해 갈 수 있어요.
-- 프록시 없이(DNS only) 쓰면 이 헤더가 오지 않아요. 그러면 모든 요청이 Caddy의 주소 하나로 세어져서 IP별 제한이 사용자 전체에 한꺼번에 걸려요. v2는 Cloudflare 프록시를 켜고 쓰는 것을 기준으로 해요.
+- 요청이 Cloudflare 대역에서 왔으면: Caddy가 Cloudflare의 `CF-Connecting-IP` 값을 넣어요 (진짜 요청한 쪽의 IP).
+- 그 밖이면 (프록시 없이 직접 받는 배포, Cloudflare를 건너뛰고 서버 IP로 바로 온 요청): 소켓의 상대 주소를 넣어요.
+- 앱이 보낸 `X-Real-IP`, `CF-Connecting-IP`, `X-Forwarded-For`는 지어내도 통하지 않아요. Caddy가 덮어쓰거나 쓰지 않아요. 위 4번의 방화벽이 없어도 그래요 (방화벽은 서버 IP를 숨기고 공격을 Cloudflare가 받게 하려고 여전히 권해요).
 
-프록시 없이(DNS only) 쓰려면 1번에서 프록시를 끄고 2~5번을 건너뛰어요. 그러면 Caddy가 Let's Encrypt 인증서를 직접 받아요. 다만 위에 적은 대로 IP별 요청 수 제한이 제대로 걸리지 않아요.
+Cloudflare 대역은 `server/Caddyfile`에 적혀 있어요 (`trusted_proxies`). **Cloudflare가 대역을 바꾸면 Caddyfile도 고쳐요** ([ips-v4](https://www.cloudflare.com/ips-v4), [ips-v6](https://www.cloudflare.com/ips-v6)). 낡으면 새 대역으로 들어온 사용자들이 Cloudflare의 주소 하나로 세어져서 한도에 빨리 걸려요.
+
+배포 뒤에 한 번 확인해요: 같은 곳에서 헤더를 바꿔 가며 손님 등록을 11번 보내면 열 번은 200, 열한 번째는 429여야 해요 (분당 10번). 빈 손님 계정이 10개 생겨요.
+
+```bash
+for i in $(seq 1 11); do
+  curl -s -o /dev/null -w '%{http_code} ' -X POST https://<도메인>/v2/auth/guest \
+    -H 'content-type: application/json' -H "X-Real-IP: 198.51.100.$i" -H "X-Forwarded-For: 198.51.100.$i" \
+    -d "{\"deviceSecret\":\"$(openssl rand -hex 32)\"}"
+done; echo   # 200 200 200 200 200 200 200 200 200 200 429
+```
+
+프록시 없이(DNS only) 쓰려면 1번에서 프록시를 끄고 2~5번을 건너뛰어요. 그러면 Caddy가 Let's Encrypt 인증서를 직접 받아요. IP별 요청 수 제한은 이때도 그대로 걸려요 (Caddy가 소켓의 상대 주소를 넣어요).
 
 ### 4. secret 등록하고 배포
 
 위 표의 secret과 variable을 등록해요. `DEPLOY_USER`는 `deploy`예요.
 
-**먼저 확인해요: 앱이 `/v2`를 부르나요?** 아니면 여기서 멈춰요 (맨 위의 경고).
+**먼저 확인해요: 앱이 `/v2`를 부르는 버전으로 나갔나요?** 아니면 여기서 멈춰요 (맨 위의 경고). 맞으면 variable `ALLOW_SERVER_V2_DEPLOY`에 `yes`를 넣어요. 이 값이 없으면 워크플로가 맨 앞에서 실패해요.
 
-1. Actions → `서버 배포` → Run workflow. 마지막 단계가 `https://<도메인>/healthz` 응답까지 확인해요. 서버는 뜰 때 테이블을 만들어요 (스키마 `app`. v1의 `public` 테이블은 건드리지 않아요).
+1. Actions → `서버 배포` → Run workflow. 마지막 단계가 `https://<도메인>/healthz` 응답까지 확인해요. 서버는 뜰 때 테이블을 만들어요 (스키마 `app`. v1의 `public` 테이블은 건드리지 않아요). 배포 뒤에 위 '요청한 쪽의 IP'의 확인(11번째에 429)을 한 번 해 봐요.
 2. **새 DB라면 그다음에 처음 자료를 넣어요.** 순서가 중요해요: 서버를 먼저 한 번 띄워 테이블을 만든 뒤에 `seed`를 돌려요.
    ```bash
    server/scripts/admin.sh seed --reason "처음 자료"

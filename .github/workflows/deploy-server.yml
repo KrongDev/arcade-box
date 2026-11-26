@@ -6,7 +6,8 @@
 # Workload Identity로 인증한 뒤 IAP 터널로 접속한다. 없으면 DEPLOY_HOST로 바로 SSH 접속한다.
 # 서버 준비는 server/deploy/setup-vm.sh 한 번으로 끝난다 (Docker·스왑·배포 사용자).
 # 필요한 secret과 variable: docs/deploy.md '비밀값 관리'
-# 주의: 이 서버(v2)는 /v2만 받는다. 앱이 /v2를 부르게 바뀌기 전에 배포하면 지금의 앱이 부르는 /v1이 사라진다 (docs/deploy.md)
+# 주의: 이 서버(v2)는 /v2만 받는다. 앱이 /v2를 부르게 바뀌기 전에 배포하면 지금의 앱이 부르는 /v1이 사라진다 (docs/deploy.md).
+#       그래서 저장소 variable ALLOW_SERVER_V2_DEPLOY가 yes일 때만 진행한다 (맨 앞의 '배포 잠금 확인')
 name: 서버 배포
 
 on:
@@ -30,6 +31,15 @@ jobs:
     outputs:
       image: ${{ steps.name.outputs.image }}
     steps:
+      # 이 서버(v2)는 /v2만 받는다. 앱이 /v2를 부르는 버전으로 나가기 전에 실수로 누른 배포를 여기서 막는다 (이미지를 올리기 전)
+      - name: 배포 잠금 확인
+        env:
+          ALLOW_SERVER_V2_DEPLOY: ${{ vars.ALLOW_SERVER_V2_DEPLOY }}
+        run: |
+          if [ "$ALLOW_SERVER_V2_DEPLOY" != "yes" ]; then
+            echo "::error::variable ALLOW_SERVER_V2_DEPLOY가 yes가 아니에요. 앱이 /v2를 부르는 버전으로 나간 뒤에 이 값을 넣으세요. 지금 배포하면 /v1이 사라져요"
+            exit 1
+          fi
       - uses: actions/checkout@v5
       - name: 이미지 이름
         id: name

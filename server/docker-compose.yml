@@ -38,8 +38,9 @@ services:
       GOOGLE_CLIENT_IDS: ${GOOGLE_CLIENT_IDS:-}
       # 게임 묶음의 서명을 확인하는 Ed25519 공개 키(base64). 비밀값이 아니다. 비우면 game add-version이 거절된다
       BUNDLE_PUBLIC_KEY: ${BUNDLE_PUBLIC_KEY:-}
-      # 요청한 쪽의 IP를 읽는 헤더. 운영은 Cloudflare → Caddy 뒤라 Cloudflare가 채워 주는 헤더를 쓴다 (docs/deploy.md)
-      CLIENT_IP_HEADER: cf-connecting-ip
+      # 요청한 쪽의 IP를 읽는 헤더. Caddy가 직접 채운 헤더 하나만 믿는다: Cloudflare 대역에서 온 요청이면 CF-Connecting-IP의 값,
+      # 그 밖이면 소켓의 상대 주소가 들어 있다 (Caddyfile). 앱이 보낸 값은 Caddy가 덮어써서 지어낼 수 없다
+      CLIENT_IP_HEADER: x-real-ip
     volumes:
       - data:/data
     # 바깥에서는 Caddy(443)로만 들어온다. 8080은 이 서버 안에서만 연다

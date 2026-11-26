@@ -5,6 +5,7 @@ Node 24 + PostgreSQL 17. 계정, 통일 코인 지갑, 상품과 보유, 주문(
 > **⚠️ 앱이 `/v2`를 부르게 바뀌기 전에는 이 서버를 운영에 배포하지 않아요.**
 > 이 서버는 `/v2`만 받아요. 지금 나가 있는 앱은 `/v1`을 불러서, 이 서버를 배포하면 앱이 부르는 `/v1`이 모두 사라져요 (404).
 > 앱은 세 작업 가운데 2번(앱 구조)에서 `/v2`로 바뀌어요. 그때까지 `서버 배포` 워크플로를 실행하지 않아요.
+> 워크플로에는 잠금이 있어요: 저장소 variable `ALLOW_SERVER_V2_DEPLOY`가 `yes`가 아니면 맨 앞에서 실패해요. 앱이 `/v2`를 부르는 버전으로 나간 뒤에 이 값을 넣어요.
 
 - 사용자는 로그인 없이 **손님**으로 시작해요. 앱이 만든 기기 비밀값을 `POST /v2/auth/guest`로 보내면 세션 토큰을 받아요. 구글 계정을 연결하면 다른 기기에서도 같은 계정으로 들어가요.
 - 코인은 사용자마다 지갑 하나이고, 코인이 변한 일은 빠짐없이 기록(`coin_ledger`)에 남아요.
@@ -46,7 +47,7 @@ curl -s http://localhost:8080/v2/catalog                    # 게임 3개가 든
 | `GOOGLE_CLIENT_IDS` | (없음) | 구글 로그인에서 받아들이는 우리 앱의 클라이언트 ID (쉼표). 없으면 구글 연결이 모두 거절돼요 |
 | `BUNDLE_PUBLIC_KEY` | (없음) | 게임 묶음 서명을 확인하는 Ed25519 공개 키(base64). 비밀값이 아니에요. 없으면 `game add-version`이 거절돼요 |
 | `DATA_DIR` | `./data` | 게임 묶음과 아이콘을 두는 곳. 컨테이너에서는 볼륨 `/data` |
-| `CLIENT_IP_HEADER` | (없음) | 요청한 쪽의 IP가 담긴 헤더. 운영은 Cloudflare 뒤라 `cf-connecting-ip`. 없으면 소켓 주소를 써요 |
+| `CLIENT_IP_HEADER` | (없음) | 요청한 쪽의 IP가 담긴 헤더. **앞단이 꼭 덮어쓰는 헤더만** 정해요: 운영 compose는 Caddy가 채우는 `x-real-ip` (`Caddyfile`, [`docs/deploy.md`](../docs/deploy.md)). 없으면 소켓 주소를 써요 |
 | `AUTH_DEV` | (꺼짐) | `1`이면 개발용 가짜 로그인 |
 | `DB_CONNECT_TIMEOUT_MS` | `5000` | DB 연결을 얻기까지 기다리는 시간 (연결 10개가 모두 쓰이는 중일 때) |
 | `DB_STATEMENT_TIMEOUT_MS` | `10000` | 쿼리 하나의 시간. 다른 요청이 잠근 지갑을 기다리는 시간도 여기에 들어요 |
@@ -117,7 +118,7 @@ server/scripts/admin.sh product list
 
 배포 방법과 secret은 [`docs/deploy.md`](../docs/deploy.md)에 있어요. 꼭 지킬 것만 여기 적어요.
 
-1. **앱이 `/v2`를 부르기 전에는 배포하지 않아요** (맨 위의 경고).
+1. **앱이 `/v2`를 부르기 전에는 배포하지 않아요** (맨 위의 경고). 배포 워크플로는 variable `ALLOW_SERVER_V2_DEPLOY`가 `yes`일 때만 진행해요.
 2. **새 DB에서는 서버를 먼저 한 번 띄워 테이블을 만든 뒤에 `seed`를 돌려요.** 테이블이 없는 DB에 명령줄 도구를 부르면 "서버를 먼저 한 번 띄워 주세요"라고 알려 주고 끝나요.
 3. **Cloudflare에 `/v2/` 응답을 캐시하는 규칙을 만들지 않아요.** `/v2/catalog`의 `cache-control: public, max-age=60`은 앱이 쓰는 값이에요. 앞단이 캐시하면 한 origin에 맞춰 붙인 CORS 허용 헤더가 다른 origin의 앱에도 가서, 그 앱이 답을 읽지 못해요 (안드로이드와 아이폰은 origin이 달라요).
 4. 게임 묶음과 아이콘은 docker 볼륨 `data`(`/data`)에 있어요. DB와 함께 지켜야 하는 자료예요.

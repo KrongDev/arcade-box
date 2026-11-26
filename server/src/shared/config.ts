@@ -43,7 +43,8 @@ export interface Config {
   devAuth: boolean;
   /**
    * 요청한 쪽의 IP를 담아 주는 헤더 이름 (소문자). 없으면 소켓 주소를 쓴다.
-   * 앞단 프록시가 꼭 채워 주는 헤더일 때만 정한다 (운영: Cloudflare의 `cf-connecting-ip`).
+   * 앞단 프록시가 꼭 덮어쓰는 헤더일 때만 정한다 (운영: Caddy가 채우는 `x-real-ip`. 손님이 보낸 값이 그대로 닿는 헤더를
+   * 정하면 값을 바꿔 가며 IP별 요청 수 제한을 피한다).
    */
   clientIpHeader: string | null;
   /** DB 연결 풀의 시간 제한 */

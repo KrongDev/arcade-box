@@ -4,6 +4,7 @@ import { devVerifier } from '../src/account/index.ts';
 import { buildServer } from '../src/server.ts';
 import type { DbTimeouts } from '../src/shared/config.ts';
 import type { Db } from '../src/shared/db/index.ts';
+import { createHandler, type Route } from '../src/shared/http/index.ts';
 import { applyCoins, getBalance, lockWallet, verifyWallets } from '../src/wallet/index.ts';
 import { loginGuest, testConfig } from '../test/account/helpers.ts';
 import { call } from '../test/helpers/http.ts';
@@ -24,6 +25,14 @@ const LONG: DbTimeouts = { connectMs: 20_000, statementMs: 20_000, idleInTxMs: 2
 function why(err: unknown): string {
   const cause = (err as { cause?: { code?: unknown; message?: unknown } } | null)?.cause;
   return `${String(cause?.code ?? '')} ${String(cause?.message ?? (err as Error).message)}`.trim();
+}
+
+/** HTTP 답이 오류 내용을 내보내지 않는 `500 internal`인지 */
+function assertInternal(res: { status: number; body: unknown }, label: string): void {
+  assert.equal(res.status, 500, `${label}: ${JSON.stringify(res.body)}`);
+  const error = (res.body as { error: { code: string } }).error;
+  assert.deepEqual(Object.keys(error).sort(), ['code', 'message'], label);
+  assert.equal(error.code, 'internal', label);
 }
 
 /** 이 사용자의 지갑을 잠근 채 `release()`를 부를 때까지 트랜잭션을 열어 둔다. `locked`는 잠금을 잡은 뒤에 풀린다 */
@@ -61,10 +70,7 @@ test('잠긴 지갑을 기다리는 요청은 정해진 시간 뒤에 오류로 
 
       // HTTP 요청도 같다: 매달리지 않고 500 internal로 끝나고, 오류 내용(쿼리)은 내보내지 않는다
       const startedHttp = Date.now();
-      const res = await call(handler, 'POST', '/v2/me/attendance', { token: me.token, body: {} });
-      assert.equal(res.status, 500);
-      assert.deepEqual(Object.keys((res.body as { error: object }).error).sort(), ['code', 'message']);
-      assert.equal((res.body as { error: { code: string } }).error.code, 'internal');
+      assertInternal(await call(handler, 'POST', '/v2/me/attendance', { token: me.token, body: {} }), '잠긴 지갑을 기다린 요청');
       assert.ok(Date.now() - startedHttp < 5000);
     } finally {
       holder.release();
@@ -89,18 +95,29 @@ test('트랜잭션을 연 채 쉬는 연결은 정해진 시간 뒤에 끊기고
   try {
     const me = await loginGuest(db, NOW);
     // 지갑을 잠근 채 아무 쿼리도 보내지 않고 멈춘 요청 (코드가 트랜잭션 안에서 다른 일을 기다리는 경우)
-    await assert.rejects(
+    const stuck = () =>
       db.transaction(async (tx) => {
         await lockWallet(tx, me.userId, NOW);
         await sleep(900);
         await applyCoins(tx, { userId: me.userId, delta: 50, reason: 'grant', now: NOW });
-      }),
-    );
+        return { ok: true };
+      });
+    // 다른 까닭이 아니라 DB가 그 연결을 끊어서 끝난다: 25P03(idle_in_transaction_session_timeout)이거나, 끊긴 연결에 보낸 쿼리의 오류다
+    await assert.rejects(stuck(), (err: unknown) => /25P03|idle-in-transaction|Connection terminated|Client has encountered a connection error/i.test(why(err)));
     // 끊긴 트랜잭션은 되돌아갔고 잠금도 풀렸다: 다음 요청이 바로 된다
     const started = Date.now();
     const out = await db.transaction((tx) => applyCoins(tx, { userId: me.userId, delta: 70, reason: 'grant', now: NOW }));
     assert.equal(out.balance, 70);
     assert.ok(Date.now() - started < 2000);
+
+    // HTTP 요청이 그렇게 멈췄을 때도 500 internal로 끝나고, 서버는 다음 요청에 답한다
+    const routes: Route[] = [
+      { method: 'POST', path: '/test/stuck', auth: 'none', handle: stuck },
+      { method: 'GET', path: '/test/balance', auth: 'none', handle: async () => ({ balance: await getBalance(db, me.userId) }) },
+    ];
+    const handler = createHandler(routes, { allowedOrigins: [], now: () => NOW, findSession: async () => null });
+    assertInternal(await call(handler, 'POST', '/test/stuck'), '트랜잭션을 연 채 쉰 요청');
+    assert.deepEqual((await call(handler, 'GET', '/test/balance')).body, { balance: 70 }, '끊긴 요청은 코인을 남기지 않았다');
     assert.deepEqual(await verifyWallets(db), []);
   } finally {
     await close();
@@ -117,15 +134,22 @@ test('연결이 모두 쓰이고 있으면 기다리던 요청은 정해진 시�
       holders.push(holdWallet(db, user.userId));
     }
     await Promise.all(holders.map((h) => h.locked));
-    const other = await Promise.race([loginGuest(db, NOW).then(() => 'ok'), sleep(5000).then(() => 'hung')]).catch((err: unknown) => `failed: ${why(err)}`);
+    const handler = buildServer({ db, config: testConfig, now: () => NOW, verify: devVerifier() });
     try {
+      const other = await Promise.race([loginGuest(db, NOW).then(() => 'ok'), sleep(5000).then(() => 'hung')]).catch((err: unknown) => `failed: ${why(err)}`);
       assert.match(other, /^failed: .*timeout/i, '열한 번째 요청은 연결을 기다리다 오류로 끝난다');
+      // HTTP 요청도 같다: 연결을 얻지 못하면 매달리지 않고 500 internal로 끝난다
+      const startedHttp = Date.now();
+      const res = await call(handler, 'POST', '/v2/auth/guest', { body: { deviceSecret: 'a'.repeat(43) } });
+      assertInternal(res, '연결을 기다린 요청');
+      assert.ok(Date.now() - startedHttp < 5000);
     } finally {
       for (const h of holders) h.release();
       await Promise.all(holders.map((h) => h.done));
     }
     // 연결이 돌아온 뒤에는 된다
     await loginGuest(db, NOW);
+    assert.equal((await call(handler, 'POST', '/v2/auth/guest', { body: { deviceSecret: 'b'.repeat(43) } })).status, 200);
   } finally {
     await close();
   }

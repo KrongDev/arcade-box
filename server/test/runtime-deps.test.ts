@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 
 /**
- * 운영 이미지는 `npm ci --omit=dev`로 만든다 (Dockerfile). 그래서 서버와 명령줄이 실행하는 코드(`src`)는
+ * 운영 이미지는 `npm ci --omit=dev --omit=optional`로 만든다 (Dockerfile). 그래서 서버와 명령줄이 실행하는 코드(`src`)는
  * `dependencies`의 패키지와 Node 기본 모듈만 가져와야 한다: 개발용 패키지(drizzle-kit, PGlite, typescript)를 가져오면
  * 테스트는 통과하는데 컨테이너에서만 죽는다.
  */

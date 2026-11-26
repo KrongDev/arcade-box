@@ -74,7 +74,10 @@ if [ -n "${GCP_PROJECT_ID:-}" ]; then
   zone=${GCP_ZONE:-us-west1-b}
   case "$GCP_PROJECT_ID" in *[!A-Za-z0-9:._-]*) die "GCP_PROJECT_ID의 모양이 이상해요" ;; esac
   case "$zone" in *[!A-Za-z0-9-]*) die "GCP_ZONE의 모양이 이상해요" ;; esac
-  command -v gcloud >/dev/null 2>&1 || die "IAP 터널로 붙으려면 gcloud가 있어야 해요 (GCP_PROJECT_ID를 비우면 바로 SSH로 붙어요)"
+  # 접속할 때만 필요하다. 무엇을 실행할지만 보는 ADMIN_DRY_RUN=1은 gcloud 없이도 된다
+  if [ "${ADMIN_DRY_RUN:-}" != 1 ]; then
+    command -v gcloud >/dev/null 2>&1 || die "IAP 터널로 붙으려면 gcloud가 있어야 해요 (GCP_PROJECT_ID를 비우면 바로 SSH로 붙어요)"
+  fi
   # 공개 SSH 없이 구글 IAP 터널로 접속한다. known_hosts는 VM 이름으로 맞춘다 (배포 워크플로와 같은 방식)
   ssh_opts+=(
     -o "HostKeyAlias=$DEPLOY_HOST"
