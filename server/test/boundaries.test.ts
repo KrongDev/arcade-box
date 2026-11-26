@@ -113,6 +113,9 @@ test('검사기가 진짜 src를 읽고 있다', () => {
   assert.ok('shared/http/index.ts' in real);
   assert.ok('shared/errors.ts' in real);
   assert.ok(importsOf(real['shared/http/index.ts']).includes('../errors.ts'));
+  // 경계를 넘는 import도 실제로 읽힌다: 명령줄 조립이 admin을 그 index.ts로 가져온다
+  assert.ok(importsOf(real['cli.ts']).includes('./admin/index.ts'));
+  assert.ok(importsOf(real['schema.ts']).includes('./admin/schema.ts'));
 });
 
 test('검사기가 어긴 예(글자열로 준 가짜 소스)를 잡아낸다', () => {

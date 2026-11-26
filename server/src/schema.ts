@@ -3,3 +3,4 @@
  * 도메인에 `schema.ts`가 생기면 여기에 한 줄을 더한다.
  */
 export { app } from './shared/db/schema.ts';
+export * from './admin/schema.ts';
