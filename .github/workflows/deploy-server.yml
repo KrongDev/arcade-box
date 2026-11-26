@@ -1,11 +1,12 @@
 # 게임 서버를 배포한다. Actions 탭에서 직접 실행한다.
 #   1) server/ 이미지를 GHCR에 올린다 (비밀값은 이미지에 넣지 않는다)
-#   2) SSH로 서버에 접속해 .env·mTLS 인증서를 secret에서 바로 쓰고 docker compose로 다시 띄운다
+#   2) SSH로 서버에 접속해 .env를 secret과 variable에서 바로 쓰고 docker compose로 다시 띄운다
 #   3) https://SERVER_DOMAIN/healthz 로 바깥에서 응답을 확인한다 (Caddy가 HTTPS 인증서를 자동 발급)
 # GCP VM(server/deploy/setup-gcp.sh)은 SSH가 공개되지 않아, GCP_* secret이 있으면 키 파일 없이
 # Workload Identity로 인증한 뒤 IAP 터널로 접속한다. 없으면 DEPLOY_HOST로 바로 SSH 접속한다.
 # 서버 준비는 server/deploy/setup-vm.sh 한 번으로 끝난다 (Docker·스왑·배포 사용자).
-# 필요한 secret: README '비밀값 관리'
+# 필요한 secret과 variable: docs/deploy.md '비밀값 관리'
+# 주의: 이 서버(v2)는 /v2만 받는다. 앱이 /v2를 부르게 바뀌기 전에 배포하면 지금의 앱이 부르는 /v1이 사라진다 (docs/deploy.md)
 name: 서버 배포
 
 on:
@@ -65,6 +66,10 @@ jobs:
       GCP_ZONE: ${{ secrets.GCP_ZONE }}
       GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
       GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      # 아래 셋은 비밀값이 아니라 variable로 둔다 (앱에도 그대로 들어가는 값이다)
+      ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS }}
+      GOOGLE_CLIENT_IDS: ${{ vars.GOOGLE_CLIENT_IDS }}
+      BUNDLE_PUBLIC_KEY: ${{ vars.BUNDLE_PUBLIC_KEY }}
     steps:
       - uses: actions/checkout@v5
 
@@ -73,13 +78,11 @@ jobs:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-          TOSS_MTLS_CERT: ${{ secrets.TOSS_MTLS_CERT }}
-          TOSS_MTLS_KEY: ${{ secrets.TOSS_MTLS_KEY }}
           CF_ORIGIN_CERT: ${{ secrets.CF_ORIGIN_CERT }}
           CF_ORIGIN_KEY: ${{ secrets.CF_ORIGIN_KEY }}
         run: |
           missing=""
-          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS SERVER_DOMAIN POSTGRES_PASSWORD TOSS_MTLS_CERT TOSS_MTLS_KEY; do
+          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS SERVER_DOMAIN POSTGRES_PASSWORD; do
             if [ -z "${!name}" ]; then missing="$missing $name"; fi
           done
           if [ -n "$missing" ]; then echo "::error::다음 secret이 없어요:$missing"; exit 1; fi
@@ -97,6 +100,19 @@ jobs:
           case "$SERVER_DOMAIN" in
             *[!A-Za-z0-9.-]*|"") echo "::error::SERVER_DOMAIN에는 도메인 이름만 넣어 주세요 (예: arcade-api.geonbox.com)"; exit 1 ;;
           esac
+          # 아래 값은 .env에 한 줄씩 그대로 들어간다. 줄바꿈·빈칸·따옴표가 섞이지 않게 쓰는 글자를 정해 둔다 (값은 찍지 않는다)
+          case "$ALLOWED_ORIGINS" in
+            *[!A-Za-z0-9.:/,_-]*) echo "::error::variable ALLOWED_ORIGINS에는 origin을 쉼표로 이어 넣어 주세요 (예: https://localhost,capacitor://localhost)"; exit 1 ;;
+          esac
+          case "$GOOGLE_CLIENT_IDS" in
+            *[!A-Za-z0-9.,_-]*) echo "::error::variable GOOGLE_CLIENT_IDS에는 클라이언트 ID를 쉼표로 이어 넣어 주세요 (빈칸 없이)"; exit 1 ;;
+          esac
+          case "$BUNDLE_PUBLIC_KEY" in
+            *[!A-Za-z0-9+/=]*) echo "::error::variable BUNDLE_PUBLIC_KEY에는 공개 키의 base64 한 줄만 넣어 주세요 (-----BEGIN 줄 없이)"; exit 1 ;;
+          esac
+          # 없어도 서버는 뜬다. 다만 그 기능이 막히니 알려 준다
+          if [ -z "$GOOGLE_CLIENT_IDS" ]; then echo "::warning::variable GOOGLE_CLIENT_IDS가 없어요. 구글 계정 연결이 모두 거절돼요"; fi
+          if [ -z "$BUNDLE_PUBLIC_KEY" ]; then echo "::warning::variable BUNDLE_PUBLIC_KEY가 없어요. 게임 묶음을 올릴 수 없어요 (game add-version)"; fi
 
       - name: GCP 인증 (Workload Identity)
         if: env.GCP_WORKLOAD_IDENTITY_PROVIDER != ''
@@ -134,11 +150,9 @@ jobs:
             fi
           } > ~/.ssh/config
 
-      - name: 설정·인증서 쓰고 다시 띄우기
+      - name: 설정 쓰고 다시 띄우기
         env:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-          TOSS_MTLS_CERT: ${{ secrets.TOSS_MTLS_CERT }}
-          TOSS_MTLS_KEY: ${{ secrets.TOSS_MTLS_KEY }}
           CF_ORIGIN_CERT: ${{ secrets.CF_ORIGIN_CERT }}
           CF_ORIGIN_KEY: ${{ secrets.CF_ORIGIN_KEY }}
           SERVER_IMAGE: ${{ needs.image.outputs.image }}
@@ -149,11 +163,9 @@ jobs:
           remote() { ssh deploy-target "$@"; }
 
           # 비밀값은 표준 입력으로만 넘긴다 — 명령줄·로그에 남기지 않는다
-          remote 'umask 077 && mkdir -p ~/arcade-box/mtls ~/arcade-box/certs'
+          remote 'umask 077 && mkdir -p ~/arcade-box/certs'
           remote 'cat > ~/arcade-box/docker-compose.yml' < server/docker-compose.yml
           remote 'cat > ~/arcade-box/Caddyfile' < server/Caddyfile
-          printf '%s\n' "$TOSS_MTLS_CERT" | remote 'umask 077 && cat > ~/arcade-box/mtls/client.crt'
-          printf '%s\n' "$TOSS_MTLS_KEY" | remote 'umask 077 && cat > ~/arcade-box/mtls/client.key'
           # Cloudflare 프록시 뒤라면 Origin 인증서를 쓰고, 아니면 Let's Encrypt 자동 발급
           if [ -n "$CF_ORIGIN_CERT" ]; then
             printf '%s\n' "$CF_ORIGIN_CERT" | remote 'umask 077 && cat > ~/arcade-box/certs/origin.pem'
@@ -166,11 +178,11 @@ jobs:
             echo "DOMAIN=$SERVER_DOMAIN"
             echo "CADDY_TLS=$CADDY_TLS"
             echo "POSTGRES_PASSWORD=$POSTGRES_PASSWORD"
-            echo "MTLS_DIR=./mtls"
-            echo "MTLS_CERT_FILE=client.crt"
-            echo "MTLS_KEY_FILE=client.key"
+            echo "ALLOWED_ORIGINS=$ALLOWED_ORIGINS"
+            echo "GOOGLE_CLIENT_IDS=$GOOGLE_CLIENT_IDS"
+            echo "BUNDLE_PUBLIC_KEY=$BUNDLE_PUBLIC_KEY"
             echo "SERVER_IMAGE=$SERVER_IMAGE"
-          } | remote 'umask 077 && cat > ~/arcade-box/.env && printf "APP_UID=%s\nAPP_GID=%s\n" "$(id -u)" "$(id -g)" >> ~/arcade-box/.env'
+          } | remote 'umask 077 && cat > ~/arcade-box/.env'
 
           # 이 작업 동안만 유효한 토큰으로 이미지를 받고 바로 로그아웃한다
           printf '%s' "$GHCR_TOKEN" | remote "docker login ghcr.io -u '$GHCR_USER' --password-stdin"

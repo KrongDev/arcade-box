@@ -1,5 +1,7 @@
 node_modules
 test
+test-pg
+data
 *.md
 .env*
 secrets

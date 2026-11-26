@@ -1,5 +1,7 @@
-# 로컬 개발 전용: 실제 인증서 없이 가짜 파트너로 로그인 흐름까지 돌린다.
+# 로컬 개발 전용: 서버 + PostgreSQL. 개발용 가짜 로그인(AUTH_DEV)이 켜져 있다.
 #   docker compose -f docker-compose.dev.yml up -d --build
+# 이 컴퓨터의 5432나 8080을 다른 것이 쓰고 있으면 포트를 바꿔 띄운다:
+#   DEV_DB_PORT=55432 DEV_SERVER_PORT=58080 docker compose -f docker-compose.dev.yml up -d --build
 # 운영 compose(docker-compose.yml)와 섞지 않는다.
 services:
   db:
@@ -12,35 +14,34 @@ services:
       - pgdata-dev:/var/lib/postgresql/data
     ports:
       # 개발 비밀번호가 공개돼 있으니 이 컴퓨터(127.0.0.1)에서만 연다
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:${DEV_DB_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U pinball -d pinball"]
       interval: 3s
       timeout: 3s
       retries: 20
 
-  mock-partner:
-    build: .
-    command: ["node", "mock-partner/server.ts"]
-    environment:
-      PORT: "9090"
-
   server:
     build: .
     depends_on:
       db:
         condition: service_healthy
-      mock-partner:
-        condition: service_started
     environment:
       NODE_ENV: development
       PORT: "8080"
       DATABASE_URL: postgres://pinball:pinball-dev@db:5432/pinball
-      TOSS_API_BASE: http://mock-partner:9090
-      # 브라우저 개발 서버(vite) origin — 개발 compose에서만
-      CORS_DEV_ORIGINS: http://localhost:5173
+      DATA_DIR: /data
+      # 개발용 가짜 로그인: 구글 대신 지어낸 토큰으로 계정 연결을 해 본다. 운영(NODE_ENV=production)에서는 켠 채로 뜨지 않는다
+      AUTH_DEV: "1"
+      # 앱의 origin 둘과 브라우저 개발 서버(vite) — 개발 compose에서만
+      ALLOWED_ORIGINS: https://localhost,capacitor://localhost,http://localhost:5173
+      # 게임 묶음을 올려 보려면 서명에 쓴 키의 공개 키를 넘긴다 (server/README.md)
+      BUNDLE_PUBLIC_KEY: ${BUNDLE_PUBLIC_KEY:-}
+    volumes:
+      - data-dev:/data
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:${DEV_SERVER_PORT:-8080}:8080"
 
 volumes:
   pgdata-dev:
+  data-dev:

@@ -1,7 +1,7 @@
-# 운영과 같은 구성: 서버 + PostgreSQL.
-# 실제 파트너 API(mTLS)를 쓰므로 인증서가 든 디렉터리를 MTLS_DIR로 마운트한다.
-#   직접 띄우기: DOMAIN=도메인 MTLS_DIR=/안전한/경로 POSTGRES_PASSWORD=... docker compose up -d --build
-#   GitHub Actions '서버 배포' 워크플로는 이 파일과 Caddyfile을 서버로 복사하고, .env와 인증서를 secret으로 채워 SERVER_IMAGE를 받아 띄운다.
+# 운영 구성: 서버 + PostgreSQL + Caddy(HTTPS).
+#   직접 띄우기: .env.example을 .env로 복사해 채운 뒤 docker compose up -d --build
+#   GitHub Actions '서버 배포' 워크플로는 이 파일과 Caddyfile을 서버로 복사하고, .env를 secret과 variable로 채워 SERVER_IMAGE를 받아 띄운다.
+# 바깥에서는 Caddy(80·443)로만 들어온다. 관리 기능은 HTTP로 열지 않고, 서버 컨테이너 안의 명령줄 도구로 한다 (scripts/admin.sh).
 services:
   db:
     image: postgres:17-alpine
@@ -22,21 +22,26 @@ services:
     # 직접 띄울 때는 이 폴더에서 빌드하고, 배포 워크플로는 GHCR에 올린 이미지(SERVER_IMAGE)를 받아 쓴다
     image: ${SERVER_IMAGE:-arcade-box-server}
     build: .
-    # 인증서 파일 주인과 같은 사용자로 돌려, 개인 키를 600 권한 그대로 읽게 한다
-    user: "${APP_UID:-1000}:${APP_GID:-1000}"
     depends_on:
       db:
         condition: service_healthy
     environment:
+      # production에서는 개발용 가짜 로그인(AUTH_DEV)을 켠 채로 뜨지 않는다
       NODE_ENV: production
       PORT: "8080"
       DATABASE_URL: postgres://pinball:${POSTGRES_PASSWORD}@db:5432/pinball
-      TOSS_API_BASE: https://apps-in-toss-api.toss.im
-      TOSS_MTLS_CERT_PATH: /run/secrets/mtls/${MTLS_CERT_FILE:?인증서 파일 이름(MTLS_CERT_FILE)을 지정하세요}
-      TOSS_MTLS_KEY_PATH: /run/secrets/mtls/${MTLS_KEY_FILE:?개인 키 파일 이름(MTLS_KEY_FILE)을 지정하세요}
+      # 게임 묶음과 아이콘을 두는 곳 — 아래 data 볼륨
+      DATA_DIR: /data
+      # 앱의 origin (쉼표로 여러 개). 비우면 서버 기본값: https://localhost(안드로이드), capacitor://localhost(아이폰)
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+      # 구글 로그인의 대상(aud)으로 받아들이는 우리 앱의 클라이언트 ID (쉼표로 여러 개). 비우면 구글 연결이 모두 거절된다
+      GOOGLE_CLIENT_IDS: ${GOOGLE_CLIENT_IDS:-}
+      # 게임 묶음의 서명을 확인하는 Ed25519 공개 키(base64). 비밀값이 아니다. 비우면 game add-version이 거절된다
+      BUNDLE_PUBLIC_KEY: ${BUNDLE_PUBLIC_KEY:-}
+      # 요청한 쪽의 IP를 읽는 헤더. 운영은 Cloudflare → Caddy 뒤라 Cloudflare가 채워 주는 헤더를 쓴다 (docs/deploy.md)
+      CLIENT_IP_HEADER: cf-connecting-ip
     volumes:
-      # 인증서·키는 저장소 밖 디렉터리에서 읽기 전용으로 마운트한다
-      - ${MTLS_DIR:?인증서 디렉터리(MTLS_DIR)를 지정하세요}:/run/secrets/mtls:ro
+      - data:/data
     # 바깥에서는 Caddy(443)로만 들어온다. 8080은 이 서버 안에서만 연다
     ports:
       - "127.0.0.1:8080:8080"
@@ -63,5 +68,7 @@ services:
 
 volumes:
   pgdata:
+  # 게임 묶음과 아이콘. 지우면 올린 묶음이 사라진다 (DB의 버전 행은 남아 내려받기가 실패한다)
+  data:
   caddy-data:
   caddy-config:

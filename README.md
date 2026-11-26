@@ -174,9 +174,10 @@ arcade-box/
 │  └─ pages/            홈 · 핀볼 · 지뢰찾기 · 벽돌깨기 · 상점 · 순위표 · 설정 화면
 ├─ test/                클라이언트 규칙 테스트 (node --test)
 ├─ server/
-│  ├─ src/              HTTP 라우트 · 게임 규칙 · 저장소(PostgreSQL/메모리) · 파트너 API · 약관 페이지
-│  ├─ mock-partner/     로컬 개발용 가짜 파트너 API
-│  └─ test/
+│  ├─ src/              서버 v2: 도메인별 디렉토리(계정 · 지갑 · 상품 · 보유 · 주문 · 게임 · 판 결과 · 보상) · 명령줄 도구 · 약관 페이지
+│  ├─ drizzle/          DB 마이그레이션 SQL
+│  ├─ scripts/          운영 도구를 부르는 스크립트(admin.sh) · 약관 페이지 만들기
+│  └─ test/ · test-pg/  서버 테스트 · 진짜 PostgreSQL에서만 도는 동시 요청 테스트
 ├─ android/             안드로이드 앱 프로젝트 (Capacitor · Android Studio)
 ├─ assets/              콘솔 등록용 로고 · 썸네일 · 스크린샷
 └─ .github/workflows/   CI · 미니앱 배포 · 서버 배포
@@ -186,12 +187,14 @@ arcade-box/
 
 ```bash
 npm install
-(cd server && docker compose -f docker-compose.dev.yml up -d --build)   # 로컬 게임 서버 (가짜 파트너 API)
+(cd server && docker compose -f docker-compose.dev.yml up -d --build)   # 로컬 게임 서버 v2 (앱은 아직 /v1을 불러 이어지지 않아요)
 npm run dev                                                             # http://localhost:5173
 npm run dev:android                                                     # 안드로이드 구현으로 브라우저에서 보기
 ```
 
 브라우저에서는 `@apps-in-toss/devtools`가 토스 SDK를 흉내 내요. 서버가 없어도 기기 저장만으로 동작해요.
+
+> 서버는 v2로 다시 만들었어요 (계정 · 통일 코인 · 상품과 보유 · 주문 · 게임 목록 — [`server/README.md`](server/README.md)). 앱은 아직 v1 서버(`/v1`)를 부르고, 앱 구조 작업에서 `/v2`로 바뀌어요. 이 문서의 서버 이야기(토스 인증 코드 교환, 게임별 코인)는 그때 함께 고쳐요. **그 전에는 서버 v2를 운영에 배포하지 않아요.**
 
 ```bash
 npm test                               # 클라이언트 규칙 테스트
