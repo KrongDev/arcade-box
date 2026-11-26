@@ -167,6 +167,21 @@ export async function markUserDeleted(tx: Tx, userId: string, now: Date): Promis
   await tx.update(users).set({ status: 'deleted', deletedAt: now }).where(eq(users.id, userId));
 }
 
+/** `deleted`로 남겨 둔 사용자 행의 ID (ID 순서) */
+export async function readDeletedUserIds(q: Q): Promise<string[]> {
+  const rows = await q.select({ id: users.id }).from(users).where(eq(users.status, 'deleted')).orderBy(users.id);
+  return rows.map((r) => r.id);
+}
+
+/** `deleted`로 남겨 둔 사용자 행을 지운다. 살아 있는 사용자와 없는 사용자는 건드리지 않고 거짓을 준다 */
+export async function deleteDeletedUserRow(tx: Tx, userId: string): Promise<boolean> {
+  const rows = await tx
+    .delete(users)
+    .where(and(eq(users.id, userId), eq(users.status, 'deleted')))
+    .returning({ id: users.id });
+  return rows.length > 0;
+}
+
 export async function readUser(q: Q, userId: string): Promise<{ id: string; status: 'active' | 'deleted'; createdAt: Date } | null> {
   const [row] = await q.select({ id: users.id, status: users.status, createdAt: users.createdAt }).from(users).where(eq(users.id, userId));
   return row ?? null;

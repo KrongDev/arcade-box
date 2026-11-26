@@ -11,3 +11,4 @@ export * from './product/schema.ts';
 export * from './entitlement/schema.ts';
 export * from './play/schema.ts';
 export * from './reward/schema.ts';
+export * from './order/schema.ts';

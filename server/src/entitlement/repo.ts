@@ -25,12 +25,15 @@ export async function insertActive(tx: Tx, row: { userId: string; productId: str
   return created[0]?.id ?? null;
 }
 
-/** 켜진 보유를 회수한다. 회수한 것이 있었으면 참 */
-export async function revokeActive(tx: Tx, userId: string, productId: string, reason: RevokeReason): Promise<boolean> {
+/**
+ * 켜진 보유를 회수한다. 회수한 것이 있었으면 참.
+ * `entitlementId`를 주면 켜진 보유가 바로 그 행일 때만 회수한다 (그 행이 이미 회수됐고 지금 켜진 것은 다른 행이면 거짓).
+ */
+export async function revokeActive(tx: Tx, userId: string, productId: string, reason: RevokeReason, entitlementId?: number): Promise<boolean> {
   const done = await tx
     .update(entitlements)
     .set({ revokedAt: sql`now()`, revokeReason: reason })
-    .where(active(userId, productId))
+    .where(entitlementId === undefined ? active(userId, productId) : and(active(userId, productId), eq(entitlements.id, entitlementId)))
     .returning({ id: entitlements.id });
   return done.length > 0;
 }

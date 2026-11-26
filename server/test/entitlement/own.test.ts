@@ -108,6 +108,37 @@ test('회수한 뒤 다시 지급하면 새 행이 생긴다 (켜진 보유는 �
   }
 });
 
+test('보유 번호를 주고 회수하면 켜진 보유가 바로 그 보유일 때만 회수한다', async () => {
+  const { db, close } = await testDb();
+  try {
+    await seedCatalog(db);
+    const me = await loginGuest(db, NOW);
+    const first = await give(db, me.userId, 'pinball.table.sunset', 'coin_purchase');
+    await take(db, me.userId, 'pinball.table.sunset');
+    const second = await give(db, me.userId, 'pinball.table.sunset');
+    await equip(db, me.userId, 'pinball.table.sunset');
+    const takeById = (entitlementId: number) => db.transaction((tx) => revoke(tx, { userId: me.userId, productId: 'pinball.table.sunset', reason: 'refund', entitlementId }));
+
+    // 이미 회수된 보유의 번호: 지금 켜진 보유(다시 받은 것)와 장착은 그대로다
+    await assert.rejects(takeById(first), rule(409, 'not_owned'));
+    // 없는 번호, 남의 보유 번호도 같다
+    await assert.rejects(takeById(999_999), rule(409, 'not_owned'));
+    const other = await loginGuest(db, NOW);
+    const theirs = await give(db, other.userId, 'pinball.table.sunset');
+    await assert.rejects(takeById(theirs), rule(409, 'not_owned'));
+    assert.deepEqual((await rowsOf(db, me.userId)).map((r) => [r.id, r.revokedAt === null, r.revokeReason]), [[first, false, 'admin'], [second, true, null]]);
+    assert.deepEqual((await listEquipped(db, me.userId)).map((e) => e.productId), ['pinball.table.sunset']);
+    assert.equal(await owns(db, other.userId, await product(db, 'pinball.table.sunset')), true);
+
+    // 켜진 보유의 번호: 회수하고 장착도 푼다
+    await takeById(second);
+    assert.deepEqual((await rowsOf(db, me.userId)).map((r) => [r.id, r.revokeReason]), [[first, 'admin'], [second, 'refund']]);
+    assert.deepEqual(await listEquipped(db, me.userId), []);
+  } finally {
+    await close();
+  }
+});
+
 test('코인 묶음과 everyone 상품은 400 not_grantable', async () => {
   const { db, close } = await testDb();
   try {

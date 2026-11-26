@@ -7,6 +7,7 @@ import { createInterface } from 'node:readline';
 import { commands as adminCommands } from './admin/index.ts';
 import { commands as entitlementCommands } from './entitlement/index.ts';
 import { commands as gameCommands } from './game/index.ts';
+import { commands as orderCommands } from './order/index.ts';
 import { commands as playCommands } from './play/index.ts';
 import { commands as productCommands } from './product/index.ts';
 import { runCli, type CliIo, type Command } from './shared/cli/index.ts';
@@ -55,6 +56,7 @@ try {
       ...productCommands(db, actor, { dataDir: config.dataDir }),
       ...entitlementCommands(db, actor),
       ...playCommands(db, actor),
+      ...orderCommands(db, actor),
     ];
     code = await runCli(process.argv.slice(2), commands, io);
   } finally {

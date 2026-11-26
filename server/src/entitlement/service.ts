@@ -81,12 +81,15 @@ export async function grant(tx: Tx, input: { userId: string; productId: string; 
 /**
  * 보유를 회수한다 (환불, 운영자 판단). 행은 지우지 않고 `revoked_at`과 까닭을 채운다. 장착하고 있었으면 장착도 푼다.
  * 없는 상품이면 `404 not_found`, 켜진 보유가 없으면 `409 not_owned`, 없거나 지워진 사용자면 `401 unauthorized`.
+ *
+ * `entitlementId`를 주면 지금 켜진 보유가 바로 그 보유일 때만 회수한다 (주문의 환불이 그 주문으로 생긴 보유만 회수할 때 쓴다).
+ * 그 보유가 이미 회수됐으면 — 그 뒤에 같은 상품을 다시 받아 켜진 보유가 따로 있더라도 — `409 not_owned`이고 아무것도 바꾸지 않는다.
  */
-export async function revoke(tx: Tx, input: { userId: string; productId: string; reason: RevokeReason }): Promise<void> {
+export async function revoke(tx: Tx, input: { userId: string; productId: string; reason: RevokeReason; entitlementId?: number }): Promise<void> {
   if (!(REVOKE_REASONS as readonly unknown[]).includes(input.reason)) throw new RuleError(400, 'invalid_reason', '회수 까닭이 올바르지 않아요');
   await requireActiveUser(tx, input.userId);
   const product = await productOrThrow(tx, input.productId);
-  if (!(await revokeActive(tx, input.userId, product.id, input.reason))) throw notOwned(409);
+  if (!(await revokeActive(tx, input.userId, product.id, input.reason, input.entitlementId))) throw notOwned(409);
   await deleteEquippedProduct(tx, input.userId, product.id);
 }
 

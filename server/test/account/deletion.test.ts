@@ -8,9 +8,11 @@ import {
   getUser,
   issueNonce,
   linkIdentity,
+  listDeletedUsers,
   listProviders,
   logout,
   registerOrLoginGuest,
+  removeDeletedUser,
   requireActiveUser,
   resolveLink,
   updateSettings,
@@ -160,6 +162,37 @@ test('지워진(행만 남은) 사용자에게는 수단·세션·설정이 다�
       await requireActiveUser(tx, alive.userId);
     });
     await assert.rejects(updateSettings(db, '11111111-1111-4111-8111-111111111111', { sound: true }, clock()), unauthorized);
+  } finally {
+    await close();
+  }
+});
+
+test('removeDeletedUser는 deleted로 남겨 둔 사용자 행만 지운다 (살아 있는 사용자와 없는 사용자는 그대로)', async () => {
+  const { db, close } = await testDb();
+  try {
+    const clock = fakeClock(START);
+    const kept = await fullUser(db, clock(), 'g-kept');
+    const alive = await fullUser(db, clock(), 'g-alive');
+    await deleteAccount(db, kept.userId, recordingPolicy(true).policy, clock());
+    assert.equal((await getUser(db, kept.userId))?.status, 'deleted');
+    const remove = (userId: string) => db.transaction((tx) => removeDeletedUser(tx, userId));
+    assert.deepEqual(await listDeletedUsers(db), [kept.userId], 'deleted로 남은 사용자만 든다');
+
+    // 살아 있는 사용자, 없는 사용자, 사용자 번호 모양이 아닌 글: 아무것도 하지 않고 거짓
+    assert.equal(await remove(alive.userId), false);
+    assert.equal(await remove('00000000-0000-4000-8000-000000000000'), false);
+    assert.equal(await remove('not-a-uuid'), false);
+    assert.equal((await getUser(db, alive.userId))?.status, 'active');
+    assert.deepEqual(await listProviders(db, alive.userId), ['guest', 'google']);
+    assert.equal((await getUser(db, kept.userId))?.status, 'deleted');
+
+    // deleted로 남은 행: 지워지고 어느 테이블에도 흔적이 없다. 두 번째는 지울 것이 없다
+    assert.equal(await remove(kept.userId), true);
+    assert.equal(await getUser(db, kept.userId), null);
+    assert.deepEqual(await tablesContaining(db, [kept.userId]), []);
+    assert.equal(await remove(kept.userId), false);
+    assert.deepEqual(await listDeletedUsers(db), []);
+    assert.equal((await db.select().from(users)).length, 1);
   } finally {
     await close();
   }
