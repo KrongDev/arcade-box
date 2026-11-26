@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { RuleError } from '../../src/shared/errors.ts';
-import { bool, idempotencyKey, int, obj, str } from '../../src/shared/validate.ts';
+import { bool, idempotencyKey, int, isUuid, obj, str } from '../../src/shared/validate.ts';
 
 /** 400이고 code가 맞는 RuleError인지 */
 function invalid(code: string) {
@@ -56,4 +56,12 @@ test('idempotencyKey는 없으면 null, 있으면 8~64자의 영문·숫자·_·
   for (const bad of ['short', 'a'.repeat(65), 'has space!', 12345678]) assert.throws(() => idempotencyKey(bad));
   for (const bad of ['', '1234567', '한글로쓴키12345678', 'abcd/efgh', true, {}]) assert.throws(() => idempotencyKey(bad), invalid('invalid_idempotency_key'));
   for (const ok of ['12345678', 'a'.repeat(64), 'run_2026-11-26_AbC', '3f2a9c1e-7b4d-4e8a-9c1e-7b4d4e8a9c1e']) assert.equal(idempotencyKey(ok), ok);
+});
+
+test('isUuid는 8-4-4-4-12 모양의 16진수 글자열만 참이다 (사용자 ID, 주문 ID)', () => {
+  assert.equal(isUuid('00000000-0000-4000-8000-000000000000'), true);
+  assert.equal(isUuid('3F2A9C10-aaaa-BBBB-cccc-0123456789ab'), true, '대문자도 받는다 (PostgreSQL의 uuid가 받는다)');
+  for (const v of ['', 'not-a-uuid', '00000000-0000-4000-8000-00000000000', '00000000-0000-4000-8000-0000000000000', '00000000000040008000000000000000', '{00000000-0000-4000-8000-000000000000}', ' 00000000-0000-4000-8000-000000000000', '00000000-0000-4000-8000-000000000000\n', '0000000g-0000-4000-8000-000000000000', "x' or '1'='1", 'a\u0000b', null, undefined, 42, {}, ['00000000-0000-4000-8000-000000000000']]) {
+    assert.equal(isUuid(v), false, JSON.stringify(v));
+  }
 });

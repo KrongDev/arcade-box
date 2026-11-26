@@ -19,4 +19,5 @@ export {
   type OrderRecord,
   type OrderSummary,
   type Purchased,
+  type PurchasedGame,
 } from './service.ts';

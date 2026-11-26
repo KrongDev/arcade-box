@@ -4,8 +4,8 @@ import { getGame, isGameId } from '../game/index.ts';
 import type { Db, Q, Tx } from '../shared/db/index.ts';
 import { RuleError } from '../shared/errors.ts';
 import { kstDayStart } from '../shared/time.ts';
-import { idempotencyKey as checkKey, obj } from '../shared/validate.ts';
-import { applyCoins, lockWallet } from '../wallet/index.ts';
+import { idempotencyKey as checkKey, isUuid, obj } from '../shared/validate.ts';
+import { applyCoins, hasLedgerKey, lockWallet } from '../wallet/index.ts';
 import {
   boardsRequiring,
   countBetter,
@@ -54,7 +54,6 @@ import {
 } from './rules.ts';
 import { canBeCleared, checkValidatorParams, findValidator } from './validators.ts';
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** `at`이 든 한국 날짜에 이 사용자가 판으로 번 코인의 합. `throughRunId`를 주면 그 판까지만 */
@@ -197,6 +196,8 @@ export async function submitRun(db: Db, userId: string, input: unknown, now: Dat
 
     // 코인은 맨 끝에 반영한다. 여기서 실패하면(지갑 상한 등) 위에서 넣은 판과 기록도 함께 되돌아간다
     let after = balance;
+    // 코인이 0이면 `applyCoins`를 부르지 않아 키를 볼 곳이 없으니 여기서 본다: 이 키의 판은 없는데 코인 기록은 있다
+    if (coins === 0 && key !== null && (await hasLedgerKey(tx, userId, key))) throw idempotencyMismatch();
     if (coins > 0) {
       const paid = await applyCoins(tx, { userId, delta: coins, reason: 'run', idempotencyKey: key, now });
       // 이 키의 판은 없는데 코인 기록은 있다: 같은 키를 다른 판에 쓴 흔적이다. 코인이 들어가지 않았으니 판도 남기지 않는다
@@ -230,7 +231,7 @@ export async function leaderboard(db: Db, boardId: string, limit: number, userId
   if ((await getGame(db, board.gameId))?.status === 'draft') throw unknownBoard(404);
   const top = ranked(await topRecords(db, board.id, board.ordering, n)).map((r) => ({ rank: r.rank, name: nickname(r.userId), value: r.value, me: r.userId === userId }));
   let mine: Leaderboard['mine'] = null;
-  if (userId !== null && UUID.test(userId)) {
+  if (userId !== null && isUuid(userId)) {
     const record = await readRecord(db, board.id, userId);
     if (record && record.bestValue !== null) mine = { rank: (await countBetter(db, board.id, board.ordering, record.bestValue)) + 1, value: record.bestValue };
   }
@@ -243,12 +244,12 @@ export async function leaderboard(db: Db, boardId: string, limit: number, userId
  */
 export async function runCoinStatus(q: Q, userId: string, now: Date): Promise<{ earnedToday: number; limit: number | null }> {
   const limit = await getNumber(q, 'run_coins_per_day');
-  return { earnedToday: UUID.test(userId) ? await earnedOn(q, userId, now) : 0, limit: limit === 0 ? null : limit };
+  return { earnedToday: isUuid(userId) ? await earnedOn(q, userId, now) : 0, limit: limit === 0 ? null : limit };
 }
 
 /** 이 사용자가 판을 낸 순위표마다의 최고 기록, 최고 시간(깬 판), 깬 적이 있는지 (`/v2/me`의 `boards`) */
 export async function boardStats(q: Q, userId: string): Promise<Record<string, { best: number | null; bestSeconds: number | null; cleared: boolean }>> {
-  if (!UUID.test(userId)) return {};
+  if (!isUuid(userId)) return {};
   const out: Record<string, { best: number | null; bestSeconds: number | null; cleared: boolean }> = {};
   for (const r of await readRecords(q, userId)) out[r.boardId] = { best: r.bestValue, bestSeconds: r.bestSeconds, cleared: r.clearedAt !== null };
   return out;

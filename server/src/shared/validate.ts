@@ -45,6 +45,16 @@ export function obj(v: unknown, name: string): Record<string, unknown> {
   return v as Record<string, unknown>;
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * uuid 모양의 글자열인지 (사용자 ID, 주문 ID). 모양이 아닌 값을 uuid 열에 견주면 쿼리가 실패하므로(500)
+ * 바깥에서 온 ID는 쿼리에 넣기 전에 이것으로 본다.
+ */
+export function isUuid(v: unknown): v is string {
+  return typeof v === 'string' && UUID.test(v);
+}
+
 const IDEMPOTENCY_KEY = /^[A-Za-z0-9_-]{8,64}$/;
 
 /** 같은 요청을 다시 보낼 때 붙이는 키. 없으면(undefined, null) null을 준다 */

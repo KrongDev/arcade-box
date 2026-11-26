@@ -1,6 +1,6 @@
 import { requireActiveUser } from '../account/index.ts';
 import type { Db, Q, Tx } from '../shared/db/index.ts';
-import { idempotencyKey as checkKey } from '../shared/validate.ts';
+import { idempotencyKey as checkKey, isUuid } from '../shared/validate.ts';
 import { deleteCoins, findByKey, insertEntry, lockWallet as lockWalletRow, readBalance, selectEntries, selectMismatched, setBalance, type Mismatch } from './repo.ts';
 import { checkDelta, checkLedgerPage, idempotencyMismatch, nextBalance, sameRequest, type LedgerPage, type LedgerReason } from './rules.ts';
 
@@ -64,6 +64,19 @@ export async function applyCoins(
 export async function lockWallet(tx: Tx, userId: string, now?: Date): Promise<number> {
   await requireActiveUser(tx, userId);
   return lockWalletRow(tx, userId, now);
+}
+
+/**
+ * 이 사용자가 이 키로 남긴 코인 기록이 있나. 키는 사용자마다 따로다. 사용자 ID 모양이 아니면 거짓.
+ *
+ * 코인을 바꾸지 않는 요청이 키를 확인할 때 쓴다 (가격이 0인 구매, 코인이 0인 판과 보상): 그런 요청은 `applyCoins`를 부르지 않아서
+ * "같은 키를 이미 다른 코인 기록에 썼다"를 볼 곳이 없다. 자기 테이블에서 같은 키의 줄을 찾지 못했는데 이것이 참이면
+ * 그 키는 다른 일에 쓴 것이니 `409 idempotency_mismatch`로 거절한다.
+ * 지갑을 잠근 뒤(`lockWallet`)에 불러야 같은 키의 다른 요청이 방금 넣은 줄이 보인다.
+ */
+export async function hasLedgerKey(q: Q, userId: string, idempotencyKey: string): Promise<boolean> {
+  if (!isUuid(userId)) return false;
+  return (await findByKey(q, userId, idempotencyKey)) !== null;
 }
 
 /** 지금 잔액. 지갑이 없으면(코인을 받은 적이 없으면) 0 */

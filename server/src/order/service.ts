@@ -1,11 +1,11 @@
 import { listDeletedUsers, removeDeletedUser } from '../account/index.ts';
 import { grant, owns, revoke } from '../entitlement/index.ts';
-import { getGame } from '../game/index.ts';
+import { getGame, type Game, type LiveVersion } from '../game/index.ts';
 import { activePrice, getProduct } from '../product/index.ts';
 import type { Db, Q, Tx } from '../shared/db/index.ts';
 import { RuleError } from '../shared/errors.ts';
-import { idempotencyKey as checkKey, obj } from '../shared/validate.ts';
-import { applyCoins, listLedger, lockWallet } from '../wallet/index.ts';
+import { idempotencyKey as checkKey, isUuid, obj } from '../shared/validate.ts';
+import { applyCoins, hasLedgerKey, listLedger, lockWallet } from '../wallet/index.ts';
 import {
   countExpired,
   deleteCoinOrders,
@@ -26,8 +26,6 @@ import {
   type OrderRow,
 } from './repo.ts';
 import type { OrderActor, OrderEventType, OrderStatus, PaymentMethod } from './schema.ts';
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // ── 거절하는 말 ───────────────────────────────────────────────
 
@@ -111,28 +109,48 @@ async function open(
 
 // ── 코인으로 사기 ──────────────────────────────────────────────
 
+/** 산 게임과 그 게임의 지금 버전. 앱이 목록을 다시 받지 않고 바로 묶음을 받을 수 있게 구매의 답에 넣는다 (스펙 5.6의 5번) */
+export interface PurchasedGame {
+  id: string;
+  /** 지금 받을 버전 (`/v2/catalog`의 `liveVersion`과 같은 모양). 내보낸 버전이 없거나 게임이 live가 아니면 null */
+  liveVersion: LiveVersion | null;
+}
+
 export interface Purchased {
   orderId: string;
   productId: string;
+  /** 게임 상품을 샀으면 그 게임과 지금 버전, 게임 상품이 아니면 null */
+  game: PurchasedGame | null;
   /** 사고 난 뒤의 잔액 */
   balance: number;
   /** 같은 키로 다시 보낸 요청이라 처음 답을 준 것인지 */
   replayed: boolean;
 }
 
+/** 구매의 답에 넣는 게임 정보. 묶음은 live 게임의 live 버전만 받을 수 있으니 게임이 live가 아니면 버전을 주지 않는다 */
+const purchasedGame = (game: Game): PurchasedGame => ({ id: game.id, liveVersion: game.status === 'live' ? game.liveVersion : null });
+
 /**
  * 같은 키로 다시 온 구매: 새로 사지 않고 처음 답을 다시 만들어 준다 (Review Focus 2).
  * 같은 키인데 상품이 다르거나 코인 주문이 아니면 `409 idempotency_mismatch`.
  *
  * 처음 답은 저장해 두지 않는다: 그때의 잔액은 그 구매의 코인 기록(`completed` 사건이 가리키는 줄)에서 읽는다
- * (그사이 잔액이 바뀌어도 처음과 같다). 가격이 0이라 코인 기록이 없는 주문은 지금 잔액을 준다 (그 주문은 잔액을 바꾸지 않았다).
- * 그사이 상품이 숨겨지거나 가격이 바뀌거나 주문이 환불됐어도 답은 처음 그대로다.
+ * (그사이 잔액이 바뀌어도 처음과 같다). 가격이 0이라 코인 기록이 없는 주문은 `completed` 사건의 `detail.balance`에 적어 둔 값을 준다.
+ * 그사이 상품이 숨겨지거나 가격이 바뀌거나 주문이 환불됐어도 주문·상품·잔액은 처음 그대로다.
+ *
+ * `game`만은 처음 값이 아니라 **지금** 값이다: 그 게임의 지금 live 버전이다 (지휘자 결정). 앱이 이제 받을 것을 알려 주는 값이라,
+ * 그사이 새 버전을 내보냈으면 새 버전을, 게임을 내렸으면 null을 준다.
  */
 async function replay(tx: Tx, a: { userId: string; productId: string; first: OrderRow; balance: number }): Promise<Purchased> {
   if (a.first.paymentMethod !== 'coin' || a.first.productId !== a.productId) throw idempotencyMismatch();
+  const product = await getProduct(tx, a.first.productId);
+  const game = product?.kind === 'game' && product.gameId !== null ? await getGame(tx, product.gameId) : null;
+  const out = { orderId: a.first.id, productId: a.first.productId, game: game ? purchasedGame(game) : null, replayed: true };
   const paid = (await readEvents(tx, a.first.id)).find((e) => e.type === 'completed');
-  const out = { orderId: a.first.id, productId: a.first.productId, replayed: true };
-  if (!paid || paid.ledgerId === null) return { ...out, balance: a.balance };
+  if (!paid || paid.ledgerId === null) {
+    const noted = (paid?.detail as { balance?: unknown } | null | undefined)?.balance;
+    return { ...out, balance: typeof noted === 'number' ? noted : a.balance };
+  }
   // 이 사용자의 코인 기록 가운데 그 번호의 줄 (번호가 그 줄보다 큰 것을 빼고 가장 최신 하나)
   const [entry] = (await listLedger(tx, a.userId, { before: paid.ledgerId + 1, limit: 1 })).entries;
   if (entry?.id !== paid.ledgerId) throw new Error('주문과 코인 기록이 어긋났어요');
@@ -158,8 +176,11 @@ async function replay(tx: Tx, a: { userId: string; productId: string; first: Ord
  * 어디서 실패하든 아무것도 남지 않는다: 코인이 모자라면 주문·사건·보유·코인 기록이 하나도 생기지 않고, 보유를 넣다 실패하면
  * 빠진 코인과 주문도 함께 되돌아간다. 운영자 지급이 같은 순간에 같은 상품을 먼저 줬으면 `409 already_owned`이고 코인은 나가지 않는다.
  *
- * 키는 사용자마다 따로이고 코인 기록에도 넘긴다: 같은 키를 이미 다른 코인 기록(판 결과, 보상)에 썼으면 `409 idempotency_mismatch`.
+ * 키는 사용자마다 따로이고 코인 기록에도 넘긴다: 같은 키를 이미 다른 코인 기록(판 결과, 보상)에 썼으면 `409 idempotency_mismatch`다
+ * (가격이 0이라 코인 기록을 만들지 않는 구매도 같다 — 2번 바로 뒤에서 `hasLedgerKey`로 본다).
  * 사면서 장착하지는 않는다 (표 D7). 없거나 지워진 사용자면 `401 unauthorized`.
+ *
+ * 답의 `game`: 게임 상품을 샀으면 그 게임과 지금 live 버전(번호, 크기, sha256, 서명, min_shell_api)이고, 게임 상품이 아니면 null이다.
  */
 export async function purchaseWithCoins(db: Db, userId: string, input: unknown, now: Date): Promise<Purchased> {
   const body = obj(input, 'body');
@@ -172,13 +193,17 @@ export async function purchaseWithCoins(db: Db, userId: string, input: unknown, 
     if (key !== null) {
       const first = await findOrderByKey(tx, userId, key);
       if (first) return replay(tx, { userId, productId, first, balance });
+      // 이 키의 주문은 없는데 코인 기록은 있다: 같은 키를 다른 일(판 결과, 보상)에 쓴 것이다.
+      // 가격이 0이면 아래에서 `applyCoins`를 부르지 않아 키를 볼 곳이 없으니 가격과 상관없이 여기서 거절한다
+      if (await hasLedgerKey(tx, userId, key)) throw idempotencyMismatch();
     }
 
     const product = await getProduct(tx, productId);
     if (!product) throw noProduct();
     if (product.status !== 'on_sale' || product.access !== 'purchase' || product.consumable) throw notForSale();
     // 게임 상품은 그 게임이 live일 때만 판다: 아직 내보내지 않았거나(draft) 내린(retired) 게임은 사도 할 수 없다
-    if (product.kind === 'game' && (product.gameId === null || (await getGame(tx, product.gameId))?.status !== 'live')) throw notForSale();
+    const game = product.kind === 'game' && product.gameId !== null ? await getGame(tx, product.gameId) : null;
+    if (product.kind === 'game' && game?.status !== 'live') throw notForSale();
     const price = await activePrice(tx, product.id, 'COIN');
     if (!price) throw notForSale();
     if (await owns(tx, userId, product)) throw alreadyOwned();
@@ -205,12 +230,13 @@ export async function purchaseWithCoins(db: Db, userId: string, input: unknown, 
       idempotencyKey: key,
       now,
     });
-    await record(tx, order, { type: 'completed', to: 'completed', actor: 'system', ledgerId, now });
+    // 코인 기록이 없는 주문(가격 0)은 그때의 잔액을 사건에 적어 둔다: 같은 키로 다시 보낸 요청에 처음 잔액을 답하려고
+    await record(tx, order, { type: 'completed', to: 'completed', actor: 'system', ledgerId, detail: ledgerId === null ? { balance: after } : undefined, now });
     // 운영자 지급이 같은 순간에 먼저 줬으면 여기서 `409 already_owned`로 던져지고 위의 코인과 주문이 함께 되돌아간다
     const entitlementId = await grant(tx, { userId, productId: product.id, source: 'coin_purchase' });
     await writeEntitlement(tx, order.id, entitlementId);
     await record(tx, order, { type: 'granted', actor: 'system', detail: { entitlementId }, now });
-    return { orderId: order.id, productId: product.id, balance: after, replayed: false };
+    return { orderId: order.id, productId: product.id, game: game ? purchasedGame(game) : null, balance: after, replayed: false };
   });
 }
 
@@ -243,7 +269,7 @@ export function checkRefundable(order: { paymentMethod: PaymentMethod; status: O
  * `now`는 사건과 `refunded_at`, 코인 기록에 남는 시각이다. 없으면 지금이다.
  */
 export async function refundCoinOrder(tx: Tx, orderId: string, adminActionId: number, now: Date = new Date()): Promise<void> {
-  const seen = UUID.test(orderId) ? await readOrder(tx, orderId) : null;
+  const seen = isUuid(orderId) ? await readOrder(tx, orderId) : null;
   if (!seen) throw noOrder();
   checkRefundable(seen);
 
@@ -295,7 +321,7 @@ const invalidBefore = () => new RuleError(400, 'invalid_before', 'before는 주�
 export function checkOrderPage(page: OrderPage): OrderPage {
   if (typeof page.limit !== 'number' || !Number.isSafeInteger(page.limit) || page.limit < 1 || page.limit > ORDER_PAGE_MAX) throw invalidLimit();
   if (page.before === undefined) return { limit: page.limit };
-  if (typeof page.before !== 'string' || !UUID.test(page.before)) throw invalidBefore();
+  if (typeof page.before !== 'string' || !isUuid(page.before)) throw invalidBefore();
   return { before: page.before, limit: page.limit };
 }
 
@@ -348,7 +374,7 @@ function summarize(row: OrderRow): OrderSummary {
  */
 export async function listOrders(db: Db, userId: string, page: OrderPage): Promise<{ orders: OrderSummary[]; next: string | null }> {
   const { before, limit } = checkOrderPage(page);
-  if (!UUID.test(userId)) return { orders: [], next: null };
+  if (!isUuid(userId)) return { orders: [], next: null };
   // 하나 더 읽어서 다음 쪽이 있는지 안다
   const rows = await selectUserOrders(db, userId, before, limit + 1);
   const shown = rows.slice(0, limit);
@@ -382,7 +408,7 @@ function toRecord(row: OrderRow): OrderRecord {
 
 /** 주문 하나와 그 사건(일어난 순서). 없거나 주문 ID 모양이 아니면 null (명령줄 `order show`) */
 export async function getOrder(q: Q, orderId: string): Promise<(OrderRecord & { events: OrderEventRecord[] }) | null> {
-  if (!UUID.test(orderId)) return null;
+  if (!isUuid(orderId)) return null;
   const row = await readOrder(q, orderId);
   if (!row) return null;
   const events = await readEvents(q, row.id);
@@ -396,7 +422,7 @@ export async function getOrder(q: Q, orderId: string): Promise<(OrderRecord & { 
 export async function recentOrders(q: Q, filter: { userId?: string; limit: number }): Promise<OrderRecord[]> {
   const { limit } = checkOrderPage({ limit: filter.limit });
   if (filter.userId === undefined) return (await selectRecentOrders(q, limit)).map(toRecord);
-  if (!UUID.test(filter.userId)) return [];
+  if (!isUuid(filter.userId)) return [];
   return (await selectUserOrders(q, filter.userId, undefined, limit)).map(toRecord);
 }
 
@@ -408,7 +434,7 @@ export async function recentOrders(q: Q, filter: { userId?: string; limit: numbe
  * 상태와 상관없이 센다 (환불된 것도, 결제가 끝나지 않은 것도 보관할 기록이다). 코인 주문은 세지 않는다.
  */
 export async function hasMoneyOrders(q: Q, userId: string): Promise<boolean> {
-  if (!UUID.test(userId)) return false;
+  if (!isUuid(userId)) return false;
   return existsMoneyOrder(q, userId);
 }
 
@@ -420,7 +446,7 @@ export async function hasMoneyOrders(q: Q, userId: string): Promise<boolean> {
  * 구매 당시의 이름·종류·가격과 사건의 종류·시각은 그대로 남는다.
  */
 export async function purgeUser(tx: Tx, userId: string): Promise<void> {
-  if (!UUID.test(userId)) return;
+  if (!isUuid(userId)) return;
   await deleteCoinOrders(tx, userId);
   await detachKeptOrders(tx, userId);
 }
@@ -441,21 +467,23 @@ export function retentionCutoff(now: Date): Date {
 
 /** 지금 `purgeExpired`를 돌리면 지워질 주문의 수 (명령이 묻기 전에 보여 준다). 읽기만 한다 */
 export async function countExpiredOrders(q: Q, now: Date): Promise<number> {
-  return countExpired(q, retentionCutoff(now));
+  return countExpired(q, retentionCutoff(now), await listDeletedUsers(q));
 }
 
 /**
- * 보관 기간이 끝난 현금 주문과 그 사건을 지우고, 주문이 하나도 남지 않은 `deleted` 사용자 행도 지운다.
+ * 계정을 지운(`deleted`) 사용자의 보관 기간이 끝난 현금 주문과 그 사건을 지우고, 주문이 하나도 남지 않은 `deleted` 사용자 행도 지운다.
  * 부른 쪽의 트랜잭션 안에서 일한다 (명령줄 `orders purge-expired`가 운영 기록과 함께 한 트랜잭션으로 부른다).
  *
- * 사용자 행: 계정을 지울 때 현금 주문 때문에 `deleted`로 남겨 둔 행이다 (스펙 5.4). 마지막 주문이 지워지면 남길 까닭이 없다.
+ * **살아 있는 사용자의 주문은 5년이 지나도 지우지 않는다** (지휘자 결정): 보관 기간은 계정을 지운 뒤에 남겨 둔 기록의 것이다 (스펙 5.4).
+ * 계정을 쓰는 사람의 주문 내역과, 운영자가 문의에 답할 근거는 그대로 남는다.
+ *
+ * 사용자 행: 계정을 지울 때 현금 주문 때문에 `deleted`로 남겨 둔 행이다. 마지막 주문이 지워지면 남길 까닭이 없다.
  * 이번에 주문이 지워진 사용자만이 아니라 `deleted` 사용자 전부를 본다: 어떤 까닭으로든 주문 없이 남은 행
- * (계정 삭제와 이 명령이 겹친 순간에 생길 수 있다)이 다음에 돌릴 때 함께 치워진다.
- * 살아 있는(`active`) 사용자의 행과, 아직 주문이 남은 사용자의 행은 건드리지 않는다.
+ * (계정 삭제와 이 명령이 겹친 순간에 생길 수 있다)이 다음에 돌릴 때 함께 치워진다. 아직 주문이 남은 사용자의 행은 건드리지 않는다.
  */
 export async function purgeExpiredIn(tx: Tx, now: Date): Promise<{ orders: number; users: number }> {
-  const orders = await deleteExpired(tx, retentionCutoff(now));
   const deleted = await listDeletedUsers(tx);
+  const orders = await deleteExpired(tx, retentionCutoff(now), deleted);
   const keep = await usersWithOrders(tx, deleted);
   let users = 0;
   for (const userId of deleted) {
@@ -465,9 +493,10 @@ export async function purgeExpiredIn(tx: Tx, now: Date): Promise<{ orders: numbe
 }
 
 /**
- * 완료나 환불에서 5년이 지난 현금 주문과 그 사건을 지우고 지운 주문의 수를 준다 (스펙 5.4, 명령줄 `orders purge-expired`).
+ * 계정을 지운 사용자의, 완료나 환불에서 5년이 지난 현금 주문과 그 사건을 지우고 지운 주문의 수를 준다 (스펙 5.4, 명령줄 `orders purge-expired`).
  * 5년에서 하루라도 모자라면 남는다. 환불된 주문은 환불한 때부터, 끝내 결제되지 않은 주문은 만든 때부터 센다.
- * 코인 주문은 지우지 않는다 (계정을 지울 때 함께 지워진다). 시각은 넣어 준 `now`로 잰다 (DB의 지금이 아니다).
+ * 살아 있는 사용자의 주문과 코인 주문은 지우지 않는다 (코인 주문은 계정을 지울 때 함께 지워진다).
+ * 시각은 넣어 준 `now`로 잰다 (DB의 지금이 아니다).
  *
  * 주문이 하나도 남지 않은 `deleted` 사용자 행도 같은 트랜잭션에서 지운다 (`purgeExpiredIn`).
  */

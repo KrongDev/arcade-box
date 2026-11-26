@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { eq, sql } from 'drizzle-orm';
 import { deleteAccount, getUser, type DeletionPolicy } from '../../src/account/index.ts';
 import { grant, purgeUser as purgeEntitlements } from '../../src/entitlement/index.ts';
-import { hasMoneyOrders, purgeExpired, purgeUser, retentionCutoff } from '../../src/order/index.ts';
+import { hasMoneyOrders, listOrders, purgeExpired, purgeUser, retentionCutoff } from '../../src/order/index.ts';
 import { orderEvents, orders } from '../../src/order/schema.ts';
 import { purgeUser as purgePlay } from '../../src/play/index.ts';
 import { purgeUser as purgeRewards } from '../../src/reward/index.ts';
@@ -142,27 +142,61 @@ test('purgeExpired는 5년이 지난 현금 주문만 지운다 (5년에서 하�
     // 끝내 결제되지 않은 주문은 만든 때부터 센다
     const pendingOld = await insertMoneyOrder(db, me.userId, yearsBefore(now, 6), { status: 'pending', completedAt: null });
     const failedNew = await insertMoneyOrder(db, me.userId, yearsBefore(now, 4), { status: 'failed', completedAt: null });
-    // 코인 주문은 아무리 오래돼도 이 명령이 지우지 않는다
-    await db.transaction((tx) => applyCoins(tx, { userId: me.userId, delta: 300, reason: 'grant', now: yearsBefore(now, 6) }));
-    const coin = (await buy(db, me.userId, 'pinball.table.sunset', undefined, yearsBefore(now, 6))).orderId;
+    // 보관 기간은 계정을 지운 뒤에 남겨 둔 기록의 것이다 (스펙 5.4). 계정을 지운다
+    await deleteAccount(db, me.userId, policy, NOW);
+    assert.equal((await getUser(db, me.userId))?.status, 'deleted');
 
-    // 하루 전에 돌리면 아직 하나도 안 지워지는 것이 있다: 기준은 넣어 준 시각이다 (DB의 지금이 아니다)
+    // 3년 전에 돌렸다면 아직 하나도 지워지지 않는다: 기준은 넣어 준 시각이다 (DB의 지금이 아니다)
     assert.equal(await purgeExpired(db, yearsBefore(now, 3)), 0);
-    assert.equal((await ordersOf(db, me.userId)).length, 9);
+    assert.equal((await ordersOf(db, me.userId)).length, 8);
 
     assert.equal(await purgeExpired(db, now), 4);
     const left = (await ordersOf(db, me.userId)).map((o) => o.id);
-    assert.deepEqual([...left].sort(), [dayShort, msShort, refundedLate, failedNew, coin].sort());
+    assert.deepEqual([...left].sort(), [dayShort, msShort, refundedLate, failedNew].sort());
     for (const gone of [expired, exact, refundedLong, pendingOld]) assert.deepEqual(await eventsOf(db, gone), [], '지운 주문의 사건도 지운다');
     assert.equal((await eventsOf(db, dayShort)).length, 2);
-    assert.equal((await eventsOf(db, coin)).length, 3);
+    // 주문이 남아 있으니 사용자 행도 남는다
+    assert.equal((await getUser(db, me.userId))?.status, 'deleted');
 
     // 다시 돌리면 지울 것이 없다. 하루가 더 지나면 하루 모자랐던 것이 지워진다
     assert.equal(await purgeExpired(db, now), 0);
     assert.equal(await purgeExpired(db, plus(now, DAY_MS)), 2);
-    assert.deepEqual((await ordersOf(db, me.userId)).map((o) => o.id).sort(), [refundedLate, failedNew, coin].sort());
-    // 살아 있는 사용자의 행은 주문이 지워져도 그대로다
-    assert.equal((await getUser(db, me.userId))?.status, 'active');
+    assert.deepEqual((await ordersOf(db, me.userId)).map((o) => o.id).sort(), [refundedLate, failedNew].sort());
+  }));
+
+test('살아 있는 사용자의 5년 지난 현금 주문은 지우지 않는다', () =>
+  withShop(async (db) => {
+    const now = new Date('2031-11-26T03:00:00Z');
+    const old = yearsBefore(now, 6);
+    const alive = await loginGuest(db, NOW);
+    const gone = await loginGuest(db, NOW);
+    // 두 사용자 모두 6년 전에 현금으로 샀다 (결제 완료 하나, 환불 하나). 살아 있는 사용자는 그때 코인으로도 샀다
+    const kept = [await insertMoneyOrder(db, alive.userId, old), await insertMoneyOrder(db, alive.userId, old, { paymentMethod: 'app_store', status: 'refunded', refundedAt: old })];
+    await db.transaction((tx) => applyCoins(tx, { userId: alive.userId, delta: 300, reason: 'grant', now: old }));
+    const coin = (await buy(db, alive.userId, 'pinball.table.sunset', undefined, old)).orderId;
+    await insertMoneyOrder(db, gone.userId, old);
+    await insertMoneyOrder(db, gone.userId, old, { status: 'refunded', refundedAt: old });
+    await deleteAccount(db, gone.userId, policy, NOW);
+
+    // 계정을 지운 사용자의 것만 지워진다
+    assert.equal(await purgeExpired(db, now), 2);
+    assert.equal(await getUser(db, gone.userId), null);
+
+    // 살아 있는 사용자: 주문도 사건도 행도 그대로다. 주문 내역에서 사라지지 않는다
+    assert.equal((await getUser(db, alive.userId))?.status, 'active');
+    assert.deepEqual((await ordersOf(db, alive.userId)).map((o) => o.id).sort(), [...kept, coin].sort());
+    for (const id of kept) assert.equal((await eventsOf(db, id)).length, 2);
+    assert.equal((await eventsOf(db, coin)).length, 3);
+    assert.equal((await listOrders(db, alive.userId, { limit: 100 })).orders.length, 3);
+    // 몇 번을 돌려도, 한참 뒤에 돌려도 같다
+    assert.equal(await purgeExpired(db, yearsBefore(now, -20)), 0);
+    assert.equal((await ordersOf(db, alive.userId)).length, 3);
+
+    // 그 사용자가 계정을 지우면 그때부터 남겨 둔 기록이고, 5년이 이미 지났으니 다음 정리에서 지워진다 (코인 주문은 계정과 함께 지워진다)
+    await deleteAccount(db, alive.userId, policy, now);
+    assert.deepEqual((await ordersOf(db, alive.userId)).map((o) => o.id).sort(), [...kept].sort());
+    assert.equal(await purgeExpired(db, now), 2);
+    assert.deepEqual(await tablesContaining(db, [alive.userId]), []);
   }));
 
 test('purgeExpired는 주문이 하나도 남지 않은 deleted 사용자 행도 지운다', () =>
@@ -186,7 +220,7 @@ test('purgeExpired는 주문이 하나도 남지 않은 deleted 사용자 행도
     await deleteAccount(db, orphan.userId, { mustKeepUserRow: async () => true, purge: [] }, NOW);
     assert.equal((await getUser(db, orphan.userId))?.status, 'deleted');
 
-    assert.equal(await purgeExpired(db, now), 4);
+    assert.equal(await purgeExpired(db, now), 3);
     // 주문이 다 지워진 deleted 사용자: 행까지 사라져 어느 테이블에도 흔적이 없다
     assert.equal(await getUser(db, gone.userId), null);
     assert.deepEqual(await tablesContaining(db, [gone.userId]), []);
@@ -194,9 +228,9 @@ test('purgeExpired는 주문이 하나도 남지 않은 deleted 사용자 행도
     // 아직 보관할 주문이 남은 deleted 사용자: 행이 남는다
     assert.equal((await getUser(db, half.userId))?.status, 'deleted');
     assert.deepEqual((await ordersOf(db, half.userId)).map((o) => o.id), [halfKept]);
-    // 살아 있는 사용자: 주문만 지워지고 행은 그대로다
+    // 살아 있는 사용자: 주문도 행도 그대로다
     assert.equal((await getUser(db, alive.userId))?.status, 'active');
-    assert.equal((await ordersOf(db, alive.userId)).length, 0);
+    assert.equal((await ordersOf(db, alive.userId)).length, 1);
 
     // 남은 주문의 보관 기간이 끝나면 그 사용자 행도 지워진다
     assert.equal(await purgeExpired(db, plus(yearsBefore(now, -3), DAY_MS)), 1);

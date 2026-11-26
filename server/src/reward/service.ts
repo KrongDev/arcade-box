@@ -3,11 +3,9 @@ import { getNumber } from '../admin/index.ts';
 import type { Db, Q, Tx } from '../shared/db/index.ts';
 import { RuleError } from '../shared/errors.ts';
 import { kstDate } from '../shared/time.ts';
-import { idempotencyKey as checkKey, obj } from '../shared/validate.ts';
-import { applyCoins, listLedger, lockWallet } from '../wallet/index.ts';
+import { idempotencyKey as checkKey, isUuid, obj } from '../shared/validate.ts';
+import { applyCoins, hasLedgerKey, listLedger, lockWallet } from '../wallet/index.ts';
 import { rewardClaims, type RewardKind } from './schema.ts';
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // 거절하는 말은 v1과 같다 (표 K13, K14)
 const alreadyClaimed = () => new RuleError(409, 'already_claimed', '오늘 출석 보상을 이미 받았어요');
@@ -72,7 +70,8 @@ async function replay(tx: Tx, a: { userId: string; kind: RewardKind; first: { ki
  *
  * 본문의 `idempotencyKey`(없어도 된다)가 이 사용자가 이미 쓴 키면 한도를 보기 전에 처음 답을 `replayed: true`로 준다 (`replay`).
  * 한도를 다 쓴 뒤에 마지막 보상을 다시 보내도 429가 아니라 처음의 성공이 나온다. 키는 사용자마다 따로이고 코인 기록에도 넘긴다:
- * 같은 키를 이미 다른 코인 기록(판 결과, 구매)에 썼으면 `409 idempotency_mismatch`이고 받은 것으로 적지 않는다.
+ * 같은 키를 이미 다른 코인 기록(판 결과, 구매)에 썼으면 `409 idempotency_mismatch`이고 받은 것으로 적지 않는다
+ * (보상 코인 설정이 0이라 코인 기록을 만들지 않을 때도 같다).
  *
  * 하루 한도의 마지막 방어선은 `UNIQUE(user_id, kind, claim_date, seq)`다. 그래도 같은 줄을 넣게 되면
  * (손으로 고친 자료 등) 오류(500)가 아니라 한도 오류로 답하고, 방금 반영한 코인은 함께 되돌아간다.
@@ -100,6 +99,8 @@ async function claim(db: Db, userId: string, now: Date, kind: RewardKind, input:
 
     const coins = await getNumber(tx, kind === 'attendance' ? 'attendance_coins' : 'ad_reward_coins');
     let ledgerId: number | null = null;
+    // 코인이 0이면 `applyCoins`를 부르지 않아 키를 볼 곳이 없으니 여기서 본다: 이 키의 보상은 없는데 코인 기록은 있다
+    if (coins === 0 && key !== null && (await hasLedgerKey(tx, userId, key))) throw idempotencyMismatch();
     if (coins > 0) {
       const paid = await applyCoins(tx, { userId, delta: coins, reason: kind, idempotencyKey: key, now });
       // 이 키의 보상은 없는데 코인 기록은 있다: 코인이 들어가지 않았으니 받은 것으로 적지 않는다
@@ -142,7 +143,7 @@ export async function claimAdReward(db: Db, userId: string, now: Date, input?: u
 /** 오늘(한국 날짜) 출석을 받았는지와 남은 광고 보상 횟수 (`/v2/me`의 `rewards`). 읽기만 한다 */
 export async function rewardStatus(q: Q, userId: string, now: Date): Promise<{ attendanceClaimedToday: boolean; adRewardsLeft: number }> {
   const limit = await limitOf(q, 'ad_reward');
-  if (!UUID.test(userId)) return { attendanceClaimedToday: false, adRewardsLeft: limit };
+  if (!isUuid(userId)) return { attendanceClaimedToday: false, adRewardsLeft: limit };
   const day = kstDate(now);
   const attendance = await claimedOn(q, userId, 'attendance', day);
   const ads = await claimedOn(q, userId, 'ad_reward', day);

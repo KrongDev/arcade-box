@@ -44,8 +44,8 @@ export interface KeyedEntry {
 }
 
 /** 이 사용자가 이 키로 남긴 기록. 지갑을 잠근 뒤에 불러야 같은 키의 다른 요청이 방금 넣은 줄이 보인다 */
-export async function findByKey(tx: Tx, userId: string, idempotencyKey: string): Promise<KeyedEntry | null> {
-  const [row] = await tx
+export async function findByKey(q: Q, userId: string, idempotencyKey: string): Promise<KeyedEntry | null> {
+  const [row] = await q
     .select({ id: coinLedger.id, delta: coinLedger.delta, balanceAfter: coinLedger.balanceAfter, reason: coinLedger.reason })
     .from(coinLedger)
     .where(and(eq(coinLedger.userId, userId), eq(coinLedger.idempotencyKey, idempotencyKey)));

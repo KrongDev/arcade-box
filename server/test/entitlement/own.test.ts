@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { deleteAccount } from '../../src/account/index.ts';
-import { canPlayGame, countOwnedGames, grant, listEquipped, listOwned, owns, purgeUser, revoke, equip } from '../../src/entitlement/index.ts';
+import { activeEntitlementId, canPlayGame, countOwnedGames, grant, listEquipped, listOwned, owns, purgeUser, revoke, equip } from '../../src/entitlement/index.ts';
 import { entitlements, equippedItems } from '../../src/entitlement/schema.ts';
 import { createGame, updateGame } from '../../src/game/index.ts';
 import { getProduct, updateProduct } from '../../src/product/index.ts';
@@ -119,6 +119,13 @@ test('보유 번호를 주고 회수하면 켜진 보유가 바로 그 보유일
     await equip(db, me.userId, 'pinball.table.sunset');
     const takeById = (entitlementId: number) => db.transaction((tx) => revoke(tx, { userId: me.userId, productId: 'pinball.table.sunset', reason: 'refund', entitlementId }));
 
+    // 지금 켜진 보유의 번호는 다시 받은 것이다. 남의 것과 가지지 않은 상품, 모양이 틀린 값은 null
+    assert.equal(await activeEntitlementId(db, me.userId, 'pinball.table.sunset'), second);
+    assert.equal(await activeEntitlementId(db, me.userId, 'pinball.ball.gold'), null);
+    assert.equal(await activeEntitlementId(db, me.userId, 'pinball.table.classic'), null, 'everyone 상품은 보유 행이 없다');
+    assert.equal(await activeEntitlementId(db, 'not-a-uuid', 'pinball.table.sunset'), null);
+    assert.equal(await activeEntitlementId(db, me.userId, 'NOT A PRODUCT'), null);
+
     // 이미 회수된 보유의 번호: 지금 켜진 보유(다시 받은 것)와 장착은 그대로다
     await assert.rejects(takeById(first), rule(409, 'not_owned'));
     // 없는 번호, 남의 보유 번호도 같다
@@ -132,6 +139,7 @@ test('보유 번호를 주고 회수하면 켜진 보유가 바로 그 보유일
 
     // 켜진 보유의 번호: 회수하고 장착도 푼다
     await takeById(second);
+    assert.equal(await activeEntitlementId(db, me.userId, 'pinball.table.sunset'), null);
     assert.deepEqual((await rowsOf(db, me.userId)).map((r) => [r.id, r.revokeReason]), [[first, 'admin'], [second, 'refund']]);
     assert.deepEqual(await listEquipped(db, me.userId), []);
   } finally {

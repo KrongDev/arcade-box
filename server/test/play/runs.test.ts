@@ -717,3 +717,23 @@ test('POST /v2/me/runs: 세션이 있어야 하고, 결과는 200 JSON, 말이 �
     await close();
   }
 });
+
+test('코인이 0인 판도 다른 코인 기록에 쓴 키로는 받지 않는다: 409 idempotency_mismatch이고 판이 남지 않는다', async () => {
+  const { db, close } = await testDb();
+  try {
+    await seedPlay(db);
+    const me = await loginGuest(db, NOW);
+    // 출석에 쓴 키 (코인 기록에 그 키가 남는다)
+    await db.transaction((tx) => applyCoins(tx, { userId: me.userId, delta: 50, reason: 'attendance', idempotencyKey: 'attend-key-0001', now: NOW }));
+    const run = { boardId: 'pinball', score: 1000, coins: 0, idempotencyKey: 'attend-key-0001' };
+    await assert.rejects(send(db, me.userId, run, NOW), rule(409, 'idempotency_mismatch'));
+    assert.deepEqual(await counts(db, me.userId), { runs: 0, records: 0, ledger: 1, balance: 50 });
+    // 새 키로는 받고, 그 키로 다시 보내면 처음 답이다
+    const first = await send(db, me.userId, { ...run, idempotencyKey: 'run-zero-key-01' }, NOW);
+    assert.deepEqual([first.coins, first.replayed], [0, false]);
+    assert.deepEqual(await send(db, me.userId, { ...run, idempotencyKey: 'run-zero-key-01' }, NOW), { ...first, replayed: true });
+    assert.deepEqual(await counts(db, me.userId), { runs: 1, records: 1, ledger: 1, balance: 50 });
+  } finally {
+    await close();
+  }
+});

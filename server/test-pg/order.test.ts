@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { deleteAccount, type DeletionPolicy } from '../src/account/index.ts';
-import { grant, listOwned, purgeUser as purgeEntitlements } from '../src/entitlement/index.ts';
-import { hasMoneyOrders, purgeUser } from '../src/order/index.ts';
+import { deleteAccount, getUser, type DeletionPolicy } from '../src/account/index.ts';
+import { equip, grant, listEquipped, listOwned, purgeUser as purgeEntitlements, revoke } from '../src/entitlement/index.ts';
+import { hasMoneyOrders, purgeExpired, purgeUser } from '../src/order/index.ts';
 import { RuleError } from '../src/shared/errors.ts';
 import { applyCoins, getBalance, purgeUser as purgeWallet, verifyWallets } from '../src/wallet/index.ts';
 import { loginGuest } from '../test/account/helpers.ts';
 import { tablesContaining } from '../test/helpers/scan.ts';
-import { buy, CHEAP, counts, eventsOf, fund, NOW, ordersOf, refund, seedShop } from '../test/order/helpers.ts';
+import { buy, CHEAP, counts, eventsOf, fund, insertMoneyOrder, NOW, ordersOf, refund, seedShop } from '../test/order/helpers.ts';
 import { pgTestDb, SKIP } from './helpers.ts';
 
 function failure(reason: unknown): string {
@@ -82,7 +82,7 @@ test('같은 키의 구매를 동시에 5번 보내면 주문이 하나이고 �
       assert.deepEqual(out.failed, [], `${round}번째: 다시 보낸 요청은 거절되지 않는다`);
       assert.equal(out.ok.filter((r) => !r.replayed).length, 1, `${round}번째: 처음 반영된 것은 하나다`);
       const [order] = await ordersOf(db, me.userId);
-      for (const r of out.ok) assert.deepEqual({ ...r, replayed: false }, { orderId: order.id, productId: 'pinball.table.sunset', balance: 700, replayed: false }, `${round}번째`);
+      for (const r of out.ok) assert.deepEqual({ ...r, replayed: false }, { orderId: order.id, productId: 'pinball.table.sunset', game: null, balance: 700, replayed: false }, `${round}번째`);
       assert.deepEqual(await counts(db, me.userId), { orders: 1, events: 3, entitlements: 1, ledger: 2, balance: 700 });
     }
   } finally {
@@ -171,9 +171,11 @@ test('구매·환불·코인 벌기가 같은 순간에 겹쳐도 서로 물고 
   }
 });
 
+/** 서버 조립이 계정 삭제에 넣는 것과 같은 방침 (이 테스트가 만드는 것만: 주문 → 보유 → 지갑) */
+const policy: DeletionPolicy = { mustKeepUserRow: hasMoneyOrders, purge: [purgeUser, purgeEntitlements, purgeWallet] };
+
 test('구매와 계정 삭제가 겹쳐도 500이 없고, 지워진 사용자에 주문·보유·코인 기록이 남지 않는다', { skip: SKIP }, async () => {
   const { db, close } = await pgTestDb();
-  const policy: DeletionPolicy = { mustKeepUserRow: hasMoneyOrders, purge: [purgeUser, purgeEntitlements, purgeWallet] };
   try {
     await seedShop(db);
     for (let round = 0; round < 12; round++) {
@@ -190,6 +192,112 @@ test('구매와 계정 삭제가 겹쳐도 500이 없고, 지워진 사용자에
       assert.deepEqual(await tablesContaining(db, [me.userId]), [], `${round}번째: 어느 테이블에도 흔적이 없다`);
     }
     assert.deepEqual(await verifyWallets(db), []);
+  } finally {
+    await close();
+  }
+});
+
+test('환불과 계정 삭제가 겹쳐도 500이 없고, 환불이 되거나 404 not_found이며 사용자의 흔적이 남지 않는다', { skip: SKIP }, async () => {
+  const { db, close } = await pgTestDb();
+  try {
+    await seedShop(db);
+    for (let round = 0; round < 20; round++) {
+      const me = await loginGuest(db, NOW);
+      await fund(db, me.userId, 1000);
+      const { orderId } = await buy(db, me.userId, 'pinball.table.sunset');
+      // 어느 쪽을 먼저 보내는지 번갈아 한다
+      const requests = [() => refund(db, orderId), () => deleteAccount(db, me.userId, policy, NOW)];
+      const settled = await Promise.allSettled((round % 2 === 1 ? requests : [...requests].reverse()).map((request) => request()));
+      for (const r of settled) if (r.status === 'rejected') assert.equal(failure(r.reason), '404 not_found', `${round}번째: 삭제에 밀린 환불은 없는 주문이라는 거절이다`);
+      assert.deepEqual(await tablesContaining(db, [me.userId]), [], `${round}번째: 어느 테이블에도 흔적이 없다`);
+    }
+    assert.deepEqual(await verifyWallets(db), []);
+  } finally {
+    await close();
+  }
+});
+
+test('환불·운영자 회수·장착이 겹쳐도 환불은 되고, 코인은 한 번만 돌아오고, 보유도 장착도 남지 않는다', { skip: SKIP }, async () => {
+  const { db, close } = await pgTestDb();
+  try {
+    await seedShop(db);
+    for (let round = 0; round < 20; round++) {
+      const me = await loginGuest(db, NOW);
+      await fund(db, me.userId, 300);
+      const { orderId } = await buy(db, me.userId, 'pinball.table.sunset');
+      const settled = await Promise.allSettled([
+        refund(db, orderId),
+        equip(db, me.userId, 'pinball.table.sunset'),
+        db.transaction((tx) => revoke(tx, { userId: me.userId, productId: 'pinball.table.sunset', reason: 'admin' })),
+        equip(db, me.userId, 'pinball.table.sunset'),
+      ]);
+      const out = settled.map((r) => (r.status === 'fulfilled' ? 'ok' : failure(r.reason)));
+      assert.equal(out[0], 'ok', `${round}번째: 환불은 늘 된다 (${out.join(' | ')})`);
+      // 장착과 운영자 회수는 순서에 따라 밀릴 수 있다. 밀려도 규칙이 거절한 것이다
+      for (const f of out.slice(1)) assert.ok(['ok', '403 not_owned', '409 not_owned'].includes(f), `${round}번째: ${out.join(' | ')}`);
+      assert.equal(await getBalance(db, me.userId), 300, `${round}번째: 코인은 한 번만 돌아왔다`);
+      assert.deepEqual(await listOwned(db, me.userId), [], `${round}번째`);
+      assert.deepEqual(await listEquipped(db, me.userId), [], `${round}번째: 장착이 남지 않는다`);
+      const types = (await eventsOf(db, orderId)).map((e) => e.type).join();
+      // 환불이 회수했으면 revoked, 운영자가 먼저 회수했으면 note
+      assert.ok(types === 'created,completed,granted,refunded,revoked' || types === 'created,completed,granted,refunded,note', `${round}번째: ${types}`);
+    }
+    assert.deepEqual(await verifyWallets(db), []);
+  } finally {
+    await close();
+  }
+});
+
+test('환불과 같은 상품 다시 사기가 겹쳐도 완료된 주문 수가 켜진 보유 수와 같고 잔액이 맞는다', { skip: SKIP }, async () => {
+  const { db, close } = await pgTestDb();
+  try {
+    await seedShop(db);
+    for (let round = 0; round < 20; round++) {
+      const me = await loginGuest(db, NOW);
+      await fund(db, me.userId, 300);
+      const first = await buy(db, me.userId, 'pinball.table.sunset');
+      const out = await together<unknown>([
+        () => refund(db, first.orderId),
+        () => buy(db, me.userId, 'pinball.table.sunset'),
+        () => buy(db, me.userId, 'pinball.table.sunset', `rebuy-key-${round}`),
+      ]);
+      for (const f of out.failed) assert.ok(['409 already_owned', '409 insufficient_coins'].includes(f), `${round}번째: ${f}`);
+      const owned = await listOwned(db, me.userId);
+      const completed = (await ordersOf(db, me.userId)).filter((o) => o.status === 'completed').length;
+      assert.equal(completed, owned.length, `${round}번째: 완료된 주문 수 = 켜진 보유 수`);
+      // 코인은 300에서 시작했다: 지금 가졌으면 0, 아니면 300
+      assert.equal(await getBalance(db, me.userId), owned.length === 1 ? 0 : 300, `${round}번째`);
+      assert.deepEqual(await verifyWallets(db, me.userId), []);
+    }
+  } finally {
+    await close();
+  }
+});
+
+test('보관 기간 정리와 계정 삭제가 겹쳐도 둘 다 되고, 주문 없이 남은 사용자 행은 다음 정리 때 지워진다', { skip: SKIP }, async () => {
+  const { db, close } = await pgTestDb();
+  try {
+    await seedShop(db);
+    const now = new Date('2040-01-01T00:00:00Z');
+    // 정리가 건드리면 안 되는 사람: 계정을 지우지 않은 사용자의 옛 현금 주문
+    const alive = await loginGuest(db, NOW);
+    const aliveOrder = await insertMoneyOrder(db, alive.userId, NOW);
+    for (let round = 0; round < 16; round++) {
+      const me = await loginGuest(db, NOW);
+      await fund(db, me.userId, 1000);
+      await buy(db, me.userId, 'pinball.table.sunset');
+      await insertMoneyOrder(db, me.userId, NOW);
+      const requests = [() => purgeExpired(db, now), () => deleteAccount(db, me.userId, policy, NOW)];
+      const settled = await Promise.allSettled((round % 2 === 1 ? requests : [...requests].reverse()).map((request) => request()));
+      assert.deepEqual(settled.map((r) => (r.status === 'fulfilled' ? 'ok' : failure(r.reason))), ['ok', 'ok'], `${round}번째`);
+      // 삭제가 먼저 끝났으면 정리가 주문과 행을 지웠고, 아니면 deleted 행과 현금 주문이 남아 있다. 어느 쪽이든 한 번 더 돌리면 남는 것이 없다
+      const user = await getUser(db, me.userId);
+      assert.ok(user === null || user.status === 'deleted', `${round}번째: 계정은 지워졌다`);
+      await purgeExpired(db, now);
+      assert.deepEqual(await tablesContaining(db, [me.userId]), [], `${round}번째`);
+    }
+    assert.deepEqual((await ordersOf(db, alive.userId)).map((o) => o.id), [aliveOrder]);
+    assert.equal((await getUser(db, alive.userId))?.status, 'active');
   } finally {
     await close();
   }

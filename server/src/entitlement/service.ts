@@ -1,22 +1,22 @@
 import { requireActiveUser } from '../account/index.ts';
 import { getGame } from '../game/index.ts';
-import { gameProduct, getProduct, type Product } from '../product/index.ts';
+import { gameProduct, getProduct, isProductId, type Product } from '../product/index.ts';
 import type { Db, Q, Tx } from '../shared/db/index.ts';
 import { RuleError } from '../shared/errors.ts';
+import { isUuid } from '../shared/validate.ts';
 import {
   deleteEquippedProduct,
   deleteUserRows,
   hasActive,
   holdActive,
   insertActive,
+  readActiveId,
   readEquipped,
   readOwnedIds,
   revokeActive,
   upsertEquipped,
 } from './repo.ts';
 import { ENTITLEMENT_SOURCES, REVOKE_REASONS, type EntitlementSource, type RevokeReason } from './schema.ts';
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const noProduct = () => new RuleError(404, 'not_found', '없는 상품이에요');
 const notOwned = (status: number) => new RuleError(status, 'not_owned', '가지고 있지 않은 상품이에요');
@@ -43,8 +43,17 @@ function givenToEveryone(product: Product): boolean {
  */
 export async function owns(q: Q, userId: string, product: Product): Promise<boolean> {
   if (givenToEveryone(product)) return true;
-  if (!UUID.test(userId)) return false;
+  if (!isUuid(userId)) return false;
   return hasActive(q, userId, product.id);
+}
+
+/**
+ * 이 사용자가 이 상품으로 지금 가진 보유(회수되지 않은 행)의 번호. 없으면 null — `everyone` 상품은 보유 행이 없어서 늘 null이다.
+ * 주문의 환불이 "그 주문으로 생긴 보유가 아직 켜져 있나"를 미리 알려 줄 때 쓴다. 사용자 ID나 상품 ID 모양이 아니면 null.
+ */
+export async function activeEntitlementId(q: Q, userId: string, productId: string): Promise<number | null> {
+  if (!isUuid(userId) || !isProductId(productId)) return null;
+  return readActiveId(q, userId, productId);
 }
 
 /**
@@ -95,7 +104,7 @@ export async function revoke(tx: Tx, input: { userId: string; productId: string;
 
 /** 켜진 보유가 있는 상품 id (`everyone` 상품은 들지 않는다). 상품 id 순서 */
 export async function listOwned(q: Q, userId: string): Promise<string[]> {
-  if (!UUID.test(userId)) return [];
+  if (!isUuid(userId)) return [];
   return readOwnedIds(q, userId);
 }
 
@@ -140,7 +149,7 @@ export async function equip(db: Db, userId: string, productId: unknown): Promise
  * 가져올 수 있어서다 (스펙 5.14). 한 사용자의 장착은 게임마다 자리 몇 개뿐이다.
  */
 export async function listEquipped(q: Q, userId: string): Promise<Array<{ gameId: string; slot: string; productId: string }>> {
-  if (!UUID.test(userId)) return [];
+  if (!isUuid(userId)) return [];
   const out = [];
   for (const row of await readEquipped(q, userId)) {
     const product = await getProduct(q, row.productId);

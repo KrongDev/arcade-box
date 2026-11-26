@@ -10,6 +10,12 @@ export async function hasActive(q: Q, userId: string, productId: string): Promis
   return rows.length > 0;
 }
 
+/** 켜진 보유의 번호. 없으면 null */
+export async function readActiveId(q: Q, userId: string, productId: string): Promise<number | null> {
+  const [row] = await q.select({ id: entitlements.id }).from(entitlements).where(active(userId, productId));
+  return row?.id ?? null;
+}
+
 /**
  * 켜진 보유를 잡고(FOR SHARE) 있는지 본다. 잡은 동안 같은 보유의 회수(UPDATE)는 이 트랜잭션이 끝나기를 기다린다.
  * 회수가 먼저 잡았으면 여기서 기다렸다가, 회수된 행이라 조건에 맞지 않아 거짓이 된다.

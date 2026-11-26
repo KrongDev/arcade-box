@@ -1,7 +1,8 @@
 import { eq, sql } from 'drizzle-orm';
 import { findSession } from '../../src/account/index.ts';
 import { audit } from '../../src/admin/index.ts';
-import { createGame, updateGame } from '../../src/game/index.ts';
+import { createGame, updateGame, type LiveVersion } from '../../src/game/index.ts';
+import { games, gameVersions } from '../../src/game/schema.ts';
 import { purchaseWithCoins, refundCoinOrder, routes } from '../../src/order/index.ts';
 import { orderEvents, orders } from '../../src/order/schema.ts';
 import { createProduct, setPrice, type NewProduct } from '../../src/product/index.ts';
@@ -58,6 +59,20 @@ export async function seedShop(db: Db): Promise<void> {
       if (krw !== undefined) await setPrice(tx, product.id, 'KRW', krw);
     }
   });
+}
+
+/**
+ * 이 게임의 버전 하나를 내보낸 것처럼 넣는다 (`game publish`가 남기는 모양: 버전 행 live, 게임의 지금 버전이 그 행).
+ * 묶음 파일과 서명 확인은 game 노드의 일이라 여기서는 행만 넣는다. 앱에 내려갈 버전 정보를 준다.
+ */
+export async function publishVersion(db: Db, gameId: string, version: number): Promise<LiveVersion> {
+  const info: LiveVersion = { version, sizeBytes: 12345, sha256: 'a'.repeat(64), signature: `sig-${gameId}-${version}`, minShellApi: 1 };
+  const [row] = await db
+    .insert(gameVersions)
+    .values({ gameId, ...info, status: 'live', bundlePath: `bundles/${gameId}/${version}.zip`, publishedAt: NOW })
+    .returning({ id: gameVersions.id });
+  await db.update(games).set({ liveVersionId: row.id }).where(eq(games.id, gameId));
+  return info;
 }
 
 /** 운영자 지급으로 코인을 넣는다 */

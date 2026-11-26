@@ -1,6 +1,7 @@
 import type { Args, Command } from '../shared/cli/index.ts';
 import type { Db, Q, Tx } from '../shared/db/index.ts';
 import { RuleError } from '../shared/errors.ts';
+import { isUuid } from '../shared/validate.ts';
 import { insertAction, readConfig, writeConfig } from './repo.ts';
 
 // ── 운영 기록 ────────────────────────────────────────────────
@@ -67,8 +68,6 @@ export async function setNumber(tx: Tx, key: ConfigKey, value: number): Promise<
 
 // ── 바꾸는 명령의 틀 ────────────────────────────────────────────
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 /**
  * 무언가를 바꾸는 운영 명령은 모두 이 틀을 거친다 (스펙 5.11, 5.15).
  * `--reason`이 꼭 있어야 하고, 요약을 보여 준 뒤 확인을 받고(`--yes`면 건너뜀),
@@ -97,7 +96,7 @@ export function mutation<T>(
     }
     const summary = spec.describe(args);
     const target = spec.target?.(args) ?? {};
-    if (target.userId !== undefined && !UUID.test(target.userId)) {
+    if (target.userId !== undefined && !isUuid(target.userId)) {
       throw new RuleError(400, 'invalid_user_id', `사용자 ID 모양이 아니에요: ${target.userId}`);
     }
 

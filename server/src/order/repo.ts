@@ -238,24 +238,35 @@ export async function detachKeptOrders(tx: Tx, userId: string): Promise<void> {
 /**
  * 보관 기간이 끝난 현금 주문: 마지막으로 돈이 오간 때(환불했으면 환불한 때, 아니면 결제가 끝난 때)가 `cutoff`이거나 그 전이다.
  * 끝내 결제되지 않은 주문(pending, failed, canceled)은 만든 때부터 센다. 코인 주문은 들지 않는다.
+ * `userIds`의 주문만 본다: 계정을 지운 사용자의 것만 지우려고 부른 쪽이 그 사용자들을 준다.
  */
-const expired = (cutoff: Date) => and(isMoney, sql`coalesce(${orders.refundedAt}, ${orders.completedAt}, ${orders.createdAt}) <= ${cutoff.toISOString()}::timestamptz`);
+const expired = (cutoff: Date, userIds: string[]) =>
+  and(isMoney, inArray(orders.userId, userIds), sql`coalesce(${orders.refundedAt}, ${orders.completedAt}, ${orders.createdAt}) <= ${cutoff.toISOString()}::timestamptz`);
 
-export async function countExpired(q: Q, cutoff: Date): Promise<number> {
-  const [row] = await q
-    .select({ n: sql<number>`count(*)::int` })
-    .from(orders)
-    .where(expired(cutoff));
-  return row?.n ?? 0;
+/** `userIds` 가운데 보관 기간이 끝난 현금 주문의 수 */
+export async function countExpired(q: Q, cutoff: Date, userIds: string[]): Promise<number> {
+  let n = 0;
+  for (const part of chunks(userIds)) {
+    const [row] = await q
+      .select({ n: sql<number>`count(*)::int` })
+      .from(orders)
+      .where(expired(cutoff, part));
+    n += row?.n ?? 0;
+  }
+  return n;
 }
 
-/** 보관 기간이 끝난 현금 주문과 그 사건을 지우고 지운 주문의 수를 준다 */
-export async function deleteExpired(tx: Tx, cutoff: Date): Promise<number> {
-  // 지울 주문을 먼저 잠가서 정한다. 사건을 지운 뒤 주문을 지우는 사이에 대상이 달라지지 않는다
-  const targets = await tx.select({ id: orders.id }).from(orders).where(expired(cutoff)).for('update');
-  for (const part of chunks(targets.map((t) => t.id))) {
-    await tx.delete(orderEvents).where(inArray(orderEvents.orderId, part));
-    await tx.delete(orders).where(inArray(orders.id, part));
+/** `userIds`의 보관 기간이 끝난 현금 주문과 그 사건을 지우고 지운 주문의 수를 준다 */
+export async function deleteExpired(tx: Tx, cutoff: Date, userIds: string[]): Promise<number> {
+  let n = 0;
+  for (const users of chunks(userIds)) {
+    // 지울 주문을 먼저 잠가서 정한다. 사건을 지운 뒤 주문을 지우는 사이에 대상이 달라지지 않는다
+    const targets = await tx.select({ id: orders.id }).from(orders).where(expired(cutoff, users)).for('update');
+    for (const part of chunks(targets.map((t) => t.id))) {
+      await tx.delete(orderEvents).where(inArray(orderEvents.orderId, part));
+      await tx.delete(orders).where(inArray(orders.id, part));
+    }
+    n += targets.length;
   }
-  return targets.length;
+  return n;
 }

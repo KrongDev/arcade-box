@@ -13,7 +13,7 @@ import { fakeClock } from '../helpers/clock.ts';
 import { testDb } from '../helpers/db.ts';
 import { call } from '../helpers/http.ts';
 import { rowsOf } from '../entitlement/helpers.ts';
-import { buy, counts, eventsOf, fund, NOW, orderHandler, ordersOf, rule, seedShop } from './helpers.ts';
+import { buy, counts, eventsOf, fund, NOW, orderHandler, ordersOf, publishVersion, rule, seedShop } from './helpers.ts';
 
 async function withShop(run: (db: Db) => Promise<void>): Promise<void> {
   const { db, close } = await testDb();
@@ -34,7 +34,7 @@ test('코인으로 사면: 주문이 completed이고 구매 당시 이름·종�
     const me = await loginGuest(db, NOW);
     await fund(db, me.userId, 1000);
     const out = await buy(db, me.userId, 'pinball.table.sunset');
-    assert.deepEqual({ ...out, orderId: '' }, { orderId: '', productId: 'pinball.table.sunset', balance: 700, replayed: false });
+    assert.deepEqual({ ...out, orderId: '' }, { orderId: '', productId: 'pinball.table.sunset', game: null, balance: 700, replayed: false });
 
     const [order, ...more] = await ordersOf(db, me.userId);
     assert.equal(more.length, 0);
@@ -111,7 +111,7 @@ test('코인이 모자라면 409 insufficient_coins이고 주문·사건·보유
 
     // 1코인을 더 받으면 같은 키로 살 수 있다 (실패한 요청은 키를 쓰지 않았다)
     await fund(db, me.userId, 1);
-    assert.deepEqual({ ...(await buy(db, me.userId, 'pinball.table.sunset', 'short-key-0001')), orderId: '' }, { orderId: '', productId: 'pinball.table.sunset', balance: 0, replayed: false });
+    assert.deepEqual({ ...(await buy(db, me.userId, 'pinball.table.sunset', 'short-key-0001')), orderId: '' }, { orderId: '', productId: 'pinball.table.sunset', game: null, balance: 0, replayed: false });
     assert.deepEqual(await counts(db, me.userId), { orders: 1, events: 3, entitlements: 1, ledger: 3, balance: 0 });
     assert.deepEqual(await verifyWallets(db), []);
   }));
@@ -195,6 +195,22 @@ test('같은 키를 이미 다른 코인 기록(보상 등)에 썼으면 409 ide
     await db.transaction((tx) => applyCoins(tx, { userId: me.userId, delta: 1000, reason: 'attendance', idempotencyKey: 'shared-key-0001', now: NOW }));
     await assert.rejects(buy(db, me.userId, 'pinball.table.sunset', 'shared-key-0001'), rule(409, 'idempotency_mismatch'));
     assert.deepEqual(await counts(db, me.userId), { orders: 0, events: 0, entitlements: 0, ledger: 1, balance: 1000 });
+  }));
+
+test('가격이 0인 상품도 다른 코인 기록에 쓴 키로는 사지 못한다: 409 idempotency_mismatch이고 아무것도 생기지 않는다', () =>
+  withShop(async (db) => {
+    const me = await loginGuest(db, NOW);
+    // 출석에 쓴 키 (코인 기록에 그 키가 남는다)
+    await db.transaction((tx) => applyCoins(tx, { userId: me.userId, delta: 50, reason: 'attendance', idempotencyKey: 'attend-key-0001', now: NOW }));
+    await assert.rejects(buy(db, me.userId, 'pinball.ball.free', 'attend-key-0001'), rule(409, 'idempotency_mismatch'));
+    assert.deepEqual(await counts(db, me.userId), { orders: 0, events: 0, entitlements: 0, ledger: 1, balance: 50 });
+    // 새 키로는 사진다. 그 키로 다시 보내면 처음 답이다 (그 키의 주문이 있으니 코인 기록을 보기 전에 답한다)
+    const out = await buy(db, me.userId, 'pinball.ball.free', 'free-key-00001');
+    assert.equal(out.replayed, false);
+    assert.deepEqual(await buy(db, me.userId, 'pinball.ball.free', 'free-key-00001'), { ...out, replayed: true });
+    // 남이 쓴 키는 내 키가 아니다
+    const other = await loginGuest(db, NOW);
+    assert.equal((await buy(db, other.userId, 'pinball.ball.free', 'attend-key-0001')).replayed, false);
   }));
 
 test('키 모양이 틀리면 400 invalid_idempotency_key, 본문이나 productId가 틀리면 400, 없는 상품은 404 not_found', () =>
@@ -293,15 +309,52 @@ test('게임 상품은 그 게임이 live일 때만 팔린다: 내보내면 살 
 test('가격이 0인 상품을 사면 코인 기록 없이 주문·사건·보유가 생긴다', () =>
   withShop(async (db) => {
     const me = await loginGuest(db, NOW);
+    await fund(db, me.userId, 40);
     const out = await buy(db, me.userId, 'pinball.ball.free', 'free-ball-0001');
-    assert.deepEqual({ ...out, orderId: '' }, { orderId: '', productId: 'pinball.ball.free', balance: 0, replayed: false });
-    assert.deepEqual(await counts(db, me.userId), { orders: 1, events: 3, entitlements: 1, ledger: 0, balance: 0 });
+    assert.deepEqual({ ...out, orderId: '' }, { orderId: '', productId: 'pinball.ball.free', game: null, balance: 40, replayed: false });
+    assert.deepEqual(await counts(db, me.userId), { orders: 1, events: 3, entitlements: 1, ledger: 1, balance: 40 });
     const events = await eventsOf(db, out.orderId);
     assert.deepEqual(events.map((e) => [e.type, e.ledgerId]), [['created', null], ['completed', null], ['granted', null]]);
-    // 다시 보내면 처음 답이다 (그 주문은 잔액을 바꾸지 않았다)
+    // 다시 보내면 처음 답이다: 그사이 코인을 벌었어도 잔액은 살 때의 값이다 (코인 기록이 없으니 사건에 적어 둔 값에서 읽는다)
+    await fund(db, me.userId, 50);
     assert.deepEqual(await buy(db, me.userId, 'pinball.ball.free', 'free-ball-0001'), { ...out, replayed: true });
+    assert.equal(await getBalance(db, me.userId), 90);
     await assert.rejects(buy(db, me.userId, 'pinball.ball.free'), rule(409, 'already_owned'));
     assert.deepEqual(await verifyWallets(db), []);
+  }));
+
+test('게임 상품을 사면 답에 그 게임의 지금 버전이 들어 있고, 다시 보낸 요청에는 지금의 live 버전이 들어 있다', () =>
+  withShop(async (db) => {
+    const me = await loginGuest(db, NOW);
+    await fund(db, me.userId, 9000);
+    const v3 = await publishVersion(db, 'minesweeper', 3);
+    const out = await buy(db, me.userId, 'game.minesweeper', 'buy-mines-0001');
+    assert.deepEqual(out, { orderId: out.orderId, productId: 'game.minesweeper', game: { id: 'minesweeper', liveVersion: v3 }, balance: 6000, replayed: false });
+    assert.deepEqual(v3, { version: 3, sizeBytes: 12345, sha256: 'a'.repeat(64), signature: 'sig-minesweeper-3', minShellApi: 1 });
+
+    // 그사이 새 버전을 내보냈다: 다시 보낸 요청은 그때(3)가 아니라 지금(4) 받을 버전을 알려 준다. 잔액과 주문은 처음 그대로다
+    const v4 = await publishVersion(db, 'minesweeper', 4);
+    assert.deepEqual(await buy(db, me.userId, 'game.minesweeper', 'buy-mines-0001'), { ...out, game: { id: 'minesweeper', liveVersion: v4 }, replayed: true });
+
+    // 아직 버전을 내보낸 적 없는 live 게임: liveVersion이 null이다
+    await db.transaction((tx) => updateGame(tx, 'breakout', { status: 'live' }));
+    assert.deepEqual((await buy(db, me.userId, 'game.breakout')).game, { id: 'breakout', liveVersion: null });
+
+    // 게임 상품이 아니면 game이 null이다 (그 게임에 버전이 있어도)
+    await publishVersion(db, 'pinball', 7);
+    assert.equal((await buy(db, me.userId, 'pinball.table.sunset')).game, null);
+  }));
+
+test('POST /v2/shop/purchase: 게임 상품을 사면 받을 버전 정보가 답에 들어 있다', () =>
+  withShop(async (db) => {
+    const handler = orderHandler(db, fakeClock(NOW.toISOString()));
+    const me = await loginGuest(db, NOW);
+    await fund(db, me.userId, 3000);
+    const version = await publishVersion(db, 'minesweeper', 2);
+    const res = await call(handler, 'POST', '/v2/shop/purchase', { token: me.token, body: { productId: 'game.minesweeper' } });
+    assert.equal(res.status, 200);
+    const [order] = await ordersOf(db, me.userId);
+    assert.deepEqual(res.body, { orderId: order.id, productId: 'game.minesweeper', game: { id: 'minesweeper', liveVersion: version }, balance: 0, replayed: false });
   }));
 
 test('구매가 중간에 실패하면(보유를 넣다 오류) 코인도 주문도 사건도 남지 않는다', () =>
@@ -343,13 +396,13 @@ test('POST /v2/shop/purchase: 로그인해야 하고, 새 잔액과 산 상품�
     const ok = await call(handler, 'POST', '/v2/shop/purchase', { token: me.token, body: { productId: 'pinball.table.sunset', idempotencyKey: 'http-buy-0001' } });
     assert.equal(ok.status, 200);
     const [order] = await ordersOf(db, me.userId);
-    assert.deepEqual(ok.body, { orderId: order.id, productId: 'pinball.table.sunset', balance: 400, replayed: false });
+    assert.deepEqual(ok.body, { orderId: order.id, productId: 'pinball.table.sunset', game: null, balance: 400, replayed: false });
     assert.equal(ok.headers['cache-control'], 'no-store');
     // 주문의 시각은 요청을 받은 시각이다
     assert.equal(order.createdAt.toISOString(), NOW.toISOString());
 
     const again = await call(handler, 'POST', '/v2/shop/purchase', { token: me.token, body: { productId: 'pinball.table.sunset', idempotencyKey: 'http-buy-0001' } });
-    assert.deepEqual(again.body, { orderId: order.id, productId: 'pinball.table.sunset', balance: 400, replayed: true });
+    assert.deepEqual(again.body, { orderId: order.id, productId: 'pinball.table.sunset', game: null, balance: 400, replayed: true });
 
     const owned = await call(handler, 'POST', '/v2/shop/purchase', { token: me.token, body: { productId: 'pinball.table.sunset' } });
     assert.deepEqual([owned.status, codeOf(owned.body)], [409, 'already_owned']);

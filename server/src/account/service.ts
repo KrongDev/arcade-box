@@ -2,6 +2,7 @@ import { randomToken, sha256Hex } from '../shared/crypto.ts';
 import type { Db, Q, Tx } from '../shared/db/index.ts';
 import { RuleError } from '../shared/errors.ts';
 import type { Session } from '../shared/http/index.ts';
+import { isUuid } from '../shared/validate.ts';
 import {
   deleteExpiredSessions,
   deleteGuestIdentity,
@@ -32,8 +33,6 @@ import {
   type Provider,
   type Settings,
 } from './rules.ts';
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** 세션을 하나 만들어 토큰 원문을 돌려준다. 원문은 여기서 한 번만 나가고 DB에는 해시만 남는다 */
 export async function issueSession(tx: Tx, userId: string, identityId: number, now: Date, ttlDays: number): Promise<{ token: string; expiresAt: Date }> {
@@ -93,7 +92,7 @@ export async function getSettings(q: Q, userId: string): Promise<Settings> {
  * 없거나 지워진 사용자면 `RuleError(401, 'unauthorized')`를 던진다. 같은 사용자의 다른 쓰기는 막지 않는다.
  */
 export async function requireActiveUser(tx: Tx, userId: string): Promise<void> {
-  if (!UUID.test(userId) || !(await holdUser(tx, userId))) throw unauthorized();
+  if (!isUuid(userId) || !(await holdUser(tx, userId))) throw unauthorized();
 }
 
 /**
@@ -141,7 +140,7 @@ export async function findUserByIdentity(q: Q, provider: AccountProvider, subjec
 
 /** 사용자 한 명 (명령줄 `user show`가 쓴다). 없거나 사용자 번호 모양이 아니면 null */
 export async function getUser(q: Q, userId: string): Promise<{ id: string; status: 'active' | 'deleted'; createdAt: string } | null> {
-  if (!UUID.test(userId)) return null;
+  if (!isUuid(userId)) return null;
   const row = await readUser(q, userId);
   return row ? { id: row.id, status: row.status, createdAt: row.createdAt.toISOString() } : null;
 }

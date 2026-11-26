@@ -5,4 +5,4 @@
 export { commands } from './commands.ts';
 export { routes, type EntitlementDeps } from './routes.ts';
 export type { EntitlementSource, RevokeReason } from './schema.ts';
-export { canPlayGame, countOwnedGames, equip, grant, listEquipped, listOwned, owns, purgeUser, revoke } from './service.ts';
+export { activeEntitlementId, canPlayGame, countOwnedGames, equip, grant, listEquipped, listOwned, owns, purgeUser, revoke } from './service.ts';

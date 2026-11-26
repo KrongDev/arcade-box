@@ -1,11 +1,11 @@
 import { mutation } from '../admin/index.ts';
+import { activeEntitlementId } from '../entitlement/index.ts';
 import type { Args, Command } from '../shared/cli/index.ts';
 import type { Db } from '../shared/db/index.ts';
 import { RuleError } from '../shared/errors.ts';
 import type { Clock } from '../shared/time.ts';
+import { isUuid } from '../shared/validate.ts';
 import { checkRefundable, countExpiredOrders, getOrder, purgeExpiredIn, recentOrders, refundCoinOrder, retentionCutoff, RETENTION_YEARS, type OrderRecord } from './service.ts';
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const usage = (line: string) => new RuleError(400, 'invalid_args', `이렇게 써 주세요: ${line}`);
 const noOrder = () => new RuleError(404, 'not_found', '없는 주문이에요');
@@ -21,7 +21,7 @@ const LIST_DEFAULT = 20;
 function orderArg(args: Args, line: string): string {
   if (args.positional.length !== 1) throw usage(line);
   const [orderId] = args.positional;
-  if (!UUID.test(orderId)) throw new RuleError(400, 'invalid_order_id', `주문 ID 모양이 아니에요: ${orderId}`);
+  if (!isUuid(orderId)) throw new RuleError(400, 'invalid_order_id', `주문 ID 모양이 아니에요: ${orderId}`);
   return orderId;
 }
 
@@ -30,7 +30,7 @@ function listArgs(args: Args): { userId?: string; limit: number } {
   const user = args.flags.user;
   const limit = args.flags.limit;
   if (user === true || limit === true) throw usage(LIST);
-  if (user !== undefined && !UUID.test(user)) throw new RuleError(400, 'invalid_user_id', `사용자 ID 모양이 아니에요: ${user}`);
+  if (user !== undefined && !isUuid(user)) throw new RuleError(400, 'invalid_user_id', `사용자 ID 모양이 아니에요: ${user}`);
   if (limit !== undefined && (!/^[0-9]{1,3}$/.test(limit) || Number(limit) < 1 || Number(limit) > 100)) throw new RuleError(400, 'invalid_limit', '--limit은 1~100의 정수로 적어 주세요');
   return { ...(user === undefined ? {} : { userId: user }), limit: limit === undefined ? LIST_DEFAULT : Number(limit) };
 }
@@ -89,28 +89,39 @@ export function commands(db: Db, actor: string, now: Clock = () => new Date()): 
         const order = await getOrder(db, orderArg(args, REFUND));
         if (!order) throw noOrder();
         checkRefundable(order);
+        // 요약은 실제로 할 일을 말한다: 가격이 0이던 주문은 돌려줄 코인이 없고, 이 주문이 만든 보유가 이미 회수됐으면
+        // (그 뒤에 다시 받아 지금 가진 것이 있더라도) 회수하지 않는다
+        const coins = order.price.amount;
+        const willRevoke = order.entitlementId !== null && (await activeEntitlementId(db, order.userId, order.productId)) === order.entitlementId;
+        const goods = `${order.productId}(${order.productName})`;
+        const back = coins > 0 ? `사용자 ${order.userId}에게 ${coins}코인을 돌려주고` : `가격이 0이던 주문이라 사용자 ${order.userId}에게 돌려줄 코인은 없고`;
+        const take = willRevoke ? `${goods}을 회수해요 (장착하고 있으면 풀어요)` : `${goods}의 보유는 이미 회수돼 있어서 ${coins > 0 ? '코인만 돌려줘요' : '주문만 환불된 것으로 바꿔요'} (지금 가진 것이 있어도 건드리지 않아요)`;
         await mutation(db, actor, {
           action: 'order.refund',
-          describe: () => `주문 ${order.id}을 환불해요: 사용자 ${order.userId}에게 ${order.price.amount}코인을 돌려주고 ${order.productId}(${order.productName})을 회수해요 (장착하고 있으면 풀어요)`,
+          describe: () => `주문 ${order.id}을 환불해요: ${back} ${take}`,
           target: () => ({ userId: order.userId, ref: order.id }),
           apply: (tx, _args, adminActionId) => refundCoinOrder(tx, order.id, adminActionId, now()),
-          report: () => `환불했어요 (${order.price.amount}코인을 돌려줬어요)`,
+          report: () => (coins > 0 ? `환불했어요 (${coins}코인을 돌려줬어요)` : '환불했어요 (돌려줄 코인은 없었어요)'),
         })(args, io);
       },
     },
     {
-      // 묻기 전에 지울 주문의 수와 기준 시각을 보여 주려고 먼저 센다. 지우는 일은 운영 기록과 한 트랜잭션이고 같은 시각으로 잰다
+      // 묻기 전에 지울 주문의 수와 기준 시각을 보여 주려고 먼저 센다. 지우는 일은 운영 기록과 한 트랜잭션이고 같은 시각으로 잰다.
+      // 되돌릴 수 없는 삭제라 무엇을 기준으로 지웠는지를 운영 기록에 남긴다 (target_ref: 기준 시각과 그때 센 주문 수.
+      // 실제로 지운 수는 틀이 기록에 넣을 길이 없어 화면에만 나온다 — 센 뒤에 계정을 지운 사용자가 없으면 같은 수다)
       name: 'orders purge-expired',
       usage: `${PURGE} [--yes]`,
       run: async (args, io) => {
         if (args.positional.length !== 0) throw usage(PURGE);
         const at = now();
+        const until = retentionCutoff(at).toISOString();
         const expired = await countExpiredOrders(db, at);
         await mutation(db, actor, {
           action: 'orders.purge-expired',
           describe: () =>
-            `결제가 끝나거나 환불된 지 ${RETENTION_YEARS}년이 지난 현금 주문 ${expired}개와 그 사건을 지워요 (${retentionCutoff(at).toISOString()}까지 끝난 것). ` +
-            '그래서 주문이 하나도 남지 않는 지워진 계정의 사용자 행도 지워요. 되돌릴 수 없어요',
+            `계정을 지운 사용자의, 결제가 끝나거나 환불된 지 ${RETENTION_YEARS}년이 지난 현금 주문 ${expired}개와 그 사건을 지워요 (${until}까지 끝난 것). ` +
+            '그래서 주문이 하나도 남지 않는 지워진 계정의 사용자 행도 지워요. 살아 있는 사용자의 주문은 지우지 않아요. 되돌릴 수 없어요',
+          target: () => ({ ref: `until=${until} orders=${expired}` }),
           apply: (tx) => purgeExpiredIn(tx, at),
           report: (r) => `주문 ${r.orders}개와 사용자 행 ${r.users}개를 지웠어요`,
         })(args, io);

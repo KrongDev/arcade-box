@@ -1,4 +1,5 @@
 import type { Db, Q, Tx } from '../shared/db/index.ts';
+import { isUuid } from '../shared/validate.ts';
 import { deleteDeletedUserRow, deleteLoginData, deleteUserRow, lockUser, markUserDeleted, readDeletedUserIds } from './repo.ts';
 
 /**
@@ -39,8 +40,6 @@ export async function deleteAccount(db: Db, userId: string, policy: DeletionPoli
   await db.transaction((tx) => deleteAccountInTx(tx, userId, policy, now));
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 /**
  * 계정을 지울 때 `deleted`로 남겨 둔 사용자 행의 ID 전부 (ID 순서). 읽기만 한다.
  * order(`orders purge-expired`)가 이 가운데 주문이 하나도 남지 않은 사용자를 골라 `removeDeletedUser`로 지운다.
@@ -57,6 +56,6 @@ export async function listDeletedUsers(q: Q): Promise<string[]> {
  * 아직 이 사용자를 가리키는 행(남은 주문 등)이 있으면 외래 키 오류로 실패하고 부른 쪽의 트랜잭션이 되돌아간다.
  */
 export async function removeDeletedUser(tx: Tx, userId: string): Promise<boolean> {
-  if (!UUID.test(userId)) return false;
+  if (!isUuid(userId)) return false;
   return deleteDeletedUserRow(tx, userId);
 }

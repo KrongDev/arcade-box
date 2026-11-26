@@ -442,3 +442,24 @@ test('같은 키를 출석과 광고에 쓰면 409 idempotency_mismatch', async 
     await close();
   }
 });
+
+test('보상 코인 설정이 0이어도 다른 코인 기록에 쓴 키로는 받지 못한다: 409 idempotency_mismatch이고 받은 것으로 적지 않는다', async () => {
+  const { db, close } = await testDb();
+  try {
+    await setConfig(db, 'attendance_coins', 0);
+    await setConfig(db, 'ad_reward_coins', 0);
+    const me = await loginGuest(db, NOON);
+    // 판 결과에 쓴 키 (코인 기록에 그 키가 남는다)
+    await db.transaction((tx) => applyCoins(tx, { userId: me.userId, delta: 40, reason: 'run', idempotencyKey: 'run-key-000001', now: NOON }));
+    await assert.rejects(claimAttendance(db, me.userId, NOON, { idempotencyKey: 'run-key-000001' }), rule(409, 'idempotency_mismatch'));
+    await assert.rejects(claimAdReward(db, me.userId, NOON, { idempotencyKey: 'run-key-000001' }), rule(409, 'idempotency_mismatch'));
+    assert.deepEqual(await counts(db, me.userId), { claims: 0, ledger: 1, balance: 40 });
+    // 그날의 몫은 그대로 남아 있다: 새 키로는 받고, 그 키로 다시 보내면 처음 답이다
+    const first = await claimAttendance(db, me.userId, NOON, { idempotencyKey: 'attend-zero-001' });
+    assert.deepEqual(first, { coins: 0, balance: 40, replayed: false });
+    assert.deepEqual(await claimAttendance(db, me.userId, NOON, { idempotencyKey: 'attend-zero-001' }), { coins: 0, balance: 40, replayed: true });
+    assert.equal((await claimAdReward(db, me.userId, NOON, { idempotencyKey: 'ad-zero-key-001' })).left, 2);
+  } finally {
+    await close();
+  }
+});

@@ -4,7 +4,7 @@ import { sql } from 'drizzle-orm';
 import { test } from 'node:test';
 import { deleteAccount, getUser, type DeletionPolicy } from '../../src/account/index.ts';
 import { RuleError } from '../../src/shared/errors.ts';
-import { applyCoins, getBalance, purgeUser, verifyWallets, type LedgerReason } from '../../src/wallet/index.ts';
+import { applyCoins, getBalance, hasLedgerKey, purgeUser, verifyWallets, type LedgerReason } from '../../src/wallet/index.ts';
 import { coinLedger, wallets } from '../../src/wallet/schema.ts';
 import { loginGuest } from '../account/helpers.ts';
 import { testDb } from '../helpers/db.ts';
@@ -540,6 +540,24 @@ test('DB 제약: 잔액은 0~9,000,000,000,000,000, delta는 0이 아니고, bal
     // 상한 딱 그 값과, 키가 없는 기록 여러 줄은 된다
     await db.execute(sql`update app.wallets set balance = 9000000000000000 where user_id = ${u}`);
     await db.execute(sql`insert into app.coin_ledger (user_id, delta, balance_after, reason) values (${u}, 1, 1, 'run'), (${u}, 1, 2, 'run')`);
+  } finally {
+    await close();
+  }
+});
+
+test('hasLedgerKey는 이 사용자가 이 키로 남긴 코인 기록이 있는지 알려 준다 (키는 사용자마다 따로)', async () => {
+  const { db, close } = await testDb();
+  try {
+    const me = await loginGuest(db, NOW);
+    const other = await loginGuest(db, NOW);
+    assert.equal(await hasLedgerKey(db, me.userId, 'used-key-0001'), false);
+    await apply(db, { userId: me.userId, delta: 50, reason: 'attendance', idempotencyKey: 'used-key-0001' });
+    await apply(db, { userId: me.userId, delta: 10, reason: 'run' });
+    assert.equal(await hasLedgerKey(db, me.userId, 'used-key-0001'), true);
+    assert.equal(await hasLedgerKey(db, me.userId, 'used-key-0002'), false);
+    assert.equal(await hasLedgerKey(db, other.userId, 'used-key-0001'), false, '남이 쓴 키는 내 키가 아니다');
+    // 사용자 ID 모양이 아니면 쿼리 없이 거짓이다
+    assert.equal(await hasLedgerKey(db, 'not-a-uuid', 'used-key-0001'), false);
   } finally {
     await close();
   }
