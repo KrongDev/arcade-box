@@ -10,3 +10,4 @@ export * from './game/schema.ts';
 export * from './product/schema.ts';
 export * from './entitlement/schema.ts';
 export * from './play/schema.ts';
+export * from './reward/schema.ts';

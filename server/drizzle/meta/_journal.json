@@ -57,6 +57,13 @@
       "when": 1795682663743,
       "tag": "0007_play",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1795682921535,
+      "tag": "0008_reward",
+      "breakpoints": true
     }
   ]
 }
