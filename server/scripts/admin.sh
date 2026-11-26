@@ -92,6 +92,8 @@ run_remote() {
     [ -z "$input" ] || echo "표준 입력: $input"
     return 0
   fi
+  # 서버에서 실행할 줄은 여기서 다 만들어 넘긴다 (인자는 quote로 감쌌다). 그래서 이 컴퓨터에서 펼쳐지는 것이 맞다
+  # shellcheck disable=SC2029
   if [ -n "$input" ]; then
     ssh "$tty" "${ssh_opts[@]}" "$target" "$remote" <"$input"
   else

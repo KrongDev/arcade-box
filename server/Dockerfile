@@ -3,8 +3,10 @@ FROM node:24-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 COPY package.json package-lock.json ./
-# 운영 이미지에는 실행에 쓰는 패키지만 넣는다 (drizzle-kit·PGlite·typescript는 개발용이라 빠진다)
-RUN npm ci --omit=dev && npm cache clean --force
+# 운영 이미지에는 실행에 쓰는 패키지(drizzle-orm, jose, pg와 그 의존성)만 넣는다.
+# --omit=dev만으로는 PGlite와 @types가 남는다: drizzle-orm이 "있으면 쓰는" 패키지이기도 해서 잠금 파일에 devOptional로 적힌다.
+# --omit=optional까지 줘야 빠진다. 함께 빠지는 pg-cloudflare는 Cloudflare Workers에서만 쓰는 것이다 (test/runtime-deps.test.ts)
+RUN npm ci --omit=dev --omit=optional && npm cache clean --force
 COPY src ./src
 # 마이그레이션 SQL — 서버가 뜰 때 적용한다 (src/shared/db의 MIGRATIONS_DIR)
 COPY drizzle ./drizzle

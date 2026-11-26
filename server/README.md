@@ -52,7 +52,7 @@ curl -s http://localhost:8080/v2/catalog                    # 게임 3개가 든
 | `DB_STATEMENT_TIMEOUT_MS` | `10000` | 쿼리 하나의 시간. 다른 요청이 잠근 지갑을 기다리는 시간도 여기에 들어요 |
 | `DB_IDLE_IN_TX_TIMEOUT_MS` | `10000` | 트랜잭션을 연 채 쉬는 시간. 넘으면 DB가 그 연결을 끊고 잠금을 풀어요 |
 
-시간 제한을 넘은 요청은 오류(`500 internal`)로 끝나고 아무것도 남기지 않아요. 앱은 같은 요청 키(`idempotencyKey`)로 다시 보내면 돼요.
+시간 제한을 넘은 요청은 오류(`500 internal`)로 끝나고 아무것도 남기지 않아요. 앱은 같은 요청 키(`idempotencyKey`)로 다시 보내면 돼요. 명령줄 도구도 같은 제한을 써요: 자료가 많아져 `wallet verify` 같은 점검이 제한에 걸리면 그 명령에만 값을 올려 실행해요 (`docker compose exec -e DB_STATEMENT_TIMEOUT_MS=600000 server node src/cli.ts wallet verify`). 마이그레이션에는 쿼리 시간 제한이 없어요.
 
 ## 테스트
 
