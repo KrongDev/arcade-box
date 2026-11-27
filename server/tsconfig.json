@@ -13,5 +13,5 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true
   },
-  "include": ["src", "test", "mock-partner", "scripts"]
+  "include": ["src", "test", "test-pg", "scripts", "drizzle.config.ts"]
 }

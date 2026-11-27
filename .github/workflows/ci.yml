@@ -27,11 +27,27 @@ jobs:
       - run: npx vite build --mode android
 
   server:
-    name: 서버 (타입 검사·테스트)
+    name: 서버 (타입 검사·테스트·PostgreSQL 테스트)
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: server
+    # 진짜 PostgreSQL에서만 드러나는 것(같은 지갑을 동시에 쓰는 요청)을 보는 테스트용. 이 작업 동안만 뜨고 사라진다
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: arcade
+          POSTGRES_USER: arcade
+          # 이 작업 안에서만 쓰는 값이다 (secret이 아니다)
+          POSTGRES_PASSWORD: ci-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U arcade -d arcade"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -42,3 +58,8 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      # 테스트 도우미(pgTestDb)는 이 컴퓨터(localhost)의 DB만 받는다. 테스트마다 데이터베이스를 새로 만들고 지운다
+      - name: PostgreSQL 테스트 (동시 요청, 시간 제한, 마이그레이션)
+        run: npm run test:pg
+        env:
+          DATABASE_URL: postgres://arcade:ci-only@localhost:5432/arcade

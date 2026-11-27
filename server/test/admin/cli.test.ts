@@ -1,0 +1,178 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { parseArgs, runCli, type Args, type Command } from '../../src/shared/cli/index.ts';
+import { RuleError } from '../../src/shared/errors.ts';
+import { fakeIo } from '../helpers/cli.ts';
+
+/** 받은 인자를 적어 두기만 하는 명령들 */
+function recording() {
+  const calls: Array<{ name: string; args: Args }> = [];
+  const make = (name: string, usage = name, flags: string[] = []): Command => ({
+    name,
+    usage,
+    flags,
+    run: async (args) => {
+      calls.push({ name, args });
+    },
+  });
+  const commands = [
+    make('config get', 'config get [key]'),
+    make('config set', 'config set <key> <value> --reason <까닭> [--yes]', ['reason', 'yes']),
+    make('game add'),
+    make('game add-version', 'game add-version <게임ID> <버전> --file <묶음.zip>', ['file']),
+    make('grant', 'grant <userId> <상품> --reason <까닭>', ['reason']),
+    make('order show'),
+    make('orders purge-expired'),
+  ];
+  return { calls, commands };
+}
+
+test('parseArgs: --flag 값, 값 없는 flag, --flag=값, 자리 인자를 가른다', () => {
+  assert.deepEqual(parseArgs([]), { positional: [], flags: {} });
+  assert.deepEqual(parseArgs(['attendance_coins', '70', '--reason', '이벤트 준비', '--yes']), {
+    positional: ['attendance_coins', '70'],
+    flags: { reason: '이벤트 준비', yes: true },
+  });
+  // --yes는 값을 받지 않는다. 뒤에 온 것은 자리 인자다
+  assert.deepEqual(parseArgs(['--yes', 'pinball', '--reason', 'x']), { positional: ['pinball'], flags: { yes: true, reason: 'x' } });
+  // 다른 flag는 뒤에 값이 없거나 다른 flag가 오면 값 없는 flag다
+  assert.deepEqual(parseArgs(['--all', '--user', 'u1', '--dry']), { positional: [], flags: { all: true, user: 'u1', dry: true } });
+  assert.deepEqual(parseArgs(['--to=3', '--note=', '--k=a=b']), { positional: [], flags: { to: '3', note: '', k: 'a=b' } });
+  // 음수는 flag가 아니다
+  assert.deepEqual(parseArgs(['u1', '-300', '--delta', '-5']), { positional: ['u1', '-300'], flags: { delta: '-5' } });
+  // 같은 flag를 두 번 쓰면 뒤의 것
+  assert.deepEqual(parseArgs(['--to', '1', '--to', '2']).flags, { to: '2' });
+});
+
+test('모르는 명령이면 쓸 수 있는 명령 목록을 보여 주고 1로 끝난다', async () => {
+  const { calls, commands } = recording();
+  for (const argv of [['nope'], ['config'], ['config', 'nope', 'x'], [], ['--yes'], ['game']]) {
+    const io = fakeIo();
+    assert.equal(await runCli(argv, commands, io), 1, argv.join(' '));
+    for (const c of commands) assert.ok(io.text().includes(c.usage), `${argv.join(' ')}: ${c.usage}가 목록에 없다`);
+  }
+  assert.deepEqual(calls, []);
+});
+
+test('명령 이름 뒤의 것을 인자로 넘기고 0으로 끝난다', async () => {
+  const { calls, commands } = recording();
+  assert.equal(await runCli(['config', 'set', 'attendance_coins', '70', '--reason', '이벤트', '--yes'], commands, fakeIo()), 0);
+  assert.equal(await runCli(['grant', 'u1', 'game.minesweeper', '--reason', '보상'], commands, fakeIo()), 0);
+  assert.equal(await runCli(['game', 'add-version', 'pinball', '3', '--file', 'a.zip'], commands, fakeIo()), 0);
+  assert.equal(await runCli(['game', 'add', 'pinball'], commands, fakeIo()), 0);
+  assert.equal(await runCli(['orders', 'purge-expired'], commands, fakeIo()), 0);
+  assert.deepEqual(calls, [
+    { name: 'config set', args: { positional: ['attendance_coins', '70'], flags: { reason: '이벤트', yes: true } } },
+    { name: 'grant', args: { positional: ['u1', 'game.minesweeper'], flags: { reason: '보상' } } },
+    { name: 'game add-version', args: { positional: ['pinball', '3'], flags: { file: 'a.zip' } } },
+    { name: 'game add', args: { positional: ['pinball'], flags: {} } },
+    { name: 'orders purge-expired', args: { positional: [], flags: {} } },
+  ]);
+});
+
+test('명령이 받지 않는 flag가 오면 실행하지 않고, 어느 flag인지와 쓰는 법을 보여 주며 1로 끝난다', async () => {
+  const { calls, commands } = recording();
+  for (const [argv, bad] of [
+    // 오타 난 flag: 조용히 넘기면 까닭 없이, 또는 확인 없이 실행된다
+    [['config', 'set', 'attendance_coins', '70', '--reasn', '이벤트', '--yes'], ['--reasn']],
+    [['config', 'set', 'attendance_coins', '70', '--reason', '이벤트', '--yse'], ['--yse']],
+    [['config', 'set', 'attendance_coins', '70', '--reason', '이벤트', '--yes', '--dry-run', '--force=1'], ['--dry-run', '--force']],
+    // 다른 명령의 flag
+    [['grant', 'u1', 'game.minesweeper', '--reason', '보상', '--yes'], ['--yes']],
+    // flag를 하나도 받지 않는 명령
+    [['config', 'get', '--reason', '확인'], ['--reason']],
+    [['game', 'add', 'pinball', '--yes'], ['--yes']],
+  ] as Array<[string[], string[]]>) {
+    const io = fakeIo();
+    assert.equal(await runCli(argv, commands, io), 1, argv.join(' '));
+    assert.match(io.text(), /모르는 flag/, argv.join(' '));
+    for (const name of bad) assert.ok(io.text().includes(name), `${argv.join(' ')}: ${name}을 알려 주지 않는다`);
+    const usage = commands.find((c) => argv.join(' ').startsWith(c.name))!.usage;
+    assert.ok(io.text().includes(usage), `${argv.join(' ')}: 쓰는 법이 없다`);
+  }
+  assert.deepEqual(calls, [], '거절한 명령은 실행되지 않는다');
+});
+
+test('값이 --로 시작해 flag로 읽혔으면 --flag=값으로 적으라고 알려 준다', async () => {
+  const { calls, commands } = recording();
+  const io = fakeIo();
+  assert.equal(await runCli(['config', 'set', 'attendance_coins', '70', '--reason', '--yes가 필요해서', '--yes'], commands, io), 1);
+  assert.match(io.text(), /모르는 flag예요: --yes가 필요해서/);
+  assert.match(io.text(), /--reason=…/);
+  assert.deepEqual(calls, []);
+  // 그렇게 적으면 된다
+  const again = recording();
+  assert.equal(await runCli(['config', 'set', 'attendance_coins', '70', '--reason=--yes가 필요해서', '--yes'], again.commands, fakeIo()), 0);
+  assert.deepEqual(
+    again.calls.map((c) => c.args.flags),
+    [{ reason: '--yes가 필요해서', yes: true }],
+  );
+  // 오타일 뿐인 flag에는 그 말을 덧붙이지 않는다
+  const typo = fakeIo();
+  assert.equal(await runCli(['config', 'set', 'attendance_coins', '70', '--reason', '이벤트', '--yse'], commands, typo), 1);
+  assert.doesNotMatch(typo.text(), /=…/);
+});
+
+test('RuleError는 메시지만 보여 주고 1로 끝난다', async () => {
+  const io = fakeIo();
+  const commands: Command[] = [
+    {
+      name: 'fail',
+      usage: 'fail',
+      flags: [],
+      run: async () => {
+        throw new RuleError(409, 'already_owned', '이미 가지고 있어요');
+      },
+    },
+  ];
+  assert.equal(await runCli(['fail'], commands, io), 1);
+  assert.deepEqual(io.lines, ['이미 가지고 있어요']);
+});
+
+test('그 밖의 오류는 스택까지 보여 주고 1로 끝난다', async () => {
+  const io = fakeIo();
+  const commands: Command[] = [
+    {
+      name: 'crash',
+      usage: 'crash',
+      flags: [],
+      run: async function crashingCommand() {
+        throw new TypeError('뜻밖의 오류');
+      },
+    },
+  ];
+  assert.equal(await runCli(['crash'], commands, io), 1);
+  assert.match(io.text(), /TypeError: 뜻밖의 오류/);
+  assert.match(io.text(), /at .*crashingCommand/);
+});
+
+test('오류가 다른 오류를 감싸고 있으면 속 까닭도 보여 준다 (DB에 못 닿았을 때 등)', async () => {
+  const io = fakeIo();
+  const refused = Object.assign(new Error(''), { code: 'ECONNREFUSED' });
+  const commands: Command[] = [
+    {
+      name: 'db',
+      usage: 'db',
+      flags: [],
+      run: async () => {
+        throw new Error('Failed query: select "value" from "app"."app_config"', { cause: refused });
+      },
+    },
+    {
+      name: 'deep',
+      usage: 'deep',
+      flags: [],
+      run: async () => {
+        throw new Error('바깥', { cause: new Error('가운데', { cause: new Error('맨 안쪽 까닭') }) });
+      },
+    },
+  ];
+  assert.equal(await runCli(['db'], commands, io), 1);
+  assert.match(io.text(), /Failed query/);
+  assert.match(io.text(), /까닭: .*ECONNREFUSED/);
+
+  const deep = fakeIo();
+  assert.equal(await runCli(['deep'], commands, deep), 1);
+  assert.match(deep.text(), /까닭: 가운데/);
+  assert.match(deep.text(), /까닭: 맨 안쪽 까닭/);
+});

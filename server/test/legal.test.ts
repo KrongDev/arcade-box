@@ -3,10 +3,12 @@ import http from 'node:http';
 import { readFileSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import { after, before, describe, it } from 'node:test';
-import { createApp } from '../src/app.ts';
+import { devVerifier } from '../src/account/index.ts';
 import { LEGAL_SOURCES } from '../src/legal.ts';
 import { renderInline, renderLegalPage, renderMarkdown } from '../src/legal-markdown.ts';
-import { MemoryStore } from '../src/store-memory.ts';
+import { buildServer } from '../src/server.ts';
+import { testConfig } from './account/helpers.ts';
+import { testDb } from './helpers/db.ts';
 
 describe('약관 문서 → HTML', () => {
   it('서버가 내보내는 HTML이 docs/의 원본 문서와 같다 (문서를 고치면 npm run legal)', () => {
@@ -38,18 +40,21 @@ describe('약관 문서 → HTML', () => {
 describe('약관 페이지 경로', () => {
   let base = '';
   let server: http.Server;
+  let closeDb: () => Promise<void>;
   before(async () => {
-    const handler = createApp({
-      store: new MemoryStore(),
-      partner: { exchangeAnonCode: async () => ({ ok: false, kind: 'invalid_code', errorCode: null }) },
-      allowedOrigins: [],
-      sessionTtlDays: 30,
-    });
+    // v2 서버 전체를 띄운다. 허용 origin은 비워 둔다 (공개 페이지는 origin과 상관없이 나와야 한다)
+    const { db, close } = await testDb();
+    closeDb = close;
+    const handler = buildServer({ db, config: { ...testConfig, allowedOrigins: [] }, now: () => new Date(), verify: devVerifier() });
     server = http.createServer((req, res) => void handler(req, res));
-    await new Promise<void>((r) => server.listen(0, r));
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
     base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   });
-  after(() => server.close());
+  after(async () => {
+    server.closeAllConnections();
+    await new Promise<void>((r) => server.close(() => r()));
+    await closeDb();
+  });
 
   it('GET /privacy · /terms는 HTML 페이지를 외부 리소스 차단 헤더와 함께 준다', async () => {
     for (const [path, title] of [
@@ -104,6 +109,34 @@ describe('약관 페이지 경로', () => {
       const html = await (await fetch(base + path)).text();
       assert.match(html, /<link rel="icon" type="image\/png" sizes="32x32" href="\/favicon-32\.png">/, path);
       assert.match(html, /<link rel="apple-touch-icon" href="\/apple-touch-icon\.png">/, path);
+    }
+  });
+
+  it('공개 페이지의 헤더는 v1과 같다: CSP·nosniff·no-referrer·no-transform, GET과 HEAD, 허용하지 않은 origin에서도 (표 K2)', async () => {
+    const csp = "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+    for (const [path, type, maxAge] of [
+      ['/privacy', 'text/html; charset=utf-8', 600],
+      ['/terms', 'text/html; charset=utf-8', 600],
+      ['/test', 'text/html; charset=utf-8', 600],
+      ['/test/og.png', 'image/png', 86400],
+      ['/favicon.ico', 'image/png', 604800],
+      ['/test/galmuri11-bold.woff2', 'font/woff2', 604800],
+    ] as const) {
+      const get = await fetch(base + path, { headers: { origin: 'https://evil.example' } });
+      const head = await fetch(base + path, { method: 'HEAD', headers: { origin: 'https://evil.example' } });
+      const body = new Uint8Array(await get.arrayBuffer());
+      for (const res of [get, head]) {
+        assert.equal(res.status, 200, path);
+        assert.equal(res.headers.get('content-type'), type, path);
+        assert.equal(res.headers.get('cache-control'), `public, max-age=${maxAge}, no-transform`, path);
+        assert.equal(res.headers.get('content-security-policy'), csp, path);
+        assert.equal(res.headers.get('x-content-type-options'), 'nosniff', path);
+        assert.equal(res.headers.get('referrer-policy'), 'no-referrer', path);
+        assert.equal(res.headers.get('content-length'), String(body.length), path);
+        // CORS 허용 헤더는 붙지 않는다 (다른 사이트의 스크립트가 읽어 가지 못한다)
+        assert.equal(res.headers.get('access-control-allow-origin'), null, path);
+      }
+      assert.equal((await head.arrayBuffer()).byteLength, 0, path);
     }
   });
 
